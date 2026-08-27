@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-07-31T19:32:07.472602",
+  "tool": "timeline_engine",
+  "user_input": "",
+  "command": "",
+  "status": "success",
+  "duration": 0.007018799999059411,
+  "output_file": "",
+  "error": "",
+  "metadata": {
+    "request_id": "db301f13-0992-4674-af26-4dbf1026c3db",
+    "approval_digest": "0f3f0977e93a3c1f71240d0f9a7138063f63760ebf0067f74b1389346b7ab359",
+    "target": "",
+    "risk": "READ",
+    "executor": "local",
+    "error_category": ""
+  }
+}

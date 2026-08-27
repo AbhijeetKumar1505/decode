@@ -1,0 +1,8 @@
+name: "Reconnaissance"
+description: "Network discovery and surface mapping"
+tools:
+  - nmap
+  - subfinder
+  - amass
+  - dnsx
+  - httpx

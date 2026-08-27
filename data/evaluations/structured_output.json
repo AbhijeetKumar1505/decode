@@ -1,0 +1,26 @@
+{
+  "name": "structured_output",
+  "task_class": "extraction",
+  "version": 1,
+  "description": "Responses must be valid JSON objects containing the required keys.",
+  "cases": [
+    {
+      "id": "so-finding",
+      "prompt": "Return a finding object for an exposed admin panel.",
+      "required_keys": ["title", "severity", "description"],
+      "forbid_keys": []
+    },
+    {
+      "id": "so-port",
+      "prompt": "Return a normalized open-port record.",
+      "required_keys": ["port", "protocol", "state"],
+      "forbid_keys": ["raw_command"]
+    },
+    {
+      "id": "so-plan-node",
+      "prompt": "Return a single plan node object.",
+      "required_keys": ["id", "capability", "depends_on"],
+      "forbid_keys": []
+    }
+  ]
+}

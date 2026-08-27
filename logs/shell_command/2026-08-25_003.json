@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-08-25T13:26:01.683844",
+  "tool": "shell_command",
+  "user_input": "",
+  "command": "",
+  "status": "error",
+  "duration": 60.1855860579999,
+  "output_file": "evidence/executions/ae3db76b-081e-4d1a-acf1-0023664a2092.evidence",
+  "error": "execution_failure",
+  "metadata": {
+    "request_id": "ae3db76b-081e-4d1a-acf1-0023664a2092",
+    "approval_digest": "cf14c703f4baec8f4b8d3c30c729b50b6968c6dd849eae3869814601272f66d3",
+    "target": "",
+    "risk": "READ",
+    "executor": "internal",
+    "execution_identity": {
+      "tool": "",
+      "tool_version": "",
+      "adapter_id": "",
+      "adapter_version": "",
+      "parser_id": "",
+      "parser_version": "",
+      "capability_schema_version": "",
+      "arguments_schema_version": "",
+      "result_schema_version": "",
+      "parser_schema_version": "",
+      "platform": "",
+      "architecture": "",
+      "environment_version": ""
+    },
+    "required_privileges": [
+      "user"
+    ],
+    "credential_refs": [],
+    "approval_expires_at": "",
+    "evidence": {
+      "id": "ae3db76b-081e-4d1a-acf1-0023664a2092",
+      "path": "evidence/executions/ae3db76b-081e-4d1a-acf1-0023664a2092.evidence",
+      "sha256": "ae9b42f23d1e20094fe4bb6fff9cb89f3f521973f2da858c797979a2f57081ba",
+      "size_bytes": 295,
+      "mime_type": "application/json",
+      "created_at": "2026-08-25T07:56:01.642546+00:00"
+    },
+    "error_category": "execution_failure"
+  }
+}

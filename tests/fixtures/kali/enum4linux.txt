@@ -1,0 +1,11 @@
+Target ........... 192.0.2.20
+user:[administrator] rid:[0x1f4]
+user:[guest] rid:[0x1f5]
+group:[Domain Admins] rid:[0x200]
+group:[Domain Users] rid:[0x201]
+
+	Sharename       Type      Comment
+	---------       ----      -------
+	ADMIN$          Disk      Remote Admin
+	IPC$            IPC       Remote IPC
+	netlogon        Disk      Logon server share

@@ -1,0 +1,17 @@
+domain: cloud
+description: "Exploitation of cloud infrastructure (AWS, Azure, GCP), IAM, and containers."
+tools:
+  - aws_enum_iam
+  - azure_brute_force
+  - k8s_rce_check
+  - s3_bucket_dump
+tactics:
+  - Account Enumeration
+  - Credential Stuffing
+  - Lateral Movement
+  - Data Exfiltration
+  - Persistence
+resources:
+  - "Misconfigured S3 Buckets"
+  - "Exposed IAM Keys"
+  - "Kubernetes API Server vulnerabilities"

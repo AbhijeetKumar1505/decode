@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-08-25T13:23:59.644226",
+  "tool": "shell_command",
+  "user_input": "",
+  "command": "",
+  "status": "success",
+  "duration": 16.477295697000955,
+  "output_file": "evidence/executions/d53ae4c9-4cb6-416e-b164-881091e187fe.evidence",
+  "error": "",
+  "metadata": {
+    "request_id": "d53ae4c9-4cb6-416e-b164-881091e187fe",
+    "approval_digest": "e8bf5a702fe7215965aa1ff845ebd642183b0a0f35e62a328a4319c1c0b0b396",
+    "target": "",
+    "risk": "READ",
+    "executor": "internal",
+    "execution_identity": {
+      "tool": "",
+      "tool_version": "",
+      "adapter_id": "",
+      "adapter_version": "",
+      "parser_id": "",
+      "parser_version": "",
+      "capability_schema_version": "",
+      "arguments_schema_version": "",
+      "result_schema_version": "",
+      "parser_schema_version": "",
+      "platform": "",
+      "architecture": "",
+      "environment_version": ""
+    },
+    "required_privileges": [
+      "user"
+    ],
+    "credential_refs": [],
+    "approval_expires_at": "",
+    "evidence": {
+      "id": "d53ae4c9-4cb6-416e-b164-881091e187fe",
+      "path": "evidence/executions/d53ae4c9-4cb6-416e-b164-881091e187fe.evidence",
+      "sha256": "7d60e1c55a46a824da4e4288238d170be1170c488b6d9fd7eb70453747820dac",
+      "size_bytes": 1432,
+      "mime_type": "application/json",
+      "created_at": "2026-08-25T07:53:59.639974+00:00"
+    },
+    "error_category": ""
+  }
+}

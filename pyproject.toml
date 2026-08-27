@@ -1,0 +1,40 @@
+[tool.poetry]
+name = "decode"
+version = "1.0.0"
+description = "Decode — local-first, extensible cybersecurity operating system"
+authors = ["YourName <you@example.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = ">=3.11,<4.0"
+mistralai = "^2.4.2"
+typer = "^0.25.0"
+rich = "^15.0.0"
+prompt-toolkit = "^3.0.0"
+jinja2 = "^3.1.3"
+pyyaml = "^6.0"
+faiss-cpu = "^1.8.0"
+python-dotenv = "^1.0.0"
+langchain = "^1.2.15"
+langchain-mistralai = "^1.1.2"
+python-nmap = "^0.7.1"
+requests = "^2.32.0"
+docker = "^7.0.0"
+numpy = "^1.26.0"
+psutil = "^6.0.0"
+pydantic = "^2.0.0"
+openai = "^1.0.0"
+anthropic = "^0.30.0"
+defusedxml = "^0.7.1"
+pymongo = "^4.6.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+mongomock = "^4.3.0"
+
+[tool.poetry.scripts]
+decode = "decode.__main__:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

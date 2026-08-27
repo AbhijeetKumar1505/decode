@@ -1,0 +1,43 @@
+# Controlled integration lab for Decode capability coverage (P5).
+#
+# Purpose: exercise supported capabilities (port_scan, http_fingerprint,
+# dir_enum, vuln_scan) against a known, authorized target on an isolated
+# network. This lab is for authorized local testing only. The target is a
+# benign stock web server on an internal, non-routable bridge; do not point the
+# runner at anything outside this compose network.
+#
+# Usage:
+#   docker compose -f docker/lab/docker-compose.yml up -d
+#   docker compose -f docker/lab/docker-compose.yml run --rm runner \
+#       env DECODE_LAB=1 python -m pytest tests/integration/test_lab.py -q
+#   docker compose -f docker/lab/docker-compose.yml down
+
+services:
+  runner:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    working_dir: /opt/decode
+    volumes:
+      - ../../:/opt/decode:ro
+    environment:
+      DECODE_LAB: "1"
+      LAB_TARGET: "target-web"
+    networks:
+      - labnet
+    depends_on:
+      - target-web
+    command: ["sleep", "infinity"]
+
+  target-web:
+    image: nginx:1.27-alpine
+    networks:
+      - labnet
+    # No published ports: the target is reachable only from inside labnet.
+    expose:
+      - "80"
+
+networks:
+  labnet:
+    driver: bridge
+    internal: true

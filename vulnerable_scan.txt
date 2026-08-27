@@ -1,0 +1,132 @@
+# Nmap 7.99 scan initiated Tue Aug 25 13:24:05 2026 as: /usr/lib/nmap/nmap --privileged -sV --script vuln -oN vulnerable_scan.txt 192.168.1.1 192.168.1.9
+Nmap scan report for 192.168.1.1
+Host is up (0.0080s latency).
+Not shown: 994 closed tcp ports (reset)
+PORT    STATE    SERVICE    VERSION
+21/tcp  filtered ftp
+22/tcp  filtered ssh
+23/tcp  filtered telnet
+53/tcp  open     domain     dnsmasq 2.80
+| vulners: 
+|   cpe:/a:thekelleys:dnsmasq:2.80: 
+|     	EDB-ID:42943	9.8	https://vulners.com/exploitdb/EDB-ID:42943	*EXPLOIT*
+|     	EDB-ID:42942	9.8	https://vulners.com/exploitdb/EDB-ID:42942	*EXPLOIT*
+|     	EDB-ID:42941	9.8	https://vulners.com/exploitdb/EDB-ID:42941	*EXPLOIT*
+|     	CVE-2017-14493	9.8	https://vulners.com/cve/CVE-2017-14493
+|     	CVE-2017-14492	9.8	https://vulners.com/cve/CVE-2017-14492
+|     	CVE-2017-14491	9.8	https://vulners.com/cve/CVE-2017-14491
+|     	CVE-2026-4892	8.8	https://vulners.com/cve/CVE-2026-4892
+|     	274DC2E1-93D6-5CED-8A97-53B6DC183289	8.4	https://vulners.com/githubexploit/274DC2E1-93D6-5CED-8A97-53B6DC183289	*EXPLOIT*
+|     	CVE-2020-25682	8.3	https://vulners.com/cve/CVE-2020-25682
+|     	CVE-2020-25681	8.3	https://vulners.com/cve/CVE-2020-25681
+|     	SSV:96623	7.8	https://vulners.com/seebug/SSV:96623	*EXPLOIT*
+|     	EXPLOITPACK:708148DF89AFEA44750A9B84E292A6B9	7.8	https://vulners.com/exploitpack/EXPLOITPACK:708148DF89AFEA44750A9B84E292A6B9	*EXPLOIT*
+|     	EDB-ID:42946	7.8	https://vulners.com/exploitdb/EDB-ID:42946	*EXPLOIT*
+|     	CVE-2017-14496	7.8	https://vulners.com/cve/CVE-2017-14496
+|     	1337DAY-ID-28727	7.8	https://vulners.com/zdt/1337DAY-ID-28727	*EXPLOIT*
+|     	SSV:96620	7.5	https://vulners.com/seebug/SSV:96620	*EXPLOIT*
+|     	SSV:96619	7.5	https://vulners.com/seebug/SSV:96619	*EXPLOIT*
+|     	SSV:96618	7.5	https://vulners.com/seebug/SSV:96618	*EXPLOIT*
+|     	EXPLOITPACK:E661AED6AF5BCC1565D1CB0F9878E40B	7.5	https://vulners.com/exploitpack/EXPLOITPACK:E661AED6AF5BCC1565D1CB0F9878E40B	*EXPLOIT*
+|     	EXPLOITPACK:95340EB39AF331E01096F2B1CF7F1DE2	7.5	https://vulners.com/exploitpack/EXPLOITPACK:95340EB39AF331E01096F2B1CF7F1DE2	*EXPLOIT*
+|     	EXPLOITPACK:572F56450B83EECCA41D07EF1B33B48B	7.5	https://vulners.com/exploitpack/EXPLOITPACK:572F56450B83EECCA41D07EF1B33B48B	*EXPLOIT*
+|     	EDB-ID:42945	7.5	https://vulners.com/exploitdb/EDB-ID:42945	*EXPLOIT*
+|     	CVE-2026-5172	7.5	https://vulners.com/cve/CVE-2026-5172
+|     	CVE-2026-4891	7.5	https://vulners.com/cve/CVE-2026-4891
+|     	CVE-2026-4890	7.5	https://vulners.com/cve/CVE-2026-4890
+|     	CVE-2023-50387	7.5	https://vulners.com/cve/CVE-2023-50387
+|     	CVE-2023-28450	7.5	https://vulners.com/cve/CVE-2023-28450
+|     	CVE-2022-0934	7.5	https://vulners.com/cve/CVE-2022-0934
+|     	CVE-2019-14513	7.5	https://vulners.com/cve/CVE-2019-14513
+|     	CVE-2017-15107	7.5	https://vulners.com/cve/CVE-2017-15107
+|     	CVE-2017-14495	7.5	https://vulners.com/cve/CVE-2017-14495
+|     	CVE-2017-13704	7.5	https://vulners.com/cve/CVE-2017-13704
+|     	CVE-2015-8899	7.5	https://vulners.com/cve/CVE-2015-8899
+|     	CVE-2005-0877	7.5	https://vulners.com/cve/CVE-2005-0877
+|     	1337DAY-ID-28724	7.5	https://vulners.com/zdt/1337DAY-ID-28724	*EXPLOIT*
+|     	1337DAY-ID-28723	7.5	https://vulners.com/zdt/1337DAY-ID-28723	*EXPLOIT*
+|     	1337DAY-ID-28720	7.5	https://vulners.com/zdt/1337DAY-ID-28720	*EXPLOIT*
+|     	CVE-2026-2291	7.3	https://vulners.com/cve/CVE-2026-2291
+|     	4F1A4896-11BE-5249-BE22-E37DF74388BE	7.3	https://vulners.com/githubexploit/4F1A4896-11BE-5249-BE22-E37DF74388BE	*EXPLOIT*
+|     	CVE-2020-25687	7.1	https://vulners.com/cve/CVE-2020-25687
+|     	CVE-2020-25683	7.1	https://vulners.com/cve/CVE-2020-25683
+|     	SSV:66871	6.8	https://vulners.com/seebug/SSV:66871	*EXPLOIT*
+|     	SSV:12710	6.8	https://vulners.com/seebug/SSV:12710	*EXPLOIT*
+|     	SSV:12174	6.8	https://vulners.com/seebug/SSV:12174	*EXPLOIT*
+|     	PACKETSTORM:80896	6.8	https://vulners.com/packetstorm/PACKETSTORM:80896	*EXPLOIT*
+|     	EXPLOITPACK:ECB83F9533371579F3997366C239FB4D	6.8	https://vulners.com/exploitpack/EXPLOITPACK:ECB83F9533371579F3997366C239FB4D	*EXPLOIT*
+|     	EDB-ID:9617	6.8	https://vulners.com/exploitdb/EDB-ID:9617	*EXPLOIT*
+|     	CVE-2009-2957	6.8	https://vulners.com/cve/CVE-2009-2957
+|     	CVE-2015-3294	6.4	https://vulners.com/cve/CVE-2015-3294
+|     	EDB-ID:42944	5.9	https://vulners.com/exploitdb/EDB-ID:42944	*EXPLOIT*
+|     	CVE-2026-12725	5.9	https://vulners.com/cve/CVE-2026-12725
+|     	CVE-2017-14494	5.9	https://vulners.com/cve/CVE-2017-14494
+|     	E0B34E43-4E6A-58FC-828B-7216B4925AB7	5.3	https://vulners.com/githubexploit/E0B34E43-4E6A-58FC-828B-7216B4925AB7	*EXPLOIT*
+|     	CVE-2026-4893	5.3	https://vulners.com/cve/CVE-2026-4893
+|     	CVE-2026-12969	5.3	https://vulners.com/cve/CVE-2026-12969
+|     	15485AC1-5C4A-57D4-ABEE-9D08CE94CB82	5.3	https://vulners.com/githubexploit/15485AC1-5C4A-57D4-ABEE-9D08CE94CB82	*EXPLOIT*
+|     	SSV:96622	5.0	https://vulners.com/seebug/SSV:96622	*EXPLOIT*
+|     	EXPLOITPACK:C0456C7DF1625677A211CB9799B79F9A	5.0	https://vulners.com/exploitpack/EXPLOITPACK:C0456C7DF1625677A211CB9799B79F9A	*EXPLOIT*
+|     	CVE-2013-0198	5.0	https://vulners.com/cve/CVE-2013-0198
+|     	CVE-2012-3411	5.0	https://vulners.com/cve/CVE-2012-3411
+|     	1337DAY-ID-28726	5.0	https://vulners.com/zdt/1337DAY-ID-28726	*EXPLOIT*
+|     	SSV:96621	4.3	https://vulners.com/seebug/SSV:96621	*EXPLOIT*
+|     	SSV:12173	4.3	https://vulners.com/seebug/SSV:12173	*EXPLOIT*
+|     	EXPLOITPACK:22D470FAFA79A3DB978CC3F8766CC759	4.3	https://vulners.com/exploitpack/EXPLOITPACK:22D470FAFA79A3DB978CC3F8766CC759	*EXPLOIT*
+|     	CVE-2021-3448	4.3	https://vulners.com/cve/CVE-2021-3448
+|     	CVE-2020-25686	4.3	https://vulners.com/cve/CVE-2020-25686
+|     	CVE-2020-25685	4.3	https://vulners.com/cve/CVE-2020-25685
+|     	CVE-2020-25684	4.3	https://vulners.com/cve/CVE-2020-25684
+|     	CVE-2019-14834	4.3	https://vulners.com/cve/CVE-2019-14834
+|     	CVE-2009-2958	4.3	https://vulners.com/cve/CVE-2009-2958
+|     	CBF3EF2D-3A5B-5110-A374-4A5ADE9AC91A	4.3	https://vulners.com/githubexploit/CBF3EF2D-3A5B-5110-A374-4A5ADE9AC91A	*EXPLOIT*
+|     	54E54B28-6154-5E4D-8DFA-D9BB3D53034A	4.3	https://vulners.com/gitee/54E54B28-6154-5E4D-8DFA-D9BB3D53034A	*EXPLOIT*
+|     	1337DAY-ID-28725	4.3	https://vulners.com/zdt/1337DAY-ID-28725	*EXPLOIT*
+|     	PACKETSTORM:144480	0.0	https://vulners.com/packetstorm/PACKETSTORM:144480	*EXPLOIT*
+|     	PACKETSTORM:144479	0.0	https://vulners.com/packetstorm/PACKETSTORM:144479	*EXPLOIT*
+|     	PACKETSTORM:144473	0.0	https://vulners.com/packetstorm/PACKETSTORM:144473	*EXPLOIT*
+|     	PACKETSTORM:144471	0.0	https://vulners.com/packetstorm/PACKETSTORM:144471	*EXPLOIT*
+|     	PACKETSTORM:144468	0.0	https://vulners.com/packetstorm/PACKETSTORM:144468	*EXPLOIT*
+|     	PACKETSTORM:144462	0.0	https://vulners.com/packetstorm/PACKETSTORM:144462	*EXPLOIT*
+|_    	1337DAY-ID-6998	0.0	https://vulners.com/zdt/1337DAY-ID-6998	*EXPLOIT*
+80/tcp  open     tcpwrapped
+|_http-majordomo2-dir-traversal: ERROR: Script execution failed (use -d to debug)
+|_http-dombased-xss: Couldn't find any DOM based XSS.
+| http-vuln-cve2010-0738: 
+|_  /jmx-console/: Authentication was not required
+|_http-trane-info: Problem with XML parsing of /evox/about
+|_http-server-header: Boa/0.93.15
+|_http-stored-xss: Couldn't find any stored XSS vulnerabilities.
+|_http-csrf: Couldn't find any CSRF vulnerabilities.
+|_http-vuln-cve2017-1001000: ERROR: Script execution failed (use -d to debug)
+443/tcp open     tcpwrapped
+|_http-dombased-xss: Couldn't find any DOM based XSS.
+| ssl-poodle: 
+|   VULNERABLE:
+|   SSL POODLE information leak
+|     State: VULNERABLE
+|     IDs:  BID:70574  CVE:CVE-2014-3566
+|           The SSL protocol 3.0, as used in OpenSSL through 1.0.1i and other
+|           products, uses nondeterministic CBC padding, which makes it easier
+|           for man-in-the-middle attackers to obtain cleartext data via a
+|           padding-oracle attack, aka the "POODLE" issue.
+|     Disclosure date: 2014-10-14
+|     Check results:
+|       TLS_RSA_WITH_AES_128_CBC_SHA
+|     References:
+|       https://www.imperialviolet.org/2014/10/14/poodle.html
+|       https://www.openssl.org/~bodo/ssl-poodle.pdf
+|       https://www.securityfocus.com/bid/70574
+|_      https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-3566
+|_http-vuln-cve2014-3704: ERROR: Script execution failed (use -d to debug)
+|_http-aspnet-debug: ERROR: Script execution failed (use -d to debug)
+|_http-csrf: Couldn't find any CSRF vulnerabilities.
+|_http-stored-xss: Couldn't find any stored XSS vulnerabilities.
+
+Nmap scan report for 192.168.1.9
+Host is up (0.0065s latency).
+All 1000 scanned ports on 192.168.1.9 are in ignored states.
+Not shown: 1000 closed tcp ports (reset)
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Tue Aug 25 13:24:56 2026 -- 2 IP addresses (2 hosts up) scanned in 51.67 seconds

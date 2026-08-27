@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-07-31T19:32:12.035685",
+  "tool": "social_ir",
+  "user_input": "",
+  "command": "",
+  "status": "success",
+  "duration": 0.0067455999997037,
+  "output_file": "",
+  "error": "",
+  "metadata": {
+    "request_id": "73c6c0b5-1251-4ebf-9a3f-67139d8d38ea",
+    "approval_digest": "30d117dd382ed865e2635d48bbc3e8c3898105459c2b5d17d0ad44b5c7ef37ff",
+    "target": "",
+    "risk": "READ",
+    "executor": "local",
+    "error_category": ""
+  }
+}

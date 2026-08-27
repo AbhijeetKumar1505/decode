@@ -1,0 +1,2 @@
+{"template-id":"tech-detect","info":{"name":"Technology Detection","severity":"info"},"matched-at":"https://192.0.2.10"}
+{"template-id":"CVE-2021-99999","info":{"name":"Example Component RCE","severity":"critical"},"matched-at":"https://192.0.2.10/app"}

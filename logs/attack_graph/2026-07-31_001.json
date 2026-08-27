@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-07-31T19:32:16.043813",
+  "tool": "attack_graph",
+  "user_input": "",
+  "command": "",
+  "status": "success",
+  "duration": 0.001758399997925153,
+  "output_file": "",
+  "error": "",
+  "metadata": {
+    "request_id": "514bf7ed-da5d-41d7-aadb-a5ccdb5a0a66",
+    "approval_digest": "e14598685c6436f51bd6c48ca8ac1a98a02d8da77652f068be5af0b444d89380",
+    "target": "",
+    "risk": "READ",
+    "executor": "local",
+    "error_category": ""
+  }
+}

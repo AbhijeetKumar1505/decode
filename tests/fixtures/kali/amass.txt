@@ -1,0 +1,3 @@
+www.example.com (FQDN) --> a_record --> 192.0.2.10 (IPAddress)
+mail.example.com (FQDN) --> mx_record --> mx1.example.com (FQDN)
+api.example.com (FQDN) --> cname_record --> cdn.example.net (FQDN)

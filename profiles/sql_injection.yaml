@@ -1,0 +1,4 @@
+name: "SQL Injection"
+description: "SQL injection detection and exploitation"
+tools:
+  - sqlmap

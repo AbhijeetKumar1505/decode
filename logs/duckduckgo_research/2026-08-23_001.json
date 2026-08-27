@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-08-23T14:22:09.154872",
+  "tool": "duckduckgo_research",
+  "user_input": "",
+  "command": "",
+  "status": "success",
+  "duration": 1.665322710000055,
+  "output_file": "evidence/executions/c669406e-4f7f-419e-8ad6-c31c21307f81.evidence",
+  "error": "",
+  "metadata": {
+    "request_id": "c669406e-4f7f-419e-8ad6-c31c21307f81",
+    "approval_digest": "bf63508e75b517e3c3d5ff0e313b121ec6c0a4ec8601beae67e1f92c171f20e4",
+    "target": "",
+    "risk": "READ",
+    "executor": "local",
+    "execution_identity": {
+      "tool": "",
+      "tool_version": "",
+      "adapter_id": "",
+      "adapter_version": "",
+      "parser_id": "",
+      "parser_version": "",
+      "capability_schema_version": "",
+      "arguments_schema_version": "",
+      "result_schema_version": "",
+      "parser_schema_version": "",
+      "platform": "",
+      "architecture": "",
+      "environment_version": ""
+    },
+    "required_privileges": [
+      "user"
+    ],
+    "credential_refs": [],
+    "approval_expires_at": "",
+    "evidence": {
+      "id": "c669406e-4f7f-419e-8ad6-c31c21307f81",
+      "path": "evidence/executions/c669406e-4f7f-419e-8ad6-c31c21307f81.evidence",
+      "sha256": "87b87a8988323b7713bcf5369c8f6309ed4a150c726786bbeb64db722abe7eff",
+      "size_bytes": 713,
+      "mime_type": "application/json",
+      "created_at": "2026-08-23T08:52:09.147416+00:00"
+    },
+    "error_category": ""
+  }
+}

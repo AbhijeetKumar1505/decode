@@ -1,0 +1,66 @@
+# GitHub Labels for Decode
+# Add these labels to your repository for organized issue tracking
+
+- name: bug
+  description: Something isn't working
+  color: d73a4a
+
+- name: enhancement
+  description: New feature or improvement
+  color: a2eeef
+
+- name: documentation
+  description: Improvements or additions to documentation
+  color: 0075ca
+
+- name: good first issue
+  description: Good for newcomers
+  color: 7057ff
+
+- name: help wanted
+  description: Extra attention needed
+  color: 008672
+
+- name: question
+  description: Further information is requested
+  color: d876e3
+
+- name: security
+  description: Security-related issue
+  color: e99695
+
+- name: skill
+  description: New skill or skill improvement
+  color: bfe5bf
+
+- name: discussion
+  description: Open discussion topic
+  color: ffffff
+
+- name: feature request
+  description: Request for new functionality
+  color: fbca04
+
+- name: invalid
+  description: This doesn't seem right
+  color: e4e669
+
+- name: wontfix
+  description: This will not be worked on
+  color: ffffff
+
+- name: duplicate
+  description: This issue or PR already exists
+  color: cfd3d7
+
+- name: roadmap
+  description: Related to project roadmap
+  color: 5319e7
+
+- name: performance
+  description: Performance improvement
+  color: 1d76db
+
+- name: testing
+  description: Testing-related
+  color: c2e0c6

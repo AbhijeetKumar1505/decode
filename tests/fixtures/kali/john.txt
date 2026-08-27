@@ -1,0 +1,3 @@
+administrator:Sup3rSecret99
+svc_backup:short
+2 password hashes cracked, 1 left

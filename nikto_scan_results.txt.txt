@@ -1,0 +1,14 @@
+- Nikto v2.6.0/
++ Target Host: youmat.in
++ Target Port: 443
++ GET /: IP address found in the 'x-vercel-id' header. The IP is "1::62". See: https://portswigger.net/kb/issues/00600300_private-ip-addresses-disclosed: 
++ GET /: Uncommon header(s) 'x-vercel-id' found, with contents: bom1::62m58-1787658704956-32c4c1fe3402.
++ SSL Info:           Subject:  /CN=*.youmat.in
+                      CN:       *.youmat.in
+                      SAN:      *.youmat.in, youmat.in
+                      Ciphers:  TLS_AES_128_GCM_SHA256
+                      Issuer:   /C=US/O=Let's Encrypt/CN=YR2
++ GET https://www.youmat.in/: Retrieved x-powered-by header: Next.js.
++ GET https://www.youmat.in/: Link header(s) found with value(s): </>; rel=preconnect; crossorigin="". See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Link: 
++ GET https://www.youmat.in/: Uncommon header(s) 'x-vercel-cache' found, with contents: MISS.
++ GET https://www.youmat.in/: Uncommon header(s) 'x-matched-path' found, with contents: /.

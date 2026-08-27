@@ -1,0 +1,17 @@
+domain: redteam
+description: "Network penetration testing and infrastructure compromise."
+tools:
+  - nmap_scan
+  - web_vuln_scan
+  - reverse_shell
+  - priv_esc_check
+tactics:
+  - Recon
+  - Vulnerability Identification
+  - Exploitation
+  - Privilege Escalation
+  - Persistence
+  - Exfiltration
+resources:
+  - "CVE-2017-0144 (EternalBlue)"
+  - "CVE-2021-4034 (PwnKit)"

@@ -1,0 +1,28 @@
+# Environment
+.env
+.venv/
+.venv_linux/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Data
+data/*.db
+data/models/
+data/knowledge_graph.json
+atlas-credentials.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

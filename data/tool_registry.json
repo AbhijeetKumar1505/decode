@@ -1,0 +1,748 @@
+{
+  "schema_version": "1.0.0",
+  "timestamp": "2026-08-23T16:28:13.713871",
+  "providers_scanned": [
+    "local",
+    "wsl"
+  ],
+  "tools": [
+    {
+      "schema_version": "1.0.0",
+      "id": "local:nmap",
+      "name": "nmap",
+      "provider": "local",
+      "path": "/usr/bin/nmap",
+      "version": "Nmap version 7.99 ( https://nmap.org )",
+      "category": "network",
+      "capabilities": [
+        "port_scan",
+        "service_detection",
+        "os_detection",
+        "host_discovery"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:masscan",
+      "name": "masscan",
+      "provider": "local",
+      "path": "/usr/bin/masscan",
+      "version": "Masscan version 1.3.2 ( https://github.com/robertdavidgraham/masscan )",
+      "category": "network",
+      "capabilities": [
+        "port_scan",
+        "host_discovery"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:ffuf",
+      "name": "ffuf",
+      "provider": "local",
+      "path": "/usr/bin/ffuf",
+      "version": "ffuf version: 2.1.0-dev",
+      "category": "web",
+      "capabilities": [
+        "dir_enum",
+        "vhost_fuzz"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:gobuster",
+      "name": "gobuster",
+      "provider": "local",
+      "path": "/usr/bin/gobuster",
+      "version": "gobuster version 3.8.2",
+      "category": "web",
+      "capabilities": [
+        "dir_enum",
+        "dns_enum"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:feroxbuster",
+      "name": "feroxbuster",
+      "provider": "local",
+      "path": "/usr/bin/feroxbuster",
+      "version": "feroxbuster 2.13.1",
+      "category": "web",
+      "capabilities": [
+        "dir_enum"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:nuclei",
+      "name": "nuclei",
+      "provider": "local",
+      "path": "/usr/bin/nuclei",
+      "version": "[\u001b[34mINF\u001b[0m] Nuclei Engine Version: v3.8.0",
+      "category": "web",
+      "capabilities": [
+        "vuln_scan"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:nikto",
+      "name": "nikto",
+      "provider": "local",
+      "path": "/usr/bin/nikto",
+      "version": "Nikto 2.6.0 (LW 2.5)",
+      "category": "web",
+      "capabilities": [
+        "vuln_scan"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:whatweb",
+      "name": "whatweb",
+      "provider": "local",
+      "path": "/usr/bin/whatweb",
+      "version": "WhatWeb version 0.6.4 ( https://morningstarsecurity.com/research/whatweb/ )",
+      "category": "web",
+      "capabilities": [
+        "http_fingerprint"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:httpx",
+      "name": "httpx",
+      "provider": "local",
+      "path": "/mnt/e/decode/venv/bin/httpx",
+      "version": "Usage: httpx [OPTIONS] URL",
+      "category": "web",
+      "capabilities": [
+        "http_fingerprint",
+        "http_probe"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:wpscan",
+      "name": "wpscan",
+      "provider": "local",
+      "path": "/usr/bin/wpscan",
+      "version": "_______________________________________________________________",
+      "category": "web",
+      "capabilities": [
+        "vuln_scan",
+        "cms_scan"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:sqlmap",
+      "name": "sqlmap",
+      "provider": "local",
+      "path": "/usr/bin/sqlmap",
+      "version": "1.10.6#stable",
+      "category": "web",
+      "capabilities": [
+        "sql_injection"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:zaproxy",
+      "name": "zaproxy",
+      "provider": "local",
+      "path": "/usr/bin/zaproxy",
+      "version": "",
+      "category": "web",
+      "capabilities": [
+        "vuln_scan"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "failed"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:amass",
+      "name": "amass",
+      "provider": "local",
+      "path": "/usr/bin/amass",
+      "version": "sudo: libpostal_data: command not found",
+      "category": "recon",
+      "capabilities": [
+        "subdomain_enum",
+        "osint"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:theharvester",
+      "name": "theharvester",
+      "provider": "local",
+      "path": "/usr/bin/theharvester",
+      "version": "┏━(\u001b[1;36mMessage from Kali developers\u001b[00m)",
+      "category": "osint",
+      "capabilities": [
+        "osint"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:hydra",
+      "name": "hydra",
+      "provider": "local",
+      "path": "/usr/bin/hydra",
+      "version": "Hydra v9.7 (c) 2023 by van Hauser/THC & David Maciejak - Please do not use in military or secret service organizations, ",
+      "category": "bruteforce",
+      "capabilities": [
+        "password_attack"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:john",
+      "name": "john",
+      "provider": "local",
+      "path": "/usr/sbin/john",
+      "version": "Unknown option: \"--version\"",
+      "category": "bruteforce",
+      "capabilities": [
+        "password_cracking"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:hashcat",
+      "name": "hashcat",
+      "provider": "local",
+      "path": "/usr/bin/hashcat",
+      "version": "v7.1.2",
+      "category": "bruteforce",
+      "capabilities": [
+        "password_cracking"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:enum4linux",
+      "name": "enum4linux",
+      "provider": "local",
+      "path": "/usr/bin/enum4linux",
+      "version": "enum4linux v0.9.1 (http://labs.portcullis.co.uk/application/enum4linux/)",
+      "category": "active_directory",
+      "capabilities": [
+        "smb_enum",
+        "ad_enum"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:smbclient",
+      "name": "smbclient",
+      "provider": "local",
+      "path": "/usr/bin/smbclient",
+      "version": "Version 4.24.3-Debian-4.24.3+dfsg-1",
+      "category": "active_directory",
+      "capabilities": [
+        "smb_enum"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:ldapsearch",
+      "name": "ldapsearch",
+      "provider": "local",
+      "path": "/usr/bin/ldapsearch",
+      "version": "ldapsearch: @(#) $OpenLDAP: ldapsearch 2.6.10+dfsg-1+b2 (Apr 29 2026 10:11:22) $",
+      "category": "active_directory",
+      "capabilities": [
+        "ldap_enum",
+        "ad_enum"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:nxc",
+      "name": "nxc",
+      "provider": "local",
+      "path": "/usr/bin/nxc",
+      "version": "1.5.1 - Yippie-Ki-Yay - Kali Linux -",
+      "category": "active_directory",
+      "capabilities": [
+        "ad_enum",
+        "smb_enum"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:bloodhound-python",
+      "name": "bloodhound-python",
+      "provider": "local",
+      "path": "/usr/bin/bloodhound-python",
+      "version": "usage: bloodhound-python [-h] [-c COLLECTIONMETHOD] [-d DOMAIN] [-v]",
+      "category": "active_directory",
+      "capabilities": [
+        "ad_enum"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:msfconsole",
+      "name": "msfconsole",
+      "provider": "local",
+      "path": "/usr/bin/msfconsole",
+      "version": "Framework Version: 6.4.135-dev",
+      "category": "exploitation",
+      "capabilities": [
+        "exploit"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "local:searchsploit",
+      "name": "searchsploit",
+      "provider": "local",
+      "path": "/usr/bin/searchsploit",
+      "version": "/usr/bin/searchsploit: illegal option -- -",
+      "category": "exploitation",
+      "capabilities": [
+        "exploit_search"
+      ],
+      "platform": "linux",
+      "architecture": "x86_64",
+      "environment_version": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "version_probe_status": "success"
+    }
+  ],
+  "capability_index": {
+    "port_scan": [
+      "local:nmap",
+      "local:masscan"
+    ],
+    "service_detection": [
+      "local:nmap"
+    ],
+    "os_detection": [
+      "local:nmap"
+    ],
+    "host_discovery": [
+      "local:nmap",
+      "local:masscan"
+    ],
+    "dir_enum": [
+      "local:ffuf",
+      "local:gobuster",
+      "local:feroxbuster"
+    ],
+    "vhost_fuzz": [
+      "local:ffuf"
+    ],
+    "dns_enum": [
+      "local:gobuster"
+    ],
+    "vuln_scan": [
+      "local:nuclei",
+      "local:nikto",
+      "local:wpscan",
+      "local:zaproxy"
+    ],
+    "http_fingerprint": [
+      "local:whatweb",
+      "local:httpx"
+    ],
+    "http_probe": [
+      "local:httpx"
+    ],
+    "cms_scan": [
+      "local:wpscan"
+    ],
+    "sql_injection": [
+      "local:sqlmap"
+    ],
+    "subdomain_enum": [
+      "local:amass"
+    ],
+    "osint": [
+      "local:amass",
+      "local:theharvester"
+    ],
+    "password_attack": [
+      "local:hydra"
+    ],
+    "password_cracking": [
+      "local:john",
+      "local:hashcat"
+    ],
+    "smb_enum": [
+      "local:enum4linux",
+      "local:smbclient",
+      "local:nxc"
+    ],
+    "ad_enum": [
+      "local:enum4linux",
+      "local:ldapsearch",
+      "local:nxc",
+      "local:bloodhound-python"
+    ],
+    "ldap_enum": [
+      "local:ldapsearch"
+    ],
+    "exploit": [
+      "local:msfconsole"
+    ],
+    "exploit_search": [
+      "local:searchsploit"
+    ]
+  },
+  "executable_capability_index": {
+    "port_scan": [
+      "local:nmap",
+      "local:masscan"
+    ],
+    "service_detection": [
+      "local:nmap"
+    ],
+    "os_detection": [
+      "local:nmap"
+    ],
+    "host_discovery": [
+      "local:nmap",
+      "local:masscan"
+    ],
+    "dir_enum": [
+      "local:ffuf",
+      "local:gobuster",
+      "local:feroxbuster"
+    ],
+    "vuln_scan": [
+      "local:nuclei",
+      "local:nikto"
+    ],
+    "http_fingerprint": [
+      "local:whatweb",
+      "local:httpx"
+    ],
+    "http_probe": [
+      "local:httpx"
+    ],
+    "sql_injection": [
+      "local:sqlmap"
+    ],
+    "subdomain_enum": [
+      "local:amass"
+    ],
+    "osint": [
+      "local:amass"
+    ],
+    "password_cracking": [
+      "local:john"
+    ],
+    "smb_enum": [
+      "local:enum4linux"
+    ],
+    "ad_enum": [
+      "local:enum4linux"
+    ],
+    "exploit_search": [
+      "local:searchsploit"
+    ]
+  },
+  "coverage": {
+    "total_capabilities": 19,
+    "executable_capabilities": 15,
+    "coverage_pct": 78.9,
+    "capabilities": [
+      "ad_enum",
+      "dir_enum",
+      "exploit_search",
+      "host_discovery",
+      "http_fingerprint",
+      "http_probe",
+      "os_detection",
+      "osint",
+      "password_cracking",
+      "port_scan",
+      "service_detection",
+      "smb_enum",
+      "sql_injection",
+      "subdomain_enum",
+      "vuln_scan"
+    ],
+    "missing_capabilities": [
+      "detection_test",
+      "hardening_check",
+      "log_analysis",
+      "password_attack"
+    ],
+    "unsupported_tools": [
+      "local:bloodhound-python",
+      "local:hashcat",
+      "local:hydra",
+      "local:ldapsearch",
+      "local:msfconsole",
+      "local:nxc",
+      "local:smbclient",
+      "local:theharvester",
+      "local:wpscan",
+      "local:zaproxy"
+    ],
+    "by_provider": {
+      "local": {
+        "total_capabilities": 19,
+        "executable_capabilities": 15,
+        "coverage_pct": 78.9,
+        "capabilities": [
+          "ad_enum",
+          "dir_enum",
+          "exploit_search",
+          "host_discovery",
+          "http_fingerprint",
+          "http_probe",
+          "os_detection",
+          "osint",
+          "password_cracking",
+          "port_scan",
+          "service_detection",
+          "smb_enum",
+          "sql_injection",
+          "subdomain_enum",
+          "vuln_scan"
+        ],
+        "missing_capabilities": [
+          "detection_test",
+          "hardening_check",
+          "log_analysis",
+          "password_attack"
+        ]
+      },
+      "wsl": {
+        "total_capabilities": 19,
+        "executable_capabilities": 0,
+        "coverage_pct": 0.0,
+        "capabilities": [],
+        "missing_capabilities": [
+          "ad_enum",
+          "detection_test",
+          "dir_enum",
+          "exploit_search",
+          "hardening_check",
+          "host_discovery",
+          "http_fingerprint",
+          "http_probe",
+          "log_analysis",
+          "os_detection",
+          "osint",
+          "password_attack",
+          "password_cracking",
+          "port_scan",
+          "service_detection",
+          "smb_enum",
+          "sql_injection",
+          "subdomain_enum",
+          "vuln_scan"
+        ]
+      }
+    },
+    "by_domain": {
+      "active_directory": {
+        "total_capabilities": 2,
+        "executable_capabilities": 2,
+        "coverage_pct": 100.0,
+        "capabilities": [
+          "ad_enum",
+          "smb_enum"
+        ],
+        "missing_capabilities": []
+      },
+      "credentials": {
+        "total_capabilities": 2,
+        "executable_capabilities": 1,
+        "coverage_pct": 50.0,
+        "capabilities": [
+          "password_cracking"
+        ],
+        "missing_capabilities": [
+          "password_attack"
+        ]
+      },
+      "defensive": {
+        "total_capabilities": 2,
+        "executable_capabilities": 0,
+        "coverage_pct": 0.0,
+        "capabilities": [],
+        "missing_capabilities": [
+          "hardening_check",
+          "log_analysis"
+        ]
+      },
+      "exploitation": {
+        "total_capabilities": 1,
+        "executable_capabilities": 1,
+        "coverage_pct": 100.0,
+        "capabilities": [
+          "exploit_search"
+        ],
+        "missing_capabilities": []
+      },
+      "network": {
+        "total_capabilities": 4,
+        "executable_capabilities": 4,
+        "coverage_pct": 100.0,
+        "capabilities": [
+          "host_discovery",
+          "os_detection",
+          "port_scan",
+          "service_detection"
+        ],
+        "missing_capabilities": []
+      },
+      "purple": {
+        "total_capabilities": 1,
+        "executable_capabilities": 0,
+        "coverage_pct": 0.0,
+        "capabilities": [],
+        "missing_capabilities": [
+          "detection_test"
+        ]
+      },
+      "recon": {
+        "total_capabilities": 2,
+        "executable_capabilities": 2,
+        "coverage_pct": 100.0,
+        "capabilities": [
+          "osint",
+          "subdomain_enum"
+        ],
+        "missing_capabilities": []
+      },
+      "web": {
+        "total_capabilities": 5,
+        "executable_capabilities": 5,
+        "coverage_pct": 100.0,
+        "capabilities": [
+          "dir_enum",
+          "http_fingerprint",
+          "http_probe",
+          "sql_injection",
+          "vuln_scan"
+        ],
+        "missing_capabilities": []
+      }
+    }
+  },
+  "resources": {
+    "schema_version": "1.0.0",
+    "is_root": false,
+    "can_sudo": true,
+    "raw_socket_capable": false,
+    "wordlists": [
+      "/usr/share/wordlists/dirb/common.txt",
+      "/usr/share/seclists",
+      "/usr/share/wordlists"
+    ],
+    "template_dirs": [
+      "/home/dexter/.local/nuclei-templates"
+    ],
+    "databases": [
+      "/usr/share/exploitdb",
+      "/usr/share/metasploit-framework"
+    ],
+    "services": [
+      "docker",
+      "psql",
+      "redis-cli",
+      "ldapsearch",
+      "smbclient",
+      "msfconsole"
+    ]
+  }
+}

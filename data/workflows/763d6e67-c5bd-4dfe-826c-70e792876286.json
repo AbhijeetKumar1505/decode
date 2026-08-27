@@ -1,0 +1,35 @@
+{
+  "id": "763d6e67-c5bd-4dfe-826c-70e792876286",
+  "name": "Test Workflow",
+  "status": "created",
+  "steps": [
+    {
+      "id": "step_0",
+      "name": "Step 1",
+      "skill": "host_profiler",
+      "params": {
+        "action": "local_profile"
+      },
+      "status": "pending",
+      "depends_on": [],
+      "result": null,
+      "error": "",
+      "started_at": "",
+      "completed_at": "",
+      "duration_ms": 0.0,
+      "retry_count": 0,
+      "max_retries": 3,
+      "timeout": 300,
+      "requires_approval": false,
+      "pipeline_inputs": [],
+      "pipeline_outputs": []
+    }
+  ],
+  "current_step_index": -1,
+  "pipeline": {},
+  "context": {},
+  "created_at": "2026-06-21T07:28:25.464969+00:00",
+  "updated_at": "2026-06-21T07:28:25.464969+00:00",
+  "completed_at": "",
+  "error": ""
+}

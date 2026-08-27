@@ -1,0 +1,9 @@
+name: "Web Security"
+description: "Web application vulnerability assessment"
+tools:
+  - nuclei
+  - ffuf
+  - nikto
+  - whatweb
+  - wpscan
+  - zaproxy

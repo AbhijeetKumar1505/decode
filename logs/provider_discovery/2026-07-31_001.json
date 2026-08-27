@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-07-31T20:18:55.120548",
+  "tool": "provider_discovery",
+  "user_input": "",
+  "command": "[redacted]",
+  "status": "success",
+  "duration": 0.0027977999998256564,
+  "output_file": "",
+  "error": "",
+  "metadata": {
+    "request_id": "b9fff8de-2fd5-482a-ae45-f28209f8c20a",
+    "approval_digest": "515aedebf3100801585d88eebc9a1fb20576571e67ca7eb8f2a0d4b75a9b9a48",
+    "target": "",
+    "risk": "READ",
+    "executor": "wsl/fake",
+    "error_category": ""
+  }
+}

@@ -1,0 +1,9 @@
+name: "Active Directory"
+description: "Active Directory security assessment"
+tools:
+  - bloodhound
+  - impacket
+  - crackmapexec
+  - enum4linux
+  - smbclient
+  - ldapsearch

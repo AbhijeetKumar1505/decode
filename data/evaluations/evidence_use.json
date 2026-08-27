@@ -1,0 +1,26 @@
+{
+  "name": "evidence_use",
+  "task_class": "analysis",
+  "version": 1,
+  "description": "Claims about the target must cite a known evidence id and must not invent one.",
+  "cases": [
+    {
+      "id": "ev-cite-known",
+      "claim": "Port 22 is open on the target.",
+      "known_evidence_ids": ["evidence:port-22", "evidence:port-80"],
+      "requires_citation": true
+    },
+    {
+      "id": "ev-cite-web",
+      "claim": "The application exposes an outdated nginx banner.",
+      "known_evidence_ids": ["evidence:http-banner"],
+      "requires_citation": true
+    },
+    {
+      "id": "ev-no-fabrication",
+      "claim": "The host runs a vulnerable SMB service.",
+      "known_evidence_ids": ["evidence:port-445"],
+      "requires_citation": true
+    }
+  ]
+}

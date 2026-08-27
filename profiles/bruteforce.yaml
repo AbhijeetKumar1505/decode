@@ -1,0 +1,6 @@
+name: "Brute Force"
+description: "Password and directory brute-force attacks"
+tools:
+  - hydra
+  - john
+  - gobuster
