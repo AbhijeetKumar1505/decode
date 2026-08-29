@@ -12,6 +12,7 @@ from .kernel.provider import create_provider
 from .logging_service import LoggingService
 from .memory import SelfLearningMemory
 from .models import (
+    ModelGateway,
     ModelRouter,
     RoutingDecision,
     RoutingRequest,
@@ -51,6 +52,10 @@ class UniversalAgent:
 
         self.model_registry = self._build_model_registry()
         self.model_router = ModelRouter(self.model_registry)
+        # Role-based model selection (subsystem 01). Single-model by default: a role
+        # resolves to self.llm unless a per-role override or DECODE_MODEL_ROUTING
+        # diverges from the configured provider/model (see :meth:`provider_for_role`).
+        self.model_gateway = ModelGateway(self.model_registry, self.model_router)
         self.context = ContextManager()
         self.audit = AuditLayer(Config.AUDIT_PATH)
         self.logging = LoggingService(Config.LOGS_PATH)
@@ -74,6 +79,19 @@ class UniversalAgent:
         for spec in registry.all():
             spec.available = configured.get(spec.provider, False)
         return registry
+
+    def provider_for_role(self, role: str) -> Any:
+        """Return the LLM provider for a role.
+
+        Defaults to the live ``self.llm`` (so reassigning it still takes effect and
+        its token accounting is preserved); only diverges to a gateway-built
+        provider when a per-role override or opt-in routing selects a different
+        provider/model than the configured default.
+        """
+        provider_name, model_name = self.model_gateway.resolve_spec(role)
+        if (provider_name, model_name) == (Config.PROVIDER, Config.MODEL):
+            return self.llm
+        return self.model_gateway.for_role(role)
 
     def select_model(self, task_class: str = "analysis", **constraints: Any) -> RoutingDecision:
         """Policy-aware, reproducible model selection with a recorded public reason.
@@ -192,25 +210,58 @@ class UniversalAgent:
         model discovers installed tools, composes multi-step work, and drives any
         command without ever bypassing scope, risk, approval, or audit.
         """
+        import os
+        import platform
         from pathlib import Path
 
         from .hostcontrol import HOST_CAPABILITIES, CommandPolicy, FilesystemScope
         from .hostcontrol.mcp import host_capability_tools
         from .runtime import HostController, ToolUseLoop
         from .runtime.coordinator import ExecutionStatus
+        from .schema import ScopeView, TaskState
+        from .verification import Verifier
 
         scope = filesystem_scope or FilesystemScope(read_roots=[Path.cwd()])
         policy = command_policy or CommandPolicy()
         host = HostController(self._coordinator, scope, policy)
         host_caps = set(HOST_CAPABILITIES)
 
-        tools = list(host_capability_tools())
-        for skill in self.skill_registry.get_all():
-            tools.append({
+        # Live task-state (Neural Schema, subsystem 04): structured world-state the
+        # loop reads and writes each turn, seeded from the goal, scope, and env.
+        task_state = TaskState(
+            objective=goal,
+            scope=ScopeView(
+                read_roots=list(getattr(scope, "read_roots", [])),
+                write_roots=list(getattr(scope, "write_roots", [])),
+                targets=list(self._scope_entries),
+                allow_destructive=self._allow_destructive,
+            ),
+            environment={
+                "cwd": os.getcwd(),
+                "platform": platform.system(),
+                "executor": Config.EXECUTOR,
+            },
+        )
+
+        from .capabilities.coding import (
+            build_coding_command,
+            is_coding_capability,
+            summarize_coding_result,
+        )
+        from .capabilities.resolver import resolve_tools
+
+        host_tools = list(host_capability_tools())
+        skill_tools = [
+            {
                 "name": skill.spec.name,
                 "description": skill.spec.description,
                 "risk": skill.spec.risk_level.value,
-            })
+            }
+            for skill in self.skill_registry.get_all()
+        ]
+        # Resolve the per-turn tool surface for this task's mode (coding vs
+        # security vs hybrid) instead of exposing everything.
+        tools = resolve_tools(task_state.mode, host_tools, skill_tools)
 
         def _observe(result: Any) -> dict[str, Any]:
             ok = result.status == ExecutionStatus.SUCCESS
@@ -226,6 +277,22 @@ class UniversalAgent:
         async def invoke(name: str, params: dict[str, Any]) -> dict[str, Any]:
             if name in host_caps:
                 return _observe(await host.run(name, params))
+            if is_coding_capability(name):
+                # Typed coding capability: translate to a governed shell_command
+                # (no new execution path) and enrich the observation with parsed
+                # signals (test results, files changed, ...).
+                try:
+                    argv, stdin = build_coding_command(name, params)
+                except ValueError as exc:
+                    return {"success": False, "summary": str(exc), "data": {}}
+                observation = _observe(
+                    await host.run("shell_command", {"argv": argv}, stdin=stdin)
+                )
+                observation["data"] = {
+                    **(observation.get("data") or {}),
+                    **summarize_coding_result(name, observation.get("data") or {}),
+                }
+                return observation
             return _observe(await self.execute_registered_skill(name, params))
 
         # Apply the loop's permission mode + approval prompt to the shared
@@ -238,7 +305,11 @@ class UniversalAgent:
         if approval_callback is not None:
             self._coordinator.set_approval_callback(approval_callback)
         try:
-            loop = ToolUseLoop(self.llm, tools, invoke, max_steps=max_steps, on_step=on_step)
+            loop = ToolUseLoop(
+                self.provider_for_role("worker"), tools, invoke,
+                max_steps=max_steps, on_step=on_step,
+                task_state=task_state, verifier=Verifier(),
+            )
             return await loop.run(goal)
         finally:
             self._coordinator.set_mode(prev_mode)

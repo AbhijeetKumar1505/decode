@@ -20,6 +20,30 @@ class CompletionCriterion(BaseModel):
     expected: Any = None
     required: bool = True
 
+    def check(self, values: Any) -> tuple[bool, str]:
+        """Evaluate this criterion against a result mapping.
+
+        Returns ``(ok, reason)``. Non-required criteria always pass. Shared by
+        :meth:`PlanGraph.validate_completion` (per-node) and the objective-level
+        completion gate in the task-state schema.
+        """
+        if not self.required:
+            return True, ""
+        actual: Any = values if isinstance(values, dict) else {"value": values}
+        if self.field:
+            for part in self.field.split("."):
+                if not isinstance(actual, dict) or part not in actual:
+                    actual = None
+                    break
+                actual = actual[part]
+        if self.kind == "equals" and actual != self.expected:
+            return False, f"completion criterion failed: {self.field} must equal expected value"
+        if self.kind == "present" and actual in (None, "", [], {}):
+            return False, f"completion criterion failed: {self.field} is required"
+        if self.kind not in {"equals", "present"}:
+            return False, f"unsupported completion criterion: {self.kind}"
+        return True, ""
+
 
 class RetryCategory(str, Enum):
     NEVER = "never"
@@ -118,19 +142,7 @@ class PlanGraph(BaseModel):
         if not isinstance(values, dict):
             values = {"value": values}
         for criterion in node.completion:
-            if not criterion.required:
-                continue
-            actual: Any = values
-            if criterion.field:
-                for part in criterion.field.split("."):
-                    if not isinstance(actual, dict) or part not in actual:
-                        actual = None
-                        break
-                    actual = actual[part]
-            if criterion.kind == "equals" and actual != criterion.expected:
-                return False, f"completion criterion failed: {criterion.field} must equal expected value"
-            if criterion.kind == "present" and actual in (None, "", [], {}):
-                return False, f"completion criterion failed: {criterion.field} is required"
-            if criterion.kind not in {"equals", "present"}:
-                return False, f"unsupported completion criterion: {criterion.kind}"
+            ok, reason = criterion.check(values)
+            if not ok:
+                return False, reason
         return True, ""

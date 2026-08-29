@@ -6,20 +6,23 @@
 decode/
   agents/          Agent base + HostAgent (governed host capabilities)
   bootstrap/       Startup and host preparation
-  capabilities/    Host-capability specs (kind="internal")
+  capabilities/    Host + coding capability specs, per-turn resolver
   execution/       Local, Docker, WSL, SSH, and MCP providers
   governance/      Scope and pre-execution policy
   hostcontrol/     Filesystem/command policy, operations, sessions, hooks
   kernel/          Context, safety, model provider
   knowledge/       Knowledge graph, retrieval, capability -> ATT&CK map
   memory/          Session, project, and semantic memory
+  models/          Model registry, policy-aware router, role gateway (subsystem 01)
   persistence/     SQLite/Mongo sessions, evidence, and artifacts
-  planner/         DAG data types (PlanNode, PlanGraph)
-  plugins/         Trusted plugin manifest + sandbox lifecycle
+  planner/         DAG data types (PlanNode, PlanGraph) — task-state primitives
+  prompting/       System-prompt composition from fragments (subsystem 02)
   reports/         Report renderers
   runtime/         ExecutionCoordinator, HostController, ToolUseLoop
+  schema/          TaskState — the live Neural Schema (subsystem 04)
   skills/          SkillRegistry + markdown playbooks (SKILL.md)
   tui/             Rich + prompt_toolkit REPL
+  verification/    Completion verifier + bounded replan (subsystem 10)
   universal_agent.py  The universal agent (run_tool_loop)
 tests/             pytest suite
 docs/              Product and engineering documentation
@@ -66,16 +69,17 @@ Reusable procedures are authored as markdown, not Python:
 
 Registration is automatic through `SkillRegistry` (see `decode/skills/markdown_skill.py`).
 
-## Plugin development
+## Extensions
 
-Third-party plugins use the manifest + sandbox lifecycle (`decode/plugins/`):
+There is no in-tree plugin system — `decode/tools.py` and `decode/plugins/` were
+removed. Extend Decode through:
 
-- A manifest declares capabilities, permissions, platforms, and a SHA-256 entrypoint digest; it never grants scope, approval, or credentials.
-- Discovery and conformance parse source without importing it.
-- Enabled packages run under the container sandbox profile.
-- Avoid import-time side effects; validate all external input; add failure and permission tests.
+- **Markdown playbooks** (above) for repeatable procedures.
+- **Native capabilities** in `decode/hostcontrol/operations.py` (wired through
+  `HostAgent`) for genuinely new OS primitives.
 
-See [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md).
+Optional connectors to *external* systems are a planned, isolated plugin surface,
+not an in-tree one. See [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md).
 
 ## Error handling
 

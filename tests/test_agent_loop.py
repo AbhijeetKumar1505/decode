@@ -115,6 +115,50 @@ class TestToolUseLoop(unittest.TestCase):
         self.assertIn("could not decide", result["final"])
 
 
+class TestToolUseLoopTaskState(unittest.TestCase):
+    """The loop reads and writes the live task-state across steps."""
+
+    def test_loop_records_actions_observations_and_completes(self):
+        from decode.schema import TaskState, TaskStatus
+
+        provider = _ScriptedProvider([
+            json.dumps({"thought": "list procs", "tool": "process_list", "params": {}}),
+            json.dumps({"message": "done"}),
+        ])
+
+        async def invoke(name, params):
+            return {"success": True, "summary": "ok", "data": {"n": 3}}
+
+        state = TaskState(objective="list processes")
+        loop = ToolUseLoop(provider, TOOLS, invoke, max_steps=5, task_state=state)
+        result = asyncio.run(loop.run("list processes"))
+
+        self.assertEqual(result["stopped"], "final")
+        self.assertEqual(len(state.actions), 1)
+        self.assertEqual(state.actions[0].tool, "process_list")
+        self.assertEqual(len(state.observations), 1)
+        self.assertTrue(state.observations[0].success)
+        self.assertEqual(state.status, TaskStatus.COMPLETE)
+        # the compact state is surfaced back to callers
+        self.assertIn("list processes", result["state_summary"])
+
+    def test_compact_state_is_sent_to_the_model_each_turn(self):
+        from decode.schema import TaskState
+
+        seen = []
+
+        class _Recorder:
+            async def chat(self, messages):
+                seen.append([m["role"] for m in messages])
+                return json.dumps({"message": "ok"})
+
+        state = TaskState(objective="inspect the repo")
+        loop = ToolUseLoop(_Recorder(), TOOLS, lambda n, p: None, max_steps=2, task_state=state)
+        asyncio.run(loop.run("inspect the repo"))
+        # a transient system state-message is appended for the model call
+        self.assertGreaterEqual(seen[0].count("system"), 2)
+
+
 class TestUniversalAgentLoopIntegration(unittest.TestCase):
     """End-to-end: the bare-prompt path discovers tools and drives them, governed."""
 

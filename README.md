@@ -32,7 +32,7 @@ It is designed for security researchers, penetration testers, students, and defe
 
 ### Roadmap
 
-The verified implementation baseline and prioritized release gates are maintained in [ROADMAP.md](ROADMAP.md). P0 execution governance, P1 universal capability/tool convergence, P2 plugin SDK and trust model, P3 planning/recovery/memory, P4 agent and model orchestration, and P5 Kali coverage and reproducibility are complete; the next release gate is P6 the optional team and distributed profile.
+The verified implementation baseline and prioritized release gates are maintained in [ROADMAP.md](ROADMAP.md). Execution governance, universal capability/tool convergence, planning/recovery/memory, model orchestration, and Kali coverage are in place; the in-tree plugin SDK was built and then **removed** in favor of markdown playbooks and native capabilities. The current direction is the De-code subsystem plan — the task-state spine (Neural Schema, prompt composition, a verification pass, and role→model routing) — described in [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md).
 
 ## Architecture
 

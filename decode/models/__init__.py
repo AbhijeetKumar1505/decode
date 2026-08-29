@@ -7,6 +7,7 @@ from .registry import (
     classification_rank,
     default_model_registry,
 )
+from .gateway import ModelGateway
 from .routing import (
     DEFAULT_RULES,
     ModelRouter,
@@ -16,6 +17,7 @@ from .routing import (
 )
 
 __all__ = [
+    "ModelGateway",
     "DataPolicy",
     "ModelCost",
     "ModelRegistry",

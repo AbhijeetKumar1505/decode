@@ -38,8 +38,8 @@ final evidence of implementation.
 
 ## Extensibility and configuration
 
-- [Plugin manifest lifecycle](PLUGIN_MANIFEST.md) — the trusted third-party extension path
-- Markdown playbooks (`SKILL.md`) — see [AGENTS.md](../AGENTS.md) and `decode/skills/playbooks/`
+- Markdown playbooks (`SKILL.md`) — the reusable-procedure extension path; see [AGENTS.md](../AGENTS.md) and `decode/skills/playbooks/`
+- [Extensions and plugins](PLUGIN_MANIFEST.md) — native capabilities now; a planned, isolated external-plugin surface (the in-tree plugin system was removed)
 - [Configuration](CONFIGURATION.md)
 - [Prompt library](PROMPT_LIBRARY.md)
 

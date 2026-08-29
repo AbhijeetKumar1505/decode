@@ -23,7 +23,7 @@ Decode provides a common capability layer between human objectives and security 
 - SOC and incident-response analysts investigating defensive telemetry.
 - Malware, forensics, cloud, identity, and application-security specialists.
 - Students working in legal labs, CTFs, and controlled training environments.
-- Playbook and plugin authors extending the agent.
+- Playbook authors extending the agent with markdown procedures.
 - Teams that require auditable, repeatable security automation.
 
 ## Core philosophy
@@ -33,7 +33,7 @@ Decode provides a common capability layer between human objectives and security 
 3. **Discovery over hardcoding** — the agent discovers and drives installed tools through one governed shell capability; nothing is wrapped per-tool.
 4. **Evidence over assertion** — conclusions link to collected outputs and provenance.
 5. **Local first** — core workflows remain useful without mandatory hosted services.
-6. **Extensibility by contract** — playbooks, plugins, models, and executors expose typed, governed interfaces.
+6. **Extensibility by contract** — markdown playbooks, native capabilities, models, and executors expose typed, governed interfaces; there is no in-tree plugin loader.
 7. **Reproducibility** — plans, parameters, versions, approvals, and results are recordable.
 8. **Explainable decisions** — routing and planning decisions expose concise reasons, not hidden reasoning traces.
 9. **Fail closed** — missing dependencies, ambiguous scope, and policy failures stop execution safely.
@@ -48,7 +48,7 @@ Decode provides a common capability layer between human objectives and security 
 - Enforce permission, scope, and confirmation policies on every action.
 - Preserve findings, evidence, audit events, and execution feedback.
 - Support cloud and local model providers behind stable interfaces.
-- Enable community extensions via markdown playbooks and trusted plugins.
+- Enable community extensions via markdown playbooks and native host capabilities.
 - Provide deterministic replay inputs where the underlying tool permits it.
 - Establish a platform for research into planning, memory, and adaptive tool use.
 
@@ -74,8 +74,7 @@ Decode provides a common capability layer between human objectives and security 
 - Governed host control: file read/write/edit/search, process and service operations.
 - READ, WRITE, and DESTRUCTIVE per-command risk classification with `plan`/`ask`/`auto` permission modes.
 - Local, Docker, WSL, SSH, and MCP execution-provider implementations.
-- Markdown playbooks (`SKILL.md`) as the reusable-procedure extension path.
-- Trusted plugin manifest + sandbox lifecycle.
+- Markdown playbooks (`SKILL.md`) and native host capabilities as the extension paths.
 - OpenRouter (default), OpenAI, and Anthropic provider adapters with data-locality-aware routing.
 - SQLite (optional MongoDB) session, target, finding, evidence, project, and artifact storage.
 - Audit, structured execution logging, execution feedback, and hashed immutable evidence.
@@ -85,12 +84,14 @@ Decode provides a common capability layer between human objectives and security 
 
 - Cross-session memory and hybrid knowledge retrieval.
 - Reproducible replay metadata across every execution path.
-- Plugin sandbox coverage for networked third-party packages.
+- Policy-aware model routing (built; not yet wired to planner/worker/reviewer roles).
 
 ### Planned
 
+- Task-state spine: a live task-state schema (Neural Schema), composed prompts, and a verification/replan pass.
 - Broader markdown-playbook library for common security procedures.
 - Optional semantic memory retrieval.
+- An isolated external-integration plugin surface (the in-tree plugin system was removed).
 
 ## Future vision
 

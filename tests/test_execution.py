@@ -260,7 +260,6 @@ class TestPublicExecutionBoundaryInventory(unittest.TestCase):
     ENTRY_METHODS = {
         "execute",
         "execute_command",
-        "execute_plugin",
         "execute_registered_skill",
         "run",
         "system_update",
@@ -270,8 +269,6 @@ class TestPublicExecutionBoundaryInventory(unittest.TestCase):
         ("bootstrap/engine.py", "BootstrapEngine", "system_update"),
         ("runtime/coordinator.py", "ExecutionCoordinator", "execute"),
         ("skills/registry.py", "SkillRegistry", "execute"),
-        ("tools.py", "PluginManager", "execute_plugin"),
-        ("tools.py", "_SkillAdapter", "execute"),
         ("tui/app.py", "AgentREPL", "run"),
         # Host-control surfaces: HostController routes through the coordinator;
         # ToolUseLoop delegates execution to a coordinator-backed invoke; HostSession
@@ -308,10 +305,6 @@ class TestPublicExecutionBoundaryInventory(unittest.TestCase):
                     discovered.add(entry)
                     wrapped_family = (
                         (relative.startswith("skills/") and method.name == "execute")
-                        or (
-                            relative.startswith("plugins/")
-                            and method.name == "execute"
-                        )
                         or (
                             relative.startswith("execution/")
                             and method.name == "execute"

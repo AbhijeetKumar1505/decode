@@ -1,51 +1,39 @@
-# Plugin Manifest and Lifecycle
+# Extensions and Plugins
 
 ## Status
 
-**Implemented P2 managed-plugin trust boundary.** Third-party packages are
-manifest-managed. Discovery, integrity verification, lifecycle operations, and
-conformance checks never import an entrypoint. The legacy `decode.plugins`
-package remains a separate trusted in-tree compatibility mechanism.
+**The in-tree plugin system has been removed.** `decode/tools.py`
+(`PluginManager`/`ToolRegistry`) and `decode/plugins/` (the manifest, sandbox,
+and lifecycle code, plus the bundled `recon`/`web`/`network`/`exploit` plugins)
+were deleted during the universal-agent consolidation. They encoded the old
+"tools are the architecture" model — hardcoded security tools shipped in-tree —
+which the governed universal agent replaces with tool **discovery**
+(`list_tools`) plus the governed `shell_command` capability.
 
-## Manifest contract
+There is no supported dynamic-plugin execution path today.
 
-Every package supplies `plugin.json` with schema version, stable ID, semantic
-version, `module:callable` entrypoint, Decode compatibility range, SHA-256
-entrypoint digest, requested capabilities, dependencies, permissions,
-platforms, and sandbox profile. Unknown fields fail validation.
+## How to extend Decode now
 
-Source digest, compatibility, revocation, and entrypoint static inspection must
-all pass before a package can be enabled. Manifest declarations never grant
-scope, approval, executor, credential, memory, filesystem, network, or model
-access.
+| Need | Mechanism |
+|---|---|
+| A repeatable procedure / workflow | **Markdown playbook** (`SKILL.md`) — see [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md). No Python. |
+| A new OS primitive | Add it to `decode/hostcontrol/operations.py` and wire it through `HostAgent` as a first-class capability. |
+| Drive any installed tool | `list_tools` to confirm it exists, then the governed `shell_command` capability. Nothing is hardcoded. |
 
-## Lifecycle
+## Future plugin surface (planned)
 
-`PluginLifecycleManager` persists local state under its managed package root
-and supports:
+Per the De-code plan, *plugins* mean optional connectors to **external** systems
+(issue trackers, cloud providers, hosted scanners, MCP servers) — never in-tree
+security tools and never core OS operations, both of which are native
+capabilities. Any future plugin surface must, before it is reintroduced:
 
-- install and verification without code import;
-- explicit enable and disable;
-- source-pinned upgrade and rollback to a retained version;
-- policy revocation; and
-- uninstall without deleting evidence or audit data.
+- pass typed input and output through `ExecutionCoordinator` without broadening
+  the caller's effective scope, approval, executor, credential, or model access;
+- verify source and compatibility without importing untrusted entrypoints;
+- run untrusted code under an isolation profile (e.g. a network-disabled,
+  read-only, resource-limited container) with explicit, revocable enablement; and
+- carry the same mandatory audit, logging, and feedback telemetry as every other
+  governed execution.
 
-A revoked package cannot be enabled. Enabling requires static conformance:
-valid syntax, a declared entrypoint callable, verified source, and the
-container sandbox profile.
-
-## Container profile
-
-`PluginContainerProfile` produces a Docker invocation with network disabled,
-a read-only root filesystem, dropped Linux capabilities, `no-new-privileges`,
-PID/CPU/memory limits, a noexec temporary filesystem, and a read-only package
-mount. Plugin manifests requesting network access fail closed. Target-scoped
-container networking is deliberately unsupported until it has a separately
-verified policy implementation.
-
-## Remaining runtime work
-
-The managed lifecycle is complete, but generic plugin invocation has not been
-exposed as a public execution path. It will be added only when the container
-protocol can pass typed input and output through `ExecutionCoordinator` without
-broadening the manifest’s effective permissions.
+Until a design meets that bar, extend Decode through native capabilities and
+markdown playbooks only.

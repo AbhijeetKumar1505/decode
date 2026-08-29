@@ -86,6 +86,16 @@ class FilesystemScope:
     def is_empty(self) -> bool:
         return not self._read_roots and not self._write_roots
 
+    @property
+    def read_roots(self) -> List[str]:
+        """Resolved read-root paths as strings (write roots are implicitly readable)."""
+        return [str(root) for root in self._read_roots]
+
+    @property
+    def write_roots(self) -> List[str]:
+        """Resolved write-root paths as strings."""
+        return [str(root) for root in self._write_roots]
+
 
 # Argument-sensitive command risk. Presence of any token classifies upward.
 _DESTRUCTIVE_BINARIES = frozenset({

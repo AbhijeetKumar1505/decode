@@ -25,7 +25,7 @@ Local, WSL, SSH, and MCP executors are not automatically sandboxes. Docker isola
 | Scope and approval records | Critical | Forgery, replay, or ambiguity |
 | Target data and evidence | Sensitive | Confidentiality and integrity |
 | Tool/model output | Untrusted, potentially sensitive | Injection, poisoning, and leakage |
-| Plugins and adapters | Trusted code today | Supply-chain and privilege expansion |
+| Markdown playbooks and native capabilities | Trusted in-tree code, governed at execution | Supply-chain and privilege expansion (future external plugins) |
 | Audit and feedback data | Sensitive | Tampering, omission, or secret capture |
 
 ## Threats and controls
@@ -37,7 +37,7 @@ Local, WSL, SSH, and MCP executors are not automatically sandboxes. Docker isola
 | Approval replay or confused deputy | Approval digest binds action, target, normalized arguments, command, executor, risk, privileges, opaque credential references, and absolute expiry | Durable actor identity and approval-replay ledger |
 | Command or argument injection | Typed skill inputs and adapter patterns | Remove raw command compatibility and complete argument-vector migration |
 | Secret exposure | Central display/log/error redaction, opaque credential references, protected evidence, and regression tests | Secret-store integration and deployment key management |
-| Malicious or vulnerable plugin | In-tree plugins are reviewed and trusted | Manifest, source pinning, isolation, revocation, and conformance tests |
+| Malicious or vulnerable extension | No in-tree plugin loader (removed); extension is via reviewed markdown playbooks and native capabilities, all governed at execution | A future external-integration plugin surface needs manifest, source pinning, isolation, revocation, and conformance tests before adoption |
 | Evidence or memory poisoning | Immutable protected evidence files, SHA-256 references, path ownership checks, and hash verification | Rich verification state and retention/deletion controls |
 | Provider compromise or unsafe response | Provider-independent kernel and schema validation | Data-policy-aware routing and systematic fallback tests |
 | Session or data theft | Local-first SQLite by default | File permission validation, optional encryption, protected exports, multi-user auth before team mode |

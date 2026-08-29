@@ -131,7 +131,7 @@ the `Agent` base and `HostAgent`; in `capabilities/`, the host-capability specs.
 | Tool-use agent loop (the universal agent) | `decode/runtime/agent_loop.py`, `decode/universal_agent.py` |
 | Host capability specs | `decode/capabilities/models.py` |
 | Skill registry (markdown playbooks) | `decode/skills/registry.py`, `decode/skills/markdown_skill.py`, `decode/skills/playbooks/` |
-| Trusted in-tree plugins | `decode/plugins/` |
+| Task-state / DAG primitives | `decode/planner/dag.py` (`PlanNode`, `PlanGraph`, `CompletionCriterion`) |
 | Execution providers | `decode/execution/` |
 | Governance | `decode/governance/` |
 | Persistence | `decode/persistence/` |
@@ -227,26 +227,25 @@ This lets new tool workflows be added as prose without a hardcoded adapter.
 - Do not retry a denial or consequential action automatically.
 - Add tests for routing, missing capabilities, denied approval, failures, and partial results.
 
-## Plugin Rules
+## Extension Rules
 
-Plugins are for **third-party additions only** — never for core operations that
-already exist on the host. General OS control (files, processes, services,
-commands) and the security capability stack are inbuilt capabilities, not
-plugins. The versioned manifest + sandbox system (`decode/plugins/`) is the
-extension mechanism; the legacy in-process `PluginManager` (`decode/tools.py`)
-has its execution quarantined and is not an extension path.
+There is **no in-tree plugin system**. `decode/tools.py` (`PluginManager`) and
+`decode/plugins/` (manifest, sandbox, lifecycle, and bundled tool plugins) were
+removed. Do not reintroduce a tool catalog, an in-process plugin loader, or
+per-tool Python wrappers.
 
-The legacy plugin loader imports trusted Python code in-process. Until manifests and isolation are the only path:
+Extend Decode through:
 
-- Treat plugins as application code with full process impact.
-- Do not load unverified third-party plugins.
-- Avoid import-time side effects.
-- Do not install dependencies during import.
-- Do not let plugin metadata grant permissions.
-- Validate inputs and outputs at the plugin boundary.
-- Isolate plugin failures and audit policy violations.
+- **Markdown playbooks** (`SKILL.md`, above) for repeatable procedures.
+- **Native capabilities** in `decode/hostcontrol/operations.py`, wired through
+  `HostAgent`, for genuinely new OS primitives.
 
-See `docs/PLUGIN_MANIFEST.md` for the plugin manifest and sandbox lifecycle.
+*Plugins* are reserved for optional, isolated connectors to **external** systems
+(issue trackers, cloud providers, hosted scanners, MCP servers) — never in-tree
+security tools and never core OS operations. That surface is planned, not built;
+any future design must pass typed I/O through `ExecutionCoordinator` under
+isolation, with the same audit/log/feedback telemetry as every other governed
+execution. See [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md).
 
 ## Mandatory Execution Telemetry
 
@@ -294,15 +293,13 @@ Bootstrap Engine
        |
 Environment Scan
        |
-Tool Registry Generation
-       |
 Dependency Validation
        |
-Skill and Plugin Loading
+Skill (markdown playbook) Loading
        |
-Provider and Domain Initialization
+Provider Initialization
        |
-Agent Registry Initialization
+Host Capability Registration
        |
 Agent Ready
 ```
