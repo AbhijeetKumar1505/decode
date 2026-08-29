@@ -10,6 +10,7 @@ message instead of a tool call.
 
 from __future__ import annotations
 
+import inspect
 import json
 import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional
@@ -97,6 +98,8 @@ class ToolUseLoop:
                 # Verify before accepting completion; replan (bounded) on failure.
                 if self._task_state is not None and self._verifier is not None:
                     verdict = self._verifier.verify(self._task_state, last_observation)
+                    if inspect.isawaitable(verdict):  # e.g. a reviewer-model verifier
+                        verdict = await verdict
                     if not verdict.valid and self._replans < self._max_replans:
                         self._replans += 1
                         self._task_state.mark("investigating")

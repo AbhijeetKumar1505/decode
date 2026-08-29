@@ -219,7 +219,7 @@ class UniversalAgent:
         from .runtime import HostController, ToolUseLoop
         from .runtime.coordinator import ExecutionStatus
         from .schema import ScopeView, TaskState
-        from .verification import Verifier
+        from .verification import ModelVerifier, Verifier
 
         scope = filesystem_scope or FilesystemScope(read_roots=[Path.cwd()])
         policy = command_policy or CommandPolicy()
@@ -312,10 +312,16 @@ class UniversalAgent:
         if approval_callback is not None:
             self._coordinator.set_approval_callback(approval_callback)
         try:
+            # Opt in to a reviewer-model verifier with DECODE_MODEL_REVIEW=1;
+            # otherwise the deterministic rule-based verifier gates completion.
+            if os.getenv("DECODE_MODEL_REVIEW", "").strip().lower() in {"1", "true", "yes"}:
+                verifier: Any = ModelVerifier(self.provider_for_role("reviewer"))
+            else:
+                verifier = Verifier()
             loop = ToolUseLoop(
                 self.provider_for_role("worker"), tools, invoke,
                 max_steps=max_steps, on_step=on_step,
-                task_state=task_state, verifier=Verifier(),
+                task_state=task_state, verifier=verifier,
             )
             return await loop.run(goal)
         finally:
