@@ -5,7 +5,7 @@ import unittest
 from decode.planner.dag import CompletionCriterion
 from decode.runtime import ToolUseLoop
 from decode.schema import TaskState
-from decode.verification import Verifier
+from decode.verification import ModelVerifier, Verifier
 
 TOOLS = [{"name": "test_run", "description": "Run the test suite"}]
 
@@ -48,6 +48,73 @@ class _ScriptedProvider:
 
     async def chat(self, messages):
         return self._replies.pop(0)
+
+
+class _RaisingProvider:
+    async def chat(self, messages):
+        raise AssertionError("provider must not be called")
+
+
+class TestModelVerifier(unittest.TestCase):
+    def _state(self):
+        return TaskState(objective="ship the feature")
+
+    def test_model_accepts(self):
+        provider = _ScriptedProvider([json.dumps({"valid": True, "reasons": []})])
+        result = asyncio.run(ModelVerifier(provider).verify(self._state()))
+        self.assertTrue(result.valid)
+
+    def test_model_rejects_with_reasons(self):
+        provider = _ScriptedProvider([json.dumps({"valid": False, "reasons": ["tests fail"]})])
+        result = asyncio.run(ModelVerifier(provider).verify(self._state()))
+        self.assertFalse(result.valid)
+        self.assertIn("tests fail", result.reasons)
+
+    def test_unparseable_reply_fails_open(self):
+        provider = _ScriptedProvider(["I am not sure honestly"])
+        result = asyncio.run(ModelVerifier(provider).verify(self._state()))
+        self.assertTrue(result.valid)
+
+    def test_hard_gate_runs_before_model(self):
+        # a failing completion condition must short-circuit without calling the model
+        state = self._state()
+        state.completion_conditions.append(
+            CompletionCriterion(kind="equals", field="last_success", expected=True)
+        )
+        state.record_action("test_run", {})
+        state.record_observation("test_run", {"success": False})
+        result = asyncio.run(ModelVerifier(_RaisingProvider()).verify(state))
+        self.assertFalse(result.valid)
+
+    def test_provider_error_fails_open(self):
+        result = asyncio.run(ModelVerifier(_RaisingProvider()).verify(self._state()))
+        self.assertTrue(result.valid)
+
+
+class TestLoopReplanWithModelReviewer(unittest.TestCase):
+    def test_reviewer_model_drives_replan(self):
+        worker = _ScriptedProvider([
+            json.dumps({"message": "done (first attempt)"}),
+            json.dumps({"tool": "test_run", "params": {}}),
+            json.dumps({"message": "done for real"}),
+        ])
+        reviewer = _ScriptedProvider([
+            json.dumps({"valid": False, "reasons": ["not yet"]}),
+            json.dumps({"valid": True, "reasons": []}),
+        ])
+
+        async def invoke(name, params):
+            return {"success": True, "summary": "ok"}
+
+        state = TaskState(objective="do the thing")
+        loop = ToolUseLoop(
+            worker, TOOLS, invoke, max_steps=6, task_state=state,
+            verifier=ModelVerifier(reviewer), max_replans=2,
+        )
+        result = asyncio.run(loop.run("do the thing"))
+        self.assertEqual(result["stopped"], "final")
+        self.assertEqual(result["final"], "done for real")
+        self.assertTrue(any(s["tool"] == "test_run" for s in result["steps"]))
 
 
 class TestLoopReplan(unittest.TestCase):

@@ -34,6 +34,9 @@ HOST_CAPABILITY_META = {
     "service_control": (RiskLevel.DESTRUCTIVE, "Start, stop, or restart a system service"),
     "shell_command": (RiskLevel.WRITE, "Run any installed CLI tool by its command line (policy-checked, per-command risk-classified, scoped, audited); if the tool is absent the result reports it"),
     "host_session": (RiskLevel.WRITE, "Run a sequence of commands in a stateful session"),
+    "session_open": (RiskLevel.READ, "Open a persistent shell session that keeps its working directory and environment across turns"),
+    "session_exec": (RiskLevel.WRITE, "Run one command in the persistent session (cwd/env persist; per-command risk-classified). Opens the session on first use"),
+    "session_close": (RiskLevel.READ, "Close the persistent session and return its transcript summary"),
 }
 
 HOST_CAPABILITIES = tuple(HOST_CAPABILITY_META)

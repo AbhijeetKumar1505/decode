@@ -25,6 +25,9 @@ _INPUT_SCHEMAS: Dict[str, Dict[str, Any]] = {
     "service_control": {"name": "string", "action": "enum[start,stop,restart]"},
     "shell_command": {"command": "string (full command line, e.g. 'nmap -sV 10.0.0.5')", "argv": "string[]? (pre-split alternative to command)"},
     "host_session": {"commands": "string[][]"},
+    "session_open": {"cwd": "string? (starting working directory)"},
+    "session_exec": {"command": "string (one command line)", "argv": "string[]? (pre-split alternative)"},
+    "session_close": {},
 }
 
 

@@ -62,6 +62,22 @@ class Observation(BaseModel):
     success: bool = False
     summary: str = ""
     data: Dict[str, Any] = Field(default_factory=dict)
+    evidence_ref: str = ""
+    evidence_hash: str = ""
+    ts: str = Field(default_factory=_now)
+
+
+class Artifact(BaseModel):
+    """A significant operation's durable record, linked to protected evidence."""
+
+    id: str = Field(default_factory=_uuid)
+    source: str = ""
+    action: str = ""
+    related_step: int = 0
+    summary: str = ""
+    evidence_id: str = ""
+    evidence_hash: str = ""
+    confidence: str = "medium"
     ts: str = Field(default_factory=_now)
 
 
@@ -96,6 +112,7 @@ class TaskState(BaseModel):
     actions: List[ActionRecord] = Field(default_factory=list)
     observations: List[Observation] = Field(default_factory=list)
     findings: List[Finding] = Field(default_factory=list)
+    artifacts: List[Artifact] = Field(default_factory=list)
     unresolved_questions: List[str] = Field(default_factory=list)
     completion_conditions: List[CompletionCriterion] = Field(default_factory=list)
     status: TaskStatus = TaskStatus.INVESTIGATING
@@ -117,16 +134,44 @@ class TaskState(BaseModel):
         return action
 
     def record_observation(self, tool: str, observation: Dict[str, Any]) -> Observation:
+        evidence = observation.get("evidence") or {}
         obs = Observation(
             step=len(self.observations) + 1,
             tool=tool,
             success=bool(observation.get("success")),
             summary=str(observation.get("summary", ""))[:400],
             data=observation.get("data") or {},
+            evidence_ref=str(evidence.get("id", "")),
+            evidence_hash=str(evidence.get("sha256", "")),
         )
         self.observations.append(obs)
+        # Link the immutable evidence captured for this step as a task artifact.
+        if obs.evidence_ref:
+            self.add_artifact(
+                source=tool, action=tool, related_step=obs.step, summary=obs.summary,
+                evidence_id=obs.evidence_ref, evidence_hash=obs.evidence_hash,
+            )
         self._touch()
         return obs
+
+    def add_artifact(
+        self,
+        *,
+        source: str = "",
+        action: str = "",
+        related_step: int = 0,
+        summary: str = "",
+        evidence_id: str = "",
+        evidence_hash: str = "",
+        confidence: str = "medium",
+    ) -> Artifact:
+        artifact = Artifact(
+            source=source, action=action, related_step=related_step, summary=summary,
+            evidence_id=evidence_id, evidence_hash=evidence_hash, confidence=confidence,
+        )
+        self.artifacts.append(artifact)
+        self._touch()
+        return artifact
 
     def add_hypothesis(self, statement: str, confidence: float = 0.0) -> Hypothesis:
         hypothesis = Hypothesis(statement=statement, confidence=confidence)
@@ -207,6 +252,8 @@ class TaskState(BaseModel):
             lines.append("Findings:")
             for finding in self.findings[-max_items:]:
                 lines.append(f"  - [{finding.severity}] {finding.title}")
+        if self.artifacts:
+            lines.append(f"Artifacts: {len(self.artifacts)} evidence-linked")
         if self.unresolved_questions:
             lines.append("Open questions:")
             for question in self.unresolved_questions[-max_items:]:

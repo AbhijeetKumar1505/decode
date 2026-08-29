@@ -32,9 +32,10 @@ spine** is now in place:
    resolver, and parsed coding observations.
 
 Policy (06), Execution (07), and Artifact/Memory (09) already matched the target
-and were not rewritten. Remaining enhancements: a persistent governed session
-across turns (12), task-state↔evidence artifact linking (09), and an optional
-reviewer-model verifier backend (10).
+and were not rewritten. The follow-on enhancements are also in place: a persistent
+governed session across turns (12, `session_open/exec/close`), task-state↔evidence
+artifact linking (09), and an opt-in reviewer-model verifier backend
+(10, `ModelVerifier` / `DECODE_MODEL_REVIEW=1`).
 
 ## Status legend
 

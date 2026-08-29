@@ -69,15 +69,15 @@ verification). The table maps each subsystem to its source and honest status.
 | 04 | Task State (Neural Schema) | `decode/schema/{task_state,store}.py` (reusing `planner/dag.py`) | **Implemented** — a live `TaskState` (objective, mode, scope, hypotheses, plan, actions, observations, findings, questions, completion conditions) that the loop reads and writes each turn; persisted via `SessionStore`. |
 | 05 | Capability Registry | `decode/capabilities/{models,coding,resolver}.py`, `decode/runtime/host_controller.py` | **Implemented** — typed host capabilities + typed coding capabilities (git/test/build/patch, translated to governed `shell_command`); a per-turn resolver scopes the surface by mode. Non-coding external tools stay discovered (`list_tools`) and shell-driven. |
 | 06 | Policy Engine | `decode/governance/{gate,scope}.py`, `decode/hostcontrol/policy.py` | **Implemented** — scope + per-command risk + permission mode + bound approval, all audited and fail-closed. |
-| 07 | Execution Runtime | `decode/execution/*`, `decode/hostcontrol/{session,operations}.py` | **Implemented** — Local / Docker / WSL / SSH / MCP behind one interface. |
-| 08 | Observation Engine | `_observe()` in `universal_agent.py`, `capabilities/coding.py` parsing, `redact_sensitive` | **Implemented** — `{success, summary, data}` with redaction; shell results carry exit code/stdout/stderr/duration, and coding results add parsed signals (test pass/fail, files changed). |
-| 09 | Artifact / Memory Store | `decode/persistence/evidence.py`, `decode/memory/*`, `decode/knowledge/*`, `decode/audit.py`, `decode/feedback.py` | **Implemented** — immutable hashed evidence, project/session memory, knowledge graph, audit, feedback. Task-state↔evidence linking is a planned enhancement. |
-| 10 | Verification Engine | `decode/verification/verifier.py` | **Implemented** — a rule-based verifier gates a "done" message on the task's completion conditions and drives bounded replan; inert unless conditions are declared. |
+| 07 | Execution Runtime | `decode/execution/*`, `decode/hostcontrol/{session,operations}.py` | **Implemented** — Local / Docker / WSL / SSH / MCP behind one interface; a persistent governed session (`session_open/exec/close`, subsystem 12) keeps cwd/env across turns, argv-governed. |
+| 08 | Observation Engine | `_observe()` in `universal_agent.py`, `capabilities/coding.py` parsing, `redact_sensitive` | **Implemented** — `{success, summary, data, evidence}` with redaction; shell results carry exit code/stdout/stderr/duration, and coding results add parsed signals (test pass/fail, files changed). |
+| 09 | Artifact / Memory Store | `decode/persistence/evidence.py`, `decode/schema/task_state.py` (Artifact), `decode/memory/*`, `decode/knowledge/*` | **Implemented** — immutable hashed evidence, project/session memory, knowledge graph, audit, feedback; each step's evidence is linked to the task state as an `Artifact`. |
+| 10 | Verification Engine | `decode/verification/verifier.py` | **Implemented** — a rule-based verifier gates a "done" message on completion conditions and drives bounded replan (inert unless declared); an opt-in reviewer-model backend (`ModelVerifier`, `DECODE_MODEL_REVIEW=1`) adds a semantic review on top. |
 
-The task-state spine (#04→#10) is in place. Remaining enhancements: a persistent
-governed session across turns (#12), task-state↔evidence artifact linking (#09),
-and an optional reviewer-model verifier backend for #10. #06, #07, and the core
-of #09 already matched the target and were not rewritten. See
+The full task-state spine (#04→#10) and its enhancements are in place: the
+persistent governed session (#12), task-state↔evidence artifact linking (#09),
+and the reviewer-model verifier backend (#10). #06, #07, and the core of #09
+already matched the target and were not rewritten. See
 [ROADMAP.md](../ROADMAP.md) for sequencing.
 
 ## The agent loop
@@ -128,7 +128,9 @@ capability taxonomy.
 | `process_list` / `service_status` | READ | Host inspection |
 | `process_kill` / `service_control` | DESTRUCTIVE | Gated |
 | `shell_command` | WRITE (per-command classified) | Run any installed CLI or script as an argument vector |
-| `host_session` | WRITE (per-command classified) | Stateful command sequence |
+| `host_session` | WRITE (per-command classified) | Stateful command sequence (one batch) |
+| `session_open` / `session_close` | READ | Open/close a persistent session that keeps cwd/env across turns |
+| `session_exec` | WRITE (per-command classified) | Run one command in the persistent session |
 
 ## Extensibility
 
