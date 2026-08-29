@@ -15,21 +15,26 @@ The canonical architecture is [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITEC
 
 The target is ten subsystems (see the table in
 [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)) with a hard split
-between what the model decides and what the runtime enforces. Most of the runtime
-already exists; the near-term work is the **task-state spine**:
+between what the model decides and what the runtime enforces. The **task-state
+spine** is now in place:
 
-1. **Task State / Neural Schema (04)** — *Planned.* A live task-state object
-   (objective, scope, hypotheses, findings, unresolved, completion) the loop
-   reads and writes each turn. Salvages `PlanGraph`/`CompletionCriterion`.
-2. **Prompt composition (02)** — *Planned.* Move the loop's inline system prompt
-   into `prompt_engine` (BASE + mode + state + resolved capabilities + policy).
-3. **Verification Engine (10)** — *Planned.* A reviewer/verify pass that can
-   trigger replan instead of stopping on the model's final message.
-4. **Role→model routing (01)** — *Partial.* Wire the existing policy-aware router
-   to planner/worker/reviewer roles.
+1. **Task State / Neural Schema (04)** — *Implemented.* Live `TaskState` in
+   `decode/schema`, read and written each turn; reuses `PlanGraph`/
+   `CompletionCriterion`; persisted via `SessionStore`.
+2. **Prompt composition (02)** — *Implemented.* `decode/prompting` composes the
+   loop prompt from BASE + mode + capabilities + policy + task-state note.
+3. **Verification Engine (10)** — *Implemented.* `decode/verification` gates a
+   "done" message on completion conditions and drives bounded replan.
+4. **Role→model routing (01)** — *Implemented.* `ModelGateway` maps roles to a
+   provider; single-model by default, per-role overrides / opt-in routing.
+5. **Coding capabilities + resolver (05, 08)** — *Implemented.* Typed git/test/
+   build/patch capabilities over governed `shell_command`, a mode-aware per-turn
+   resolver, and parsed coding observations.
 
-Policy (06), Execution (07), and Artifact/Memory (09) already match the target
-and are not being rewritten.
+Policy (06), Execution (07), and Artifact/Memory (09) already matched the target
+and were not rewritten. Remaining enhancements: a persistent governed session
+across turns (12), task-state↔evidence artifact linking (09), and an optional
+reviewer-model verifier backend (10).
 
 ## Status legend
 

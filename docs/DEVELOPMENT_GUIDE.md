@@ -6,19 +6,23 @@
 decode/
   agents/          Agent base + HostAgent (governed host capabilities)
   bootstrap/       Startup and host preparation
-  capabilities/    Host-capability specs (kind="internal")
+  capabilities/    Host + coding capability specs, per-turn resolver
   execution/       Local, Docker, WSL, SSH, and MCP providers
   governance/      Scope and pre-execution policy
   hostcontrol/     Filesystem/command policy, operations, sessions, hooks
   kernel/          Context, safety, model provider
   knowledge/       Knowledge graph, retrieval, capability -> ATT&CK map
   memory/          Session, project, and semantic memory
+  models/          Model registry, policy-aware router, role gateway (subsystem 01)
   persistence/     SQLite/Mongo sessions, evidence, and artifacts
   planner/         DAG data types (PlanNode, PlanGraph) — task-state primitives
+  prompting/       System-prompt composition from fragments (subsystem 02)
   reports/         Report renderers
   runtime/         ExecutionCoordinator, HostController, ToolUseLoop
+  schema/          TaskState — the live Neural Schema (subsystem 04)
   skills/          SkillRegistry + markdown playbooks (SKILL.md)
   tui/             Rich + prompt_toolkit REPL
+  verification/    Completion verifier + bounded replan (subsystem 10)
   universal_agent.py  The universal agent (run_tool_loop)
 tests/             pytest suite
 docs/              Product and engineering documentation

@@ -63,20 +63,21 @@ verification). The table maps each subsystem to its source and honest status.
 
 | # | Subsystem | Source | Status |
 |---|---|---|---|
-| 01 | Model Gateway | `decode/models/{registry,routing}.py`, `decode/kernel/provider.py` | **Partial** — policy-aware router + provider abstraction exist; the live loop still uses one configured provider. Role→model selection (planner/worker/reviewer) is not yet wired. |
-| 02 | Prompt Engine | `decode/prompt_engine.py`, `prompts/` | **Partial** — a Jinja/YAML composer exists; the live loop's system prompt is still assembled inline in `agent_loop.py`. Composition (BASE + mode + state + capabilities + policy) is planned. |
-| 03 | Agent Runtime | `decode/runtime/agent_loop.py`, `decode/universal_agent.py` | **Implemented** — bounded reason→call→observe→iterate loop. Capability resolution and a verify step are planned extensions. |
-| 04 | Task State (Neural Schema) | `decode/planner/dag.py` (`PlanGraph`, `CompletionCriterion`), `decode/kernel/context.py` | **Planned** — the DAG data types and a flat session state exist; a live task-state object (objective, hypotheses, findings, unresolved, completion) that the loop reads and writes each turn is the next major build. |
-| 05 | Capability Registry | `decode/capabilities/models.py`, `decode/runtime/host_controller.py` | **Implemented (host)** — host capabilities are typed and governed. There is deliberately **no** external-tool taxonomy: the agent discovers tools (`list_tools`) and drives them via `shell_command`. A per-turn capability/playbook resolver is planned. |
+| 01 | Model Gateway | `decode/models/{registry,routing,gateway}.py`, `decode/kernel/provider.py` | **Implemented** — `ModelGateway` maps roles (planner/worker/reviewer/coder) to a provider via the policy-aware router. Single-model by default; per-role overrides (`DECODE_<ROLE>_MODEL`) and opt-in routing (`DECODE_MODEL_ROUTING=1`) enable multi-model. |
+| 02 | Prompt Engine | `decode/prompting/composer.py` | **Implemented** — the loop's system prompt is composed from fragments: BASE + MODE + CAPABILITIES + POLICY + task-state note + optional project rules. (`decode/prompt_engine.py` remains for domain/template prompts.) |
+| 03 | Agent Runtime | `decode/runtime/agent_loop.py`, `decode/universal_agent.py` | **Implemented** — bounded reason→resolve→call→observe→verify→iterate loop. |
+| 04 | Task State (Neural Schema) | `decode/schema/{task_state,store}.py` (reusing `planner/dag.py`) | **Implemented** — a live `TaskState` (objective, mode, scope, hypotheses, plan, actions, observations, findings, questions, completion conditions) that the loop reads and writes each turn; persisted via `SessionStore`. |
+| 05 | Capability Registry | `decode/capabilities/{models,coding,resolver}.py`, `decode/runtime/host_controller.py` | **Implemented** — typed host capabilities + typed coding capabilities (git/test/build/patch, translated to governed `shell_command`); a per-turn resolver scopes the surface by mode. Non-coding external tools stay discovered (`list_tools`) and shell-driven. |
 | 06 | Policy Engine | `decode/governance/{gate,scope}.py`, `decode/hostcontrol/policy.py` | **Implemented** — scope + per-command risk + permission mode + bound approval, all audited and fail-closed. |
 | 07 | Execution Runtime | `decode/execution/*`, `decode/hostcontrol/{session,operations}.py` | **Implemented** — Local / Docker / WSL / SSH / MCP behind one interface. |
-| 08 | Observation Engine | `_observe()` in `universal_agent.py`, coordinator normalization, `redact_sensitive` | **Partial** — `{success, summary, data}` with redaction; richer typed observations (exit code, diffs, files changed) are planned. |
-| 09 | Artifact / Memory Store | `decode/persistence/evidence.py`, `decode/memory/*`, `decode/knowledge/*`, `decode/audit.py`, `decode/feedback.py` | **Implemented** — immutable hashed evidence, project/session memory, knowledge graph, audit, feedback. The task-state tier is #04. |
-| 10 | Verification Engine | (types in `decode/planner/dag.py`) | **Planned** — no reviewer/verify-then-replan pass yet; `CompletionCriterion`/`RetryCategory` are the salvageable primitives. |
+| 08 | Observation Engine | `_observe()` in `universal_agent.py`, `capabilities/coding.py` parsing, `redact_sensitive` | **Implemented** — `{success, summary, data}` with redaction; shell results carry exit code/stdout/stderr/duration, and coding results add parsed signals (test pass/fail, files changed). |
+| 09 | Artifact / Memory Store | `decode/persistence/evidence.py`, `decode/memory/*`, `decode/knowledge/*`, `decode/audit.py`, `decode/feedback.py` | **Implemented** — immutable hashed evidence, project/session memory, knowledge graph, audit, feedback. Task-state↔evidence linking is a planned enhancement. |
+| 10 | Verification Engine | `decode/verification/verifier.py` | **Implemented** — a rule-based verifier gates a "done" message on the task's completion conditions and drives bounded replan; inert unless conditions are declared. |
 
-The near-term plan is the task-state spine: introduce #04, compose the prompt
-through #02, add the #10 verify pass, then wire #01 role routing. #06, #07, and
-#09 already match the target and are not being rewritten. See
+The task-state spine (#04→#10) is in place. Remaining enhancements: a persistent
+governed session across turns (#12), task-state↔evidence artifact linking (#09),
+and an optional reviewer-model verifier backend for #10. #06, #07, and the core
+of #09 already matched the target and were not rewritten. See
 [ROADMAP.md](../ROADMAP.md) for sequencing.
 
 ## The agent loop
