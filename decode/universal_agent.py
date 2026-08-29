@@ -243,13 +243,25 @@ class UniversalAgent:
             },
         )
 
-        tools = list(host_capability_tools())
-        for skill in self.skill_registry.get_all():
-            tools.append({
+        from .capabilities.coding import (
+            build_coding_command,
+            is_coding_capability,
+            summarize_coding_result,
+        )
+        from .capabilities.resolver import resolve_tools
+
+        host_tools = list(host_capability_tools())
+        skill_tools = [
+            {
                 "name": skill.spec.name,
                 "description": skill.spec.description,
                 "risk": skill.spec.risk_level.value,
-            })
+            }
+            for skill in self.skill_registry.get_all()
+        ]
+        # Resolve the per-turn tool surface for this task's mode (coding vs
+        # security vs hybrid) instead of exposing everything.
+        tools = resolve_tools(task_state.mode, host_tools, skill_tools)
 
         def _observe(result: Any) -> dict[str, Any]:
             ok = result.status == ExecutionStatus.SUCCESS
@@ -265,6 +277,22 @@ class UniversalAgent:
         async def invoke(name: str, params: dict[str, Any]) -> dict[str, Any]:
             if name in host_caps:
                 return _observe(await host.run(name, params))
+            if is_coding_capability(name):
+                # Typed coding capability: translate to a governed shell_command
+                # (no new execution path) and enrich the observation with parsed
+                # signals (test results, files changed, ...).
+                try:
+                    argv, stdin = build_coding_command(name, params)
+                except ValueError as exc:
+                    return {"success": False, "summary": str(exc), "data": {}}
+                observation = _observe(
+                    await host.run("shell_command", {"argv": argv}, stdin=stdin)
+                )
+                observation["data"] = {
+                    **(observation.get("data") or {}),
+                    **summarize_coding_result(name, observation.get("data") or {}),
+                }
+                return observation
             return _observe(await self.execute_registered_skill(name, params))
 
         # Apply the loop's permission mode + approval prompt to the shared
