@@ -10,7 +10,7 @@ class SkillRegistry:
         self._load_skills()
 
     def _load_skills(self):
-        packages = ["decode.skills", "decode.plugins"]
+        packages = ["decode.skills"]
         for pkg_name in packages:
             try:
                 package = importlib.import_module(pkg_name)

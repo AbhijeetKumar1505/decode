@@ -54,6 +54,31 @@ Persistence, evidence, logs, audit, knowledge   Implemented
   knowledge graph, project/session memory
 ```
 
+## De-code subsystems
+
+The target architecture is ten subsystems with a strict separation between what
+the **model** decides (reasoning, planning, tool selection, interpretation) and
+what the **runtime** enforces (permissions, scope, execution, state,
+verification). The table maps each subsystem to its source and honest status.
+
+| # | Subsystem | Source | Status |
+|---|---|---|---|
+| 01 | Model Gateway | `decode/models/{registry,routing}.py`, `decode/kernel/provider.py` | **Partial** — policy-aware router + provider abstraction exist; the live loop still uses one configured provider. Role→model selection (planner/worker/reviewer) is not yet wired. |
+| 02 | Prompt Engine | `decode/prompt_engine.py`, `prompts/` | **Partial** — a Jinja/YAML composer exists; the live loop's system prompt is still assembled inline in `agent_loop.py`. Composition (BASE + mode + state + capabilities + policy) is planned. |
+| 03 | Agent Runtime | `decode/runtime/agent_loop.py`, `decode/universal_agent.py` | **Implemented** — bounded reason→call→observe→iterate loop. Capability resolution and a verify step are planned extensions. |
+| 04 | Task State (Neural Schema) | `decode/planner/dag.py` (`PlanGraph`, `CompletionCriterion`), `decode/kernel/context.py` | **Planned** — the DAG data types and a flat session state exist; a live task-state object (objective, hypotheses, findings, unresolved, completion) that the loop reads and writes each turn is the next major build. |
+| 05 | Capability Registry | `decode/capabilities/models.py`, `decode/runtime/host_controller.py` | **Implemented (host)** — host capabilities are typed and governed. There is deliberately **no** external-tool taxonomy: the agent discovers tools (`list_tools`) and drives them via `shell_command`. A per-turn capability/playbook resolver is planned. |
+| 06 | Policy Engine | `decode/governance/{gate,scope}.py`, `decode/hostcontrol/policy.py` | **Implemented** — scope + per-command risk + permission mode + bound approval, all audited and fail-closed. |
+| 07 | Execution Runtime | `decode/execution/*`, `decode/hostcontrol/{session,operations}.py` | **Implemented** — Local / Docker / WSL / SSH / MCP behind one interface. |
+| 08 | Observation Engine | `_observe()` in `universal_agent.py`, coordinator normalization, `redact_sensitive` | **Partial** — `{success, summary, data}` with redaction; richer typed observations (exit code, diffs, files changed) are planned. |
+| 09 | Artifact / Memory Store | `decode/persistence/evidence.py`, `decode/memory/*`, `decode/knowledge/*`, `decode/audit.py`, `decode/feedback.py` | **Implemented** — immutable hashed evidence, project/session memory, knowledge graph, audit, feedback. The task-state tier is #04. |
+| 10 | Verification Engine | (types in `decode/planner/dag.py`) | **Planned** — no reviewer/verify-then-replan pass yet; `CompletionCriterion`/`RetryCategory` are the salvageable primitives. |
+
+The near-term plan is the task-state spine: introduce #04, compose the prompt
+through #02, add the #10 verify pass, then wire #01 role routing. #06, #07, and
+#09 already match the target and are not being rewritten. See
+[ROADMAP.md](../ROADMAP.md) for sequencing.
+
 ## The agent loop
 
 `UniversalAgent.run_tool_loop` (`decode/universal_agent.py`) builds the tool
@@ -106,12 +131,21 @@ capability taxonomy.
 
 ## Extensibility
 
+- **Native capabilities** (`decode/hostcontrol/`, `decode/agents/host.py`): the
+  first-class OS primitives listed above. New primitives are added here and wired
+  through `HostAgent` — never as plugins.
 - **Markdown playbooks** (`decode/skills/markdown_skill.py`,
   `decode/skills/playbooks/`, or `DECODE_PLAYBOOKS_DIR`): a `SKILL.md` file
   is surfaced as a tool; invoking it returns its instructions, which the agent
-  carries out via governed `shell_command`. No Python wrapper required.
-- **Trusted plugins** (`decode/plugins/`): the manifest + sandbox lifecycle for
-  third-party packages. See [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md).
+  carries out via governed `shell_command`. No Python wrapper required. This is
+  the sanctioned way to add repeatable procedures today.
+- **External-integration plugins** (planned): optional connectors to *external*
+  systems (issue trackers, cloud providers, scanners as a service, MCP servers).
+  Per the De-code plan these are always optional, never in-tree security tools.
+  The earlier in-process plugin loader and the manifest/sandbox/lifecycle code
+  (`decode/tools.py`, `decode/plugins/`) have been **removed**; see
+  [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md) for what a future plugin surface must
+  satisfy.
 
 ## Persistence and memory
 

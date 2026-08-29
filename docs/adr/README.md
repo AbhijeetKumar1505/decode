@@ -5,14 +5,20 @@ ADRs record durable Decode architecture choices. `Accepted` decisions govern cur
 Records for approaches that were later removed during the universal-agent pivot
 (event-driven kernel, universal tool registry, Kali integration, multi-agent
 design, dynamic plugin loading, tool-capability discovery) and for infrastructure
-that was never adopted (Redis Streams, PostgreSQL, Qdrant, FastAPI, Neural Schema)
-have been deleted rather than kept as stale history; the current design is
-described in [../SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md).
+that was never adopted (Redis Streams, PostgreSQL, Qdrant, FastAPI) have been
+deleted rather than kept as stale history; the current design is described in
+[../SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md).
+
+The **Neural Schema** (a live task-state graph, subsystem 04 in
+[../SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md)) returns as a *planned*
+direction under the De-code plan; the `PlanGraph`/`CompletionCriterion` data
+types in `decode/planner/dag.py` are its starting primitives. An ADR will record
+that decision when the design is committed.
 
 | ADR | Decision | Status |
 |---|---|---|
 | [001](ADR-001-why-python.md) | Python as the primary implementation language | Accepted |
-| [004](ADR-004-plugin-architecture.md) | Plugin architecture | Accepted |
+| [004](ADR-004-plugin-architecture.md) | Plugin architecture | Superseded |
 | [007](ADR-007-multi-model-routing.md) | Multi-model routing | Accepted |
 | [013](ADR-013-knowledge-graph-memory.md) | Knowledge graph memory | Accepted |
 | [014](ADR-014-permission-based-execution.md) | Permission-based execution | Accepted |

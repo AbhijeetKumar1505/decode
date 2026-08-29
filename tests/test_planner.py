@@ -1,6 +1,6 @@
 import unittest
 
-from decode.planner import CompletionCriterion, DAGPlanner, PlanGraph, PlanNode
+from decode.planner import PlanGraph, PlanNode
 
 
 class TestPlanGraph(unittest.TestCase):
@@ -42,36 +42,6 @@ class TestPlanGraph(unittest.TestCase):
         for nid in ("a", "b", "c"):
             g.mark(nid, "success")
         self.assertTrue(g.is_complete())
-
-
-class TestDAGPlanner(unittest.TestCase):
-    def setUp(self):
-        self.planner = DAGPlanner()
-
-    def test_ip_goal_builds_network_plan(self):
-        g = self.planner.build("scan 10.0.0.5")
-        self.assertIn("ports", g.nodes)
-        self.assertEqual(g.nodes["ports"].params.get("target"), "10.0.0.5")
-        # port_scan depends on host_discovery in the network template
-        self.assertIn("discover", g.nodes["ports"].depends_on)
-
-    def test_url_goal_builds_web_plan(self):
-        g = self.planner.build("assess https://example.com/app")
-        self.assertIn("fingerprint", g.nodes)
-        self.assertIn("vulns", g.nodes)
-        self.assertEqual(g.nodes["ports"].params.get("target"), "https://example.com/app")
-
-    def test_available_capabilities_filter(self):
-        g = self.planner.build("scan 10.0.0.5", available_capabilities=["host_discovery", "port_scan"])
-        self.assertIn("ports", g.nodes)
-        self.assertNotIn("services", g.nodes)  # service_detection filtered out
-        # report is always retained as the terminal intent
-        self.assertIn("report", g.nodes)
-
-    def test_built_graph_is_acyclic(self):
-        g = self.planner.build("assess https://example.com")
-        # Should not raise
-        g.validate_edges()
 
 
 if __name__ == "__main__":

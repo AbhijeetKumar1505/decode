@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Removed
+
+- Deleted the orphaned in-tree plugin/tools/planner layer: `decode/tools.py` (`PluginManager`/`ToolRegistry`), the `decode/plugins/` package (manifest, sandbox, lifecycle, and the bundled `recon`/`web`/`network`/`exploit` plugins), the legacy `decode/kernel/planner.py` (`Workflow`/`Planner`), and the test-only `decode/planner/planner.py` (`DAGPlanner`), with their tests. None were on the live agent-loop path. The `PlanGraph`/`PlanNode`/`CompletionCriterion` data types in `decode/planner/dag.py` are retained (used by `HostController`). Skill discovery no longer scans `decode.plugins`.
+- Documentation updated to the De-code ten-subsystem plan: extension is via markdown playbooks and native capabilities; an external-integration plugin surface is planned but unbuilt. ADR-004 marked Superseded.
+
 ### Added
 
 - Shared `ExecutionCoordinator` with typed requests/outcomes, material-action approval digests, audit fail-closed preflight, stable error categories, redacted structured logging, audit events, and execution feedback.
@@ -14,7 +19,7 @@
 
 - Mission CLI/workflows, registered conversational skills, the legacy attack chain, and Social IR CLI skill calls now use the shared coordinator.
 - Coordinator-backed capability and skill execution denies omitted required targets even when scope is configured as `allow_all`.
-- Deprecated direct `PluginManager`, skill-adapter, and `SkillRegistry` execution methods are quarantined.
+- Direct `SkillRegistry` execution is disabled; all execution routes through `ExecutionCoordinator`.
 - All shipped domain CLI commands now resolve registered skills through `ExecutionCoordinator`; direct agent, skill, capability-registry, provider, concrete legacy-plugin, nested cross-skill, and raw-shell execution fail closed, and the legacy agent approval callback is removed.
 - Provider-based tool discovery now runs through READ coordinator requests, and provider execution must match the request's authorized executor family.
 - Network mapper Nmap execution now uses a validated argument vector and structured XML parser instead of invoking another skill.

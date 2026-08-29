@@ -2,9 +2,34 @@
 
 ## Vision
 
-Decode is evolving into a local-first cybersecurity operating system whose kernel turns authorized objectives into reviewable capability plans, enforces scope and permission, executes through replaceable providers, and preserves evidence and audit history.
+Decode is a local-first engineering + authorized-security agent runtime: a
+governed loop that turns authorized objectives into reviewable actions, enforces
+scope and permission, executes through replaceable providers, and preserves
+evidence and audit history. Its capabilities happen to include software
+development and authorized security assessment; the runtime — not any tool set —
+is the architecture.
 
-The canonical architecture sequence is maintained in [docs/ROADMAP.md](docs/ROADMAP.md). This file maps that design to release priorities and verified implementation state.
+The canonical architecture is [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md), which describes the ten De-code subsystems and their status. This file maps that design to release priorities and verified implementation state.
+
+## De-code subsystem plan (current direction)
+
+The target is ten subsystems (see the table in
+[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)) with a hard split
+between what the model decides and what the runtime enforces. Most of the runtime
+already exists; the near-term work is the **task-state spine**:
+
+1. **Task State / Neural Schema (04)** — *Planned.* A live task-state object
+   (objective, scope, hypotheses, findings, unresolved, completion) the loop
+   reads and writes each turn. Salvages `PlanGraph`/`CompletionCriterion`.
+2. **Prompt composition (02)** — *Planned.* Move the loop's inline system prompt
+   into `prompt_engine` (BASE + mode + state + resolved capabilities + policy).
+3. **Verification Engine (10)** — *Planned.* A reviewer/verify pass that can
+   trigger replan instead of stopping on the model's final message.
+4. **Role→model routing (01)** — *Partial.* Wire the existing policy-aware router
+   to planner/worker/reviewer roles.
+
+Policy (06), Execution (07), and Artifact/Memory (09) already match the target
+and are not being rewritten.
 
 ## Status legend
 
@@ -14,6 +39,13 @@ The canonical architecture sequence is maintained in [docs/ROADMAP.md](docs/ROAD
 - **Research** — requires experiments and evaluation before a product commitment.
 
 ## Verified baseline — 2026-07-31
+
+> **Historical snapshot.** This section predates the universal-agent
+> consolidation. The domain agents, tool catalog/discovery, the deterministic
+> DAG planner, and the in-tree plugin system named below have since been
+> **removed**; only `PlanGraph`/`PlanNode` data types remain in `planner/dag.py`.
+> The current design is [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)
+> and the De-code subsystem plan above.
 
 ### Implemented
 
@@ -75,6 +107,14 @@ The canonical architecture sequence is maintained in [docs/ROADMAP.md](docs/ROAD
 **Exit criteria:** agents never name tools; installed-but-unsupported tools do not count as executable coverage; raw output survives parse failures.
 
 ## P2 — Plugin SDK and trust model
+
+> **Withdrawn (removed 2026-08-28).** The manifest, sandbox, lifecycle, and
+> in-process loader (`decode/plugins/`, `decode/tools.py`) shipped but were never
+> exposed as a governed execution path, and encoded the old in-tree-tools model.
+> They have been deleted. Extension is now via markdown playbooks and native
+> capabilities; an *external-integration* plugin surface is planned but unbuilt
+> (see [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md)). The checklist below is
+> retained as a record of what was built and removed.
 
 **Goal:** support extensions without treating arbitrary third-party code as trusted kernel code.
 

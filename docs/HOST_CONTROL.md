@@ -12,10 +12,11 @@ rather than a wrapper around a fixed set of security tools.
 ## Why it is inbuilt, not a plugin
 
 General system operations already exist on the host; they are core to being a
-useful agent. So they ship as **inbuilt capabilities**, never as plugins.
-Plugins ([Plugin manifest lifecycle](PLUGIN_MANIFEST.md)) are reserved for
-genuine third-party additions with declared manifests and sandboxing. Core host
-and security operations are never delivered as plugins.
+useful agent. So they ship as **inbuilt capabilities**, never as plugins. There
+is no in-tree plugin loader (it was removed); repeatable procedures are added as
+markdown playbooks, and *plugins* are reserved for a planned, isolated
+external-integration surface ([Extensions and Plugins](PLUGIN_MANIFEST.md)). Core
+host and security operations are never delivered as plugins.
 
 ## Capability family
 

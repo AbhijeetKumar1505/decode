@@ -14,8 +14,7 @@ decode/
   knowledge/       Knowledge graph, retrieval, capability -> ATT&CK map
   memory/          Session, project, and semantic memory
   persistence/     SQLite/Mongo sessions, evidence, and artifacts
-  planner/         DAG data types (PlanNode, PlanGraph)
-  plugins/         Trusted plugin manifest + sandbox lifecycle
+  planner/         DAG data types (PlanNode, PlanGraph) — task-state primitives
   reports/         Report renderers
   runtime/         ExecutionCoordinator, HostController, ToolUseLoop
   skills/          SkillRegistry + markdown playbooks (SKILL.md)
@@ -66,16 +65,17 @@ Reusable procedures are authored as markdown, not Python:
 
 Registration is automatic through `SkillRegistry` (see `decode/skills/markdown_skill.py`).
 
-## Plugin development
+## Extensions
 
-Third-party plugins use the manifest + sandbox lifecycle (`decode/plugins/`):
+There is no in-tree plugin system — `decode/tools.py` and `decode/plugins/` were
+removed. Extend Decode through:
 
-- A manifest declares capabilities, permissions, platforms, and a SHA-256 entrypoint digest; it never grants scope, approval, or credentials.
-- Discovery and conformance parse source without importing it.
-- Enabled packages run under the container sandbox profile.
-- Avoid import-time side effects; validate all external input; add failure and permission tests.
+- **Markdown playbooks** (above) for repeatable procedures.
+- **Native capabilities** in `decode/hostcontrol/operations.py` (wired through
+  `HostAgent`) for genuinely new OS primitives.
 
-See [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md).
+Optional connectors to *external* systems are a planned, isolated plugin surface,
+not an in-tree one. See [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md).
 
 ## Error handling
 
