@@ -12,6 +12,7 @@ from .kernel.provider import create_provider
 from .logging_service import LoggingService
 from .memory import SelfLearningMemory
 from .models import (
+    ModelGateway,
     ModelRouter,
     RoutingDecision,
     RoutingRequest,
@@ -51,6 +52,10 @@ class UniversalAgent:
 
         self.model_registry = self._build_model_registry()
         self.model_router = ModelRouter(self.model_registry)
+        # Role-based model selection (subsystem 01). Single-model by default: a role
+        # resolves to self.llm unless a per-role override or DECODE_MODEL_ROUTING
+        # diverges from the configured provider/model (see :meth:`provider_for_role`).
+        self.model_gateway = ModelGateway(self.model_registry, self.model_router)
         self.context = ContextManager()
         self.audit = AuditLayer(Config.AUDIT_PATH)
         self.logging = LoggingService(Config.LOGS_PATH)
@@ -74,6 +79,19 @@ class UniversalAgent:
         for spec in registry.all():
             spec.available = configured.get(spec.provider, False)
         return registry
+
+    def provider_for_role(self, role: str) -> Any:
+        """Return the LLM provider for a role.
+
+        Defaults to the live ``self.llm`` (so reassigning it still takes effect and
+        its token accounting is preserved); only diverges to a gateway-built
+        provider when a per-role override or opt-in routing selects a different
+        provider/model than the configured default.
+        """
+        provider_name, model_name = self.model_gateway.resolve_spec(role)
+        if (provider_name, model_name) == (Config.PROVIDER, Config.MODEL):
+            return self.llm
+        return self.model_gateway.for_role(role)
 
     def select_model(self, task_class: str = "analysis", **constraints: Any) -> RoutingDecision:
         """Policy-aware, reproducible model selection with a recorded public reason.
@@ -260,7 +278,8 @@ class UniversalAgent:
             self._coordinator.set_approval_callback(approval_callback)
         try:
             loop = ToolUseLoop(
-                self.llm, tools, invoke, max_steps=max_steps, on_step=on_step,
+                self.provider_for_role("worker"), tools, invoke,
+                max_steps=max_steps, on_step=on_step,
                 task_state=task_state, verifier=Verifier(),
             )
             return await loop.run(goal)
