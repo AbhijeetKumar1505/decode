@@ -192,17 +192,37 @@ class UniversalAgent:
         model discovers installed tools, composes multi-step work, and drives any
         command without ever bypassing scope, risk, approval, or audit.
         """
+        import os
+        import platform
         from pathlib import Path
 
         from .hostcontrol import HOST_CAPABILITIES, CommandPolicy, FilesystemScope
         from .hostcontrol.mcp import host_capability_tools
         from .runtime import HostController, ToolUseLoop
         from .runtime.coordinator import ExecutionStatus
+        from .schema import ScopeView, TaskState
 
         scope = filesystem_scope or FilesystemScope(read_roots=[Path.cwd()])
         policy = command_policy or CommandPolicy()
         host = HostController(self._coordinator, scope, policy)
         host_caps = set(HOST_CAPABILITIES)
+
+        # Live task-state (Neural Schema, subsystem 04): structured world-state the
+        # loop reads and writes each turn, seeded from the goal, scope, and env.
+        task_state = TaskState(
+            objective=goal,
+            scope=ScopeView(
+                read_roots=list(getattr(scope, "read_roots", [])),
+                write_roots=list(getattr(scope, "write_roots", [])),
+                targets=list(self._scope_entries),
+                allow_destructive=self._allow_destructive,
+            ),
+            environment={
+                "cwd": os.getcwd(),
+                "platform": platform.system(),
+                "executor": Config.EXECUTOR,
+            },
+        )
 
         tools = list(host_capability_tools())
         for skill in self.skill_registry.get_all():
@@ -238,7 +258,10 @@ class UniversalAgent:
         if approval_callback is not None:
             self._coordinator.set_approval_callback(approval_callback)
         try:
-            loop = ToolUseLoop(self.llm, tools, invoke, max_steps=max_steps, on_step=on_step)
+            loop = ToolUseLoop(
+                self.llm, tools, invoke, max_steps=max_steps, on_step=on_step,
+                task_state=task_state,
+            )
             return await loop.run(goal)
         finally:
             self._coordinator.set_mode(prev_mode)

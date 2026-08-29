@@ -69,6 +69,7 @@ class ToolUseLoop:
         invoke: InvokeTool,
         max_steps: int = 8,
         on_step: Optional[StepCallback] = None,
+        task_state: Any = None,
     ) -> None:
         self._provider = provider
         self._tools = tools
@@ -76,6 +77,11 @@ class ToolUseLoop:
         self._max_steps = max(1, max_steps)
         self._tool_names = {t["name"] for t in tools}
         self._on_step = on_step
+        # Optional live task-state (Neural Schema, subsystem 04). When present the
+        # loop renders a compact view of it into the prompt each turn and records
+        # every action/observation into it, so reasoning is not driven by the raw
+        # message log alone.
+        self._task_state = task_state
 
     def _emit(self, event: Dict[str, Any]) -> None:
         if self._on_step is None:
@@ -96,25 +102,39 @@ class ToolUseLoop:
         ]
         steps: List[Dict[str, Any]] = []
         for _ in range(self._max_steps):
+            # Inject a compact, refreshed view of the task state for this turn only,
+            # then drop it so the transient context never accumulates in history.
+            state_message = self._state_message()
+            if state_message is not None:
+                messages.append(state_message)
             start = time.monotonic()
             tokens_before = getattr(self._provider, "session_tokens", 0)
             raw = await self._provider.chat(messages)
             elapsed = time.monotonic() - start
             step_tokens = getattr(self._provider, "session_tokens", 0) - tokens_before
+            if state_message is not None:
+                messages.remove(state_message)
             decision = parse_llm_response(raw)
             thought = str(decision.get("thought") or decision.get("reasoning") or "").strip()
             tool = decision.get("tool")
             if not tool:
+                if self._task_state is not None:
+                    self._task_state.mark("complete")
                 self._emit({"phase": "final", "thought": thought, "message": decision.get("message", ""),
-                            "elapsed": elapsed, "tokens": step_tokens})
-                return {"final": decision.get("message", ""), "thought": thought, "steps": steps, "stopped": "final"}
+                            "elapsed": elapsed, "tokens": step_tokens, "state_summary": self._state_summary()})
+                return {"final": decision.get("message", ""), "thought": thought, "steps": steps,
+                        "stopped": "final", "state_summary": self._state_summary()}
             params = decision.get("params") or {}
+            if self._task_state is not None:
+                self._task_state.record_action(tool, params, thought)
             self._emit({"phase": "call", "thought": thought, "tool": tool, "params": params,
                         "elapsed": elapsed, "tokens": step_tokens})
             if tool not in self._tool_names:
                 observation = {"success": False, "summary": f"unknown tool '{tool}'"}
             else:
                 observation = await self._invoke(tool, params)
+            if self._task_state is not None:
+                self._task_state.record_observation(tool, observation)
             self._emit({"phase": "result", "tool": tool, "observation": observation})
             steps.append({"tool": tool, "params": params, "thought": thought, "observation": observation})
             messages.append({"role": "assistant", "content": raw})
@@ -122,4 +142,13 @@ class ToolUseLoop:
                 "role": "user",
                 "content": f"Observation from {tool}: {json.dumps(observation, default=str)[:1500]}",
             })
-        return {"final": "step budget exhausted", "steps": steps, "stopped": "budget"}
+        return {"final": "step budget exhausted", "steps": steps, "stopped": "budget",
+                "state_summary": self._state_summary()}
+
+    def _state_message(self) -> Optional[Dict[str, str]]:
+        if self._task_state is None:
+            return None
+        return {"role": "system", "content": "Current task state:\n" + self._task_state.render_compact()}
+
+    def _state_summary(self) -> str:
+        return self._task_state.render_compact() if self._task_state is not None else ""

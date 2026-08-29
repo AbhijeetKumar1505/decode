@@ -152,6 +152,12 @@ class SessionStore:
                 detail TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS task_state (
+                session_id TEXT PRIMARY KEY,
+                state_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_targets_session ON targets(session_id);
             CREATE INDEX IF NOT EXISTS idx_ports_target ON ports(target_id);
             CREATE INDEX IF NOT EXISTS idx_findings_session ON findings(session_id);
@@ -614,6 +620,24 @@ class SessionStore:
             return False
         self.checkpoint_plan_node(session_id, node_id, "pending", "retry requested")
         return True
+
+    # ── Task state (Neural Schema, subsystem 04) ────────────────────────
+
+    def save_task_state(self, session_id: str, state_json: str) -> None:
+        """Persist the serialized TaskState blob for a session (upsert)."""
+        now = self._now()
+        self._conn.execute(
+            "INSERT INTO task_state (session_id, state_json, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(session_id) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at",
+            (session_id, state_json, now),
+        )
+        self._conn.commit()
+
+    def load_task_state(self, session_id: str) -> Optional[str]:
+        row = self._conn.execute(
+            "SELECT state_json FROM task_state WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        return row["state_json"] if row else None
 
     # ── Project-isolated knowledge and memory lifecycle ─────────────────
 
