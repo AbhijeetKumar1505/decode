@@ -35,6 +35,8 @@ class ToolUseLoop:
         task_state: Any = None,
         mode: TaskMode = TaskMode.HYBRID,
         project_rules: str = "",
+        verifier: Any = None,
+        max_replans: int = 2,
     ) -> None:
         self._provider = provider
         self._tools = tools
@@ -44,6 +46,12 @@ class ToolUseLoop:
         self._on_step = on_step
         self._mode = mode
         self._project_rules = project_rules
+        # Verification (subsystem 10): before accepting a "done" message, check the
+        # task's completion conditions; on failure, replan (bounded) rather than
+        # reporting false success. Inert unless completion conditions are declared.
+        self._verifier = verifier
+        self._max_replans = max(0, max_replans)
+        self._replans = 0
         # Optional live task-state (Neural Schema, subsystem 04). When present the
         # loop renders a compact view of it into the prompt each turn and records
         # every action/observation into it, so reasoning is not driven by the raw
@@ -68,6 +76,7 @@ class ToolUseLoop:
             {"role": "user", "content": f"Goal: {goal}"},
         ]
         steps: List[Dict[str, Any]] = []
+        last_observation: Optional[Dict[str, Any]] = None
         for _ in range(self._max_steps):
             # Inject a compact, refreshed view of the task state for this turn only,
             # then drop it so the transient context never accumulates in history.
@@ -85,6 +94,25 @@ class ToolUseLoop:
             thought = str(decision.get("thought") or decision.get("reasoning") or "").strip()
             tool = decision.get("tool")
             if not tool:
+                # Verify before accepting completion; replan (bounded) on failure.
+                if self._task_state is not None and self._verifier is not None:
+                    verdict = self._verifier.verify(self._task_state, last_observation)
+                    if not verdict.valid and self._replans < self._max_replans:
+                        self._replans += 1
+                        self._task_state.mark("investigating")
+                        self._emit({"phase": "verify", "valid": False,
+                                    "failed": verdict.failed_criteria, "replans": self._replans})
+                        messages.append({"role": "assistant", "content": raw})
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                "Verification failed before completing: "
+                                + "; ".join(verdict.failed_criteria)
+                                + ". Continue working to satisfy the completion conditions, "
+                                "or explain in a final message why they cannot be met."
+                            ),
+                        })
+                        continue
                 if self._task_state is not None:
                     self._task_state.mark("complete")
                 self._emit({"phase": "final", "thought": thought, "message": decision.get("message", ""),
@@ -100,6 +128,7 @@ class ToolUseLoop:
                 observation = {"success": False, "summary": f"unknown tool '{tool}'"}
             else:
                 observation = await self._invoke(tool, params)
+            last_observation = observation
             if self._task_state is not None:
                 self._task_state.record_observation(tool, observation)
             self._emit({"phase": "result", "tool": tool, "observation": observation})

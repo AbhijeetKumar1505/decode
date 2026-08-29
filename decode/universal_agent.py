@@ -201,6 +201,7 @@ class UniversalAgent:
         from .runtime import HostController, ToolUseLoop
         from .runtime.coordinator import ExecutionStatus
         from .schema import ScopeView, TaskState
+        from .verification import Verifier
 
         scope = filesystem_scope or FilesystemScope(read_roots=[Path.cwd()])
         policy = command_policy or CommandPolicy()
@@ -260,7 +261,7 @@ class UniversalAgent:
         try:
             loop = ToolUseLoop(
                 self.llm, tools, invoke, max_steps=max_steps, on_step=on_step,
-                task_state=task_state,
+                task_state=task_state, verifier=Verifier(),
             )
             return await loop.run(goal)
         finally:
