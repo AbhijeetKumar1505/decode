@@ -6,6 +6,18 @@ from ..config import Config
 
 
 class LLMProvider(ABC):
+    # Class-level defaults so token accounting is always readable, even on
+    # instances built via ``__new__`` (e.g. in tests) that skip ``__init__``.
+    last_prompt_tokens: int = 0
+    last_completion_tokens: int = 0
+    session_tokens: int = 0
+
+    def __init__(self) -> None:
+        # Token accounting surfaced to the TUI (top bar + streaming meter).
+        self.last_prompt_tokens = 0
+        self.last_completion_tokens = 0
+        self.session_tokens = 0
+
     @abstractmethod
     async def complete(self, prompt: str, system: Optional[str] = None) -> str:
         pass
@@ -18,6 +30,28 @@ class LLMProvider(ABC):
     @abstractmethod
     def name(self) -> str:
         pass
+
+    def _record_usage(self, usage) -> None:
+        """Accumulate token usage from a provider response's ``usage`` object.
+
+        Handles both the OpenAI/OpenRouter shape (``prompt_tokens`` /
+        ``completion_tokens``) and the Anthropic shape (``input_tokens`` /
+        ``output_tokens``). Missing usage is a no-op.
+        """
+        if not usage:
+            return
+        prompt = getattr(usage, "prompt_tokens", None)
+        if prompt is None:
+            prompt = getattr(usage, "input_tokens", 0)
+        completion = getattr(usage, "completion_tokens", None)
+        if completion is None:
+            completion = getattr(usage, "output_tokens", 0)
+        try:
+            self.last_prompt_tokens = int(prompt or 0)
+            self.last_completion_tokens = int(completion or 0)
+        except (TypeError, ValueError):
+            return  # non-numeric usage (e.g. a bare mock) — ignore rather than crash
+        self.session_tokens += self.last_prompt_tokens + self.last_completion_tokens
 
 
 class OpenRouterProvider(LLMProvider):
@@ -35,6 +69,7 @@ class OpenRouterProvider(LLMProvider):
     MAX_RETRIES = 4
 
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+        super().__init__()
         from openai import OpenAI
 
         self._api_key = api_key or Config.OPENROUTER_API_KEY
@@ -81,6 +116,7 @@ class OpenRouterProvider(LLMProvider):
                 response = self._client.chat.completions.create(
                     model=self._model, messages=messages, temperature=0.1
                 )
+                self._record_usage(getattr(response, "usage", None))
                 return response.choices[0].message.content
             except Exception as exc:  # narrowed to retryable statuses below
                 status = getattr(exc, "status_code", None)
@@ -107,6 +143,7 @@ class OpenRouterProvider(LLMProvider):
 
 class OpenAIProvider(LLMProvider):
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+        super().__init__()
         from openai import OpenAI
 
         self._api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -133,6 +170,7 @@ class OpenAIProvider(LLMProvider):
         response = self._client.chat.completions.create(
             model=self._model, messages=messages, temperature=0.1
         )
+        self._record_usage(getattr(response, "usage", None))
         return response.choices[0].message.content
 
 
@@ -140,6 +178,7 @@ class AnthropicProvider(LLMProvider):
     def __init__(
         self, api_key: Optional[str] = None, model: Optional[str] = None
     ):
+        super().__init__()
         from anthropic import Anthropic
 
         self._api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
@@ -160,6 +199,7 @@ class AnthropicProvider(LLMProvider):
             max_tokens=4096,
             temperature=0.1,
         )
+        self._record_usage(getattr(response, "usage", None))
         return response.content[0].text
 
     async def chat(self, messages: List[Dict[str, str]]) -> str:
@@ -175,6 +215,7 @@ class AnthropicProvider(LLMProvider):
             max_tokens=4096,
             temperature=0.1,
         )
+        self._record_usage(getattr(response, "usage", None))
         return response.content[0].text
 
 

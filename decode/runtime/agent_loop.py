@@ -11,6 +11,7 @@ message instead of a tool call.
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from ..utils import parse_llm_response
@@ -95,15 +96,21 @@ class ToolUseLoop:
         ]
         steps: List[Dict[str, Any]] = []
         for _ in range(self._max_steps):
+            start = time.monotonic()
+            tokens_before = getattr(self._provider, "session_tokens", 0)
             raw = await self._provider.chat(messages)
+            elapsed = time.monotonic() - start
+            step_tokens = getattr(self._provider, "session_tokens", 0) - tokens_before
             decision = parse_llm_response(raw)
             thought = str(decision.get("thought") or decision.get("reasoning") or "").strip()
             tool = decision.get("tool")
             if not tool:
-                self._emit({"phase": "final", "thought": thought, "message": decision.get("message", "")})
+                self._emit({"phase": "final", "thought": thought, "message": decision.get("message", ""),
+                            "elapsed": elapsed, "tokens": step_tokens})
                 return {"final": decision.get("message", ""), "thought": thought, "steps": steps, "stopped": "final"}
             params = decision.get("params") or {}
-            self._emit({"phase": "call", "thought": thought, "tool": tool, "params": params})
+            self._emit({"phase": "call", "thought": thought, "tool": tool, "params": params,
+                        "elapsed": elapsed, "tokens": step_tokens})
             if tool not in self._tool_names:
                 observation = {"success": False, "summary": f"unknown tool '{tool}'"}
             else:

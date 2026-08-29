@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 import shlex
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -15,24 +17,64 @@ from rich.markdown import Markdown
 from rich.table import Table
 from rich.panel import Panel
 from rich.json import JSON
+from rich.live import Live
+from rich.text import Text
 from rich import box
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import NestedCompleter
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.keys import Keys
 from prompt_toolkit.styles import Style as PTStyle
 from prompt_toolkit.formatted_text import HTML
 
 from rich.prompt import Confirm, Prompt
 
 from decode.logging_service import LoggingService
+from decode.models import default_model_registry
 from decode.skills.registry import SkillRegistry
 from decode.persistence import create_store
 from decode.persistence.target_tracker import TargetContextTracker, TargetFinding
 from decode.persistence.evidence import EvidenceCollector
 from decode.runtime import redact_sensitive
 from decode.hostcontrol import CommandPolicy, FilesystemScope, PermissionMode
+from .theme import DECODE_THEME, _SPINNER_FRAMES, code_panel, diamond, fmt_path
 
-console = Console()
+console = Console(theme=DECODE_THEME)
+
+
+class _Thinking:
+    """Live status line: spinner + elapsed on the left, mm:ss + ↓tokens [stop] right.
+
+    Re-rendered ~10×/s by ``rich.live.Live``; ``__rich__`` recomputes elapsed time
+    and the running token total from the active provider each refresh.
+    """
+
+    def __init__(self, label: str, provider) -> None:
+        self._label = label
+        self._provider = provider
+        self._start = time.monotonic()
+        self._tokens0 = getattr(provider, "session_tokens", 0)
+
+    def __rich__(self) -> Table:
+        elapsed = time.monotonic() - self._start
+        tokens = getattr(self._provider, "session_tokens", 0) - self._tokens0
+        frame = _SPINNER_FRAMES[int(elapsed * 10) % len(_SPINNER_FRAMES)]
+        grid = Table.grid(expand=True)
+        grid.add_column(justify="left", ratio=1)
+        grid.add_column(justify="right")
+        left = Text.assemble(
+            (f"{frame} ", "accent"),
+            (f"{self._label} ", "thought"),
+            (f"{elapsed:.1f}s", "time"),
+        )
+        right = Text.assemble(
+            (f"{int(elapsed) // 60}m{int(elapsed) % 60:02d}s  ", "time"),
+            (f"↓{tokens} ", "meta"),
+            ("[stop]", "time"),
+        )
+        grid.add_row(left, right)
+        return grid
 
 # Single source of truth for help, autocompletion, and the /help <command> detail
 # view. group -> list of (command, args, short description, long detail).
@@ -116,6 +158,7 @@ class AgentREPL:
         self._tracker: Optional[TargetContextTracker] = None
         self._evidence = EvidenceCollector()
         self._registry = SkillRegistry()
+        self._model_registry = default_model_registry()
         self._session_active = False
         self._current_target: str = ""
         self._scope_entries: List[str] = []
@@ -164,11 +207,30 @@ class AgentREPL:
         })
 
         # Ctrl+C cancels the current line/op (handled in run()); Ctrl+D exits.
+        # Shift+Tab cycles the permission mode; Ctrl+X submits /help (shortcuts).
+        kb = KeyBindings()
+
+        @kb.add(Keys.BackTab)
+        def _(event):
+            self._cycle_mode()
+            event.app.invalidate()  # refresh the bottom toolbar
+
+        @kb.add("c-x")
+        def _(event):
+            buf = event.current_buffer
+            buf.text = "/help"
+            buf.validate_and_handle()
+
         self._session = PromptSession(
             history=FileHistory(str(self._history_path)),
             completer=completer,
             complete_while_typing=True,
-            style=PTStyle([("prompt", "bold cyan")]),
+            key_bindings=kb,
+            style=PTStyle([
+                ("prompt", "bold cyan"),
+                ("bottom-toolbar", "fg:#8a8a8a bg:#111111"),
+                ("bottom-toolbar.text", "fg:#8a8a8a bg:#111111"),
+            ]),
             bottom_toolbar=self._get_bottom_toolbar,
         )
 
@@ -285,6 +347,7 @@ class AgentREPL:
                 else:
                     console.print("[dim yellow]Please answer y or n.[/dim yellow]")
                 continue
+            self._echo_user_message(text)
             self._run(self._chat_loop(text))
 
     def _exit(self):
@@ -356,7 +419,7 @@ class AgentREPL:
 
     def _prompt(self):
         target = f" <ansiyellow>{self._current_target}</ansiyellow>" if self._current_target else ""
-        return HTML(f"<b><ansicyan>decode</ansicyan></b>{target} <ansigreen>❯</ansigreen> ")
+        return HTML(f"<b><ansicyan>decode</ansicyan></b>{target} <ansigreen>&gt;</ansigreen> ")
 
     def _print_welcome(self):
         status = "[green]session active[/green]" if self._session_active else "[dim]no session[/dim]"
@@ -365,26 +428,108 @@ class AgentREPL:
             "Type a request in natural language, a [cyan]/command[/cyan], or "
             "[cyan]![/cyan] to run a shell command directly ([cyan]Tab[/cyan] to autocomplete).\n"
             "Examples:  [dim]scan 10.0.0.5 for open ports[/dim]   [dim]! nmap -sV 10.0.0.5[/dim]   "
-            "[dim]! sudo apt update[/dim]   [dim]/mode auto[/dim]   [dim]/model devstral-2512[/dim]\n"
+            "[dim]! sudo apt update[/dim]   [dim]/mode auto[/dim]   [dim]/model glm-5.2:free[/dim]\n"
             f"[cyan]/help[/cyan] lists everything · [cyan]Ctrl+C[/cyan] cancels "
             f"(twice to quit) · [cyan]Ctrl+D[/cyan] quits    {status}",
             border_style="cyan",
             box=box.ROUNDED,
         ))
+        self._render_header_bar()
+
+    # ── design-system render helpers ─────────────────────────────────────
+    def _active_model(self) -> str:
+        """The provider-native model slug currently in use (falls back to label)."""
+        return getattr(getattr(self._agent, "llm", None), "_model", None) or self._model
+
+    def _context_limit(self) -> int:
+        """Context window of the active model, resolved from the registry (0 if unknown)."""
+        current = self._active_model()
+        spec = self._model_registry.get(current) or next(
+            (s for s in self._model_registry.all() if s.model_name == current), None
+        )
+        return spec.context_limit if spec else 0
+
+    def _render_header_bar(self) -> None:
+        """Top bar: working directory (left) · tokens used / context · model (right)."""
+        used = getattr(getattr(self._agent, "llm", None), "session_tokens", 0)
+        ctx = self._context_limit()
+        used_str = f"{used / 1000:.1f}K" if used >= 1000 else str(used)
+        ctx_str = f"{ctx // 1000}K" if ctx >= 1000 else (str(ctx) if ctx else "—")
+        grid = Table.grid(expand=True)
+        grid.add_column(justify="left", ratio=1)
+        grid.add_column(justify="right")
+        grid.add_row(
+            Text(str(Path.cwd()), style="header"),
+            Text(f"{used_str} / {ctx_str} · {self._active_model()}", style="meta"),
+        )
+        console.print(grid)
+
+    def _echo_user_message(self, text: str) -> None:
+        """Re-render the submitted line as a styled band with a right-aligned time."""
+        ts = datetime.now().strftime("%I:%M %p").lstrip("0")
+        grid = Table.grid(expand=True)
+        grid.add_column(justify="left", ratio=1)
+        grid.add_column(justify="right")
+        grid.add_row(Text(f"> {text}", style="user"), Text(ts, style="time"))
+        console.print()
+        console.print(grid)
+
+    def _cycle_mode(self) -> None:
+        """Advance the permission mode plan → ask → auto (Shift+Tab)."""
+        order = [PermissionMode.PLAN, PermissionMode.ASK, PermissionMode.AUTO]
+        try:
+            nxt = order[(order.index(self._perm_mode) + 1) % len(order)]
+        except ValueError:
+            nxt = PermissionMode.ASK
+        self._perm_mode = nxt
+
+    @contextlib.contextmanager
+    def _thinking(self, label: str = "Thinking…"):
+        """A live spinner + elapsed + running-token status around a blocking await."""
+        renderable = _Thinking(label, getattr(self._agent, "llm", None))
+        with Live(renderable, console=console, refresh_per_second=10, transient=True):
+            yield
+
+    def _render_step_call(self, tool: str, params: Dict[str, Any]) -> None:
+        """A ♦ step line for a tool call, with special forms for file/shell ops."""
+        params = params or {}
+        if tool == "file_write" and params.get("path") and params.get("content") is not None:
+            console.print(diamond(fmt_path(params["path"]), verb="Creating"))
+            console.print(code_panel(params["path"], str(params["content"])))
+            return
+        if tool == "shell_command":
+            cmd = params.get("command") or " ".join(params.get("argv", []) or [])
+            console.print(diamond(f"[bold]{cmd}[/bold]", verb="Run"))
+            return
+        if tool in ("file_list", "file_read", "file_search"):
+            verb = {"file_list": "Listing", "file_read": "Reading", "file_search": "Searching"}[tool]
+            target = params.get("path") or params.get("root") or "."
+            console.print(diamond(fmt_path(target), verb=verb))
+            return
+        detail = json.dumps(redact_sensitive(params))[:80] if params else ""
+        console.print(diamond(f"[accent]{tool}[/accent] [dim]{detail}[/dim]", verb="Run"))
+
+    def _render_step_result(self, tool: str, obs: Dict[str, Any]) -> None:
+        """A dim result line under a step: ✓/✗ and a short summary."""
+        obs = obs or {}
+        ok = obs.get("success")
+        icon = "[ok]✓[/ok]" if ok else "[fail]✗[/fail]"
+        summary = str(obs.get("summary", ""))[:110]
+        data = obs.get("data") if isinstance(obs.get("data"), dict) else {}
+        if tool == "file_list" and ok and data.get("total") is not None:
+            n = data["total"]
+            summary = f"Listed {n} {'entry' if n == 1 else 'entries'}"
+        console.print(f"  {icon} [dim]{summary}[/dim]")
 
     def _get_bottom_toolbar(self):
-        session_status = "Active" if self._session_active else "Inactive"
-        tool_count = len(self._registry.get_all())
-        target_str = f"Target: <b>{self._current_target}</b>  |  " if self._current_target else ""
-        scope_str = f"Scope: <b>{len(self._scope_entries)}</b>  |  " if self._scope_entries else ""
+        approve = {"plan": "plan", "ask": "ask", "auto": "always-approve"}.get(
+            self._perm_mode.value, self._perm_mode.value
+        )
+        target_str = f"  ·  <b>{self._current_target}</b>" if self._current_target else ""
         return HTML(
-            f" {target_str}"
-            f"Model: <b>{self._model}</b>  |  "
-            f"Domain: <b>{self._domain}</b>  |  "
-            f"{scope_str}"
-            f"Skills: <b>{tool_count}</b>  |  "
-            f"Session: <b>{session_status}</b>  |  "
-            f"<b>Ctrl+C</b> cancel (2× quit)  <b>Ctrl+D</b> quit  <b>/help</b>"
+            f" <b>Shift+Tab</b>:mode   <b>Esc</b>:cancel   <b>Ctrl+X</b>:shortcuts   "
+            f"<b>Ctrl+C</b>:cancel (2× quit)"
+            f"     {self._active_model()} · {approve}{target_str} "
         )
 
     def _print_help(self, command: str = ""):
@@ -690,8 +835,8 @@ class AgentREPL:
                 console.print("[yellow]Cancelled — no password entered.[/yellow]")
                 return
             stdin = pw + "\n"
-        console.print(f"[dim]▶ running:[/dim] [bold]{command_str}[/bold]")
-        with console.status("[dim]executing…[/dim]", spinner="dots"):
+        console.print(diamond(f"[bold]{command_str}[/bold]", verb="Run"))
+        with self._thinking("Executing…"):
             result = await self._host_controller().run(
                 "shell_command", {"command": command_str}, stdin=stdin
             )
@@ -796,23 +941,24 @@ class AgentREPL:
         if not goal:
             console.print("[yellow]Usage: /agent <goal>[/yellow]")
             return
-        # No spinner here: tool calls may prompt for approval, which conflicts
-        # with a live spinner. The loop respects the current /mode. Steps and the
-        # model's first-person reasoning are streamed live via on_step.
-        console.print(f"[dim]Agent working on: {goal}  (mode: {self._perm_mode.value})[/dim]\n")
+        # No wrapping spinner here: tool calls may prompt for approval, which
+        # conflicts with a live region. The loop respects the current /mode.
+        # Steps, timing, and the model's first-person reasoning stream via on_step.
+        self._render_header_bar()
+        console.print(f"[thought]Working on: {goal}  (mode: {self._perm_mode.value})[/thought]")
 
         def on_step(event):
             phase = event.get("phase")
             thought = (event.get("thought") or "").strip()
+            elapsed = event.get("elapsed")
+            if phase in ("call", "final") and elapsed:
+                console.print(f"[thought]› Thought for {elapsed:.1f}s[/thought]")
             if phase in ("call", "final") and thought:
-                console.print(f"[magenta]🧠 {thought}[/magenta]")
+                console.print(f"[thought]{thought}[/thought]")
             if phase == "call":
-                params = json.dumps(event.get("params", {}))[:80]
-                console.print(f"  [dim]▶ running[/dim] [cyan]{event.get('tool')}[/cyan] [dim]{params}[/dim]")
+                self._render_step_call(event.get("tool"), event.get("params", {}))
             elif phase == "result":
-                obs = event.get("observation", {}) or {}
-                icon = "[green]✓[/green]" if obs.get("success") else "[red]✗[/red]"
-                console.print(f"  {icon} [dim]{str(obs.get('summary', ''))[:110]}[/dim]")
+                self._render_step_result(event.get("tool"), event.get("observation", {}))
 
         result = await self._agent.run_tool_loop(
             goal,
@@ -832,7 +978,13 @@ class AgentREPL:
             console.print(f"[bold red]{capability} {result.status.value}:[/bold red] {reason}")
             return
         data = result.value.normalized if result.value else {}
-        console.print(f"[bold green]✓[/bold green] [bold]{capability}[/bold]")
+        path = data.get("path") if isinstance(data, dict) else None
+        label = f"[bold]{capability}[/bold]" + (f" {fmt_path(path)}" if path else "")
+        console.print(f"  [ok]✓[/ok] {label}")
+        # A read file renders as a syntax-highlighted block, not a JSON dump.
+        if capability == "file_read" and isinstance(data, dict) and data.get("content") is not None:
+            console.print(code_panel(path or "file", str(data["content"])))
+            return
         self._render_json(data)
 
     def _handle_knowledge(self, query):
@@ -879,7 +1031,7 @@ class AgentREPL:
     async def _execute_tool(self, action, params=None):
         start = time.time()
         try:
-            with console.status(f"[cyan]Running [bold]{action}[/bold]…[/cyan]", spinner="dots"):
+            with self._thinking(f"Running {action}…"):
                 execution = await self._agent.execute_registered_skill(
                     action,
                     params or {},
@@ -901,7 +1053,7 @@ class AgentREPL:
         result = execution.value
         safe_result = redact_sensitive(result)
         duration = time.time() - start
-        console.print(f"[bold green]✓[/bold green] [bold]{action}[/bold] completed [dim]({duration:.1f}s)[/dim]")
+        console.print(f"  [ok]✓[/ok] [bold]{action}[/bold] completed [dim]({duration:.1f}s)[/dim]")
         self._render_result(action, safe_result)
         if self._session_active and self._tracker and action in self._finding_type_map:
             cat, sev = self._finding_type_map[action]
@@ -911,7 +1063,7 @@ class AgentREPL:
                 self._tracker.session_id, type="command_output", label=action,
                 data={"result": str(safe_result)[:1000]}, source=action,
             )
-        with console.status("[white]Analyzing results…[/white]", spinner="dots"):
+        with self._thinking("Analyzing results…"):
             follow_up = await self._agent.chat(
                 f"I've executed the tool. Here is the result (truncated): {str(safe_result)[:4000]}",
                 self._domain,
@@ -926,7 +1078,8 @@ class AgentREPL:
         console.print("")
 
     async def _execute_command(self, command):
-        console.print(f"\n[bold cyan]▶[/bold cyan] $ [bold]{command}[/bold]")
+        console.print()
+        console.print(diamond(f"[bold]{command}[/bold]", verb="Run"))
         start = time.time()
         try:
             result = await self._agent.execute_command(command)
@@ -936,7 +1089,7 @@ class AgentREPL:
         duration = time.time() - start
 
         if result.success:
-            console.print(f"[bold green]✓[/bold green] Command succeeded [dim]({duration:.1f}s)[/dim]")
+            console.print(f"  [ok]✓[/ok] Command succeeded [dim]({duration:.1f}s)[/dim]")
             if result.stdout:
                 console.print(Markdown(f"```\n{result.stdout[:2000]}\n```"))
             console.print("\n[bold white]Analyzing results...[/bold white]")
@@ -945,7 +1098,7 @@ class AgentREPL:
                 self._domain,
             )
         else:
-            console.print(f"[bold red]✗[/bold red] Command failed [dim]({duration:.1f}s)[/dim]")
+            console.print(f"  [fail]✗[/fail] Command failed [dim]({duration:.1f}s)[/dim]")
             if result.timed_out:
                 console.print(f"[bold red]Timed out after {duration:.1f}s[/bold red]")
             elif result.error:

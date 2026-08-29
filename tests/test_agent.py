@@ -281,6 +281,57 @@ class TestOpenRouterRetry(unittest.TestCase):
         self.assertEqual(OpenRouterProvider._retry_delay(RuntimeError(), attempt=1), 2.0)
 
 
+class TestUsageAccounting(unittest.TestCase):
+    """Providers accumulate token usage for the TUI's top bar and streaming meter."""
+
+    def _provider(self, client):
+        from decode.kernel.provider import OpenRouterProvider
+
+        p = OpenRouterProvider.__new__(OpenRouterProvider)
+        p.last_prompt_tokens = 0
+        p.last_completion_tokens = 0
+        p.session_tokens = 0
+        p._model = "z-ai/glm-5.2:free"
+        p._client = client
+        return p
+
+    def test_session_tokens_accumulate_across_calls(self):
+        class _Usage:
+            prompt_tokens = 10
+            completion_tokens = 5
+
+        class _Client:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(**_kwargs):
+                        return mock.Mock(
+                            choices=[mock.Mock(message=mock.Mock(content="hi"))],
+                            usage=_Usage(),
+                        )
+
+        provider = self._provider(_Client())
+        asyncio.run(provider.chat([{"role": "user", "content": "a"}]))
+        asyncio.run(provider.chat([{"role": "user", "content": "b"}]))
+        self.assertEqual(provider.last_prompt_tokens, 10)
+        self.assertEqual(provider.last_completion_tokens, 5)
+        self.assertEqual(provider.session_tokens, 30)  # (10+5) × 2
+
+    def test_record_usage_handles_anthropic_shape(self):
+        class _AnthropicUsage:  # no prompt_tokens/completion_tokens → fallback path
+            input_tokens = 7
+            output_tokens = 3
+
+        provider = self._provider(client=None)
+        provider._record_usage(_AnthropicUsage())
+        self.assertEqual(provider.session_tokens, 10)
+
+    def test_record_usage_tolerates_missing_usage(self):
+        provider = self._provider(client=None)
+        provider._record_usage(None)
+        self.assertEqual(provider.session_tokens, 0)
+
+
 async def _async_noop(*_args, **_kwargs):
     return None
 
