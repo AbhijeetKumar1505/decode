@@ -64,6 +64,25 @@ class TestTaskState(unittest.TestCase):
         self.assertTrue(s.evaluate_completion({"exit_code": 0})[0])
         self.assertFalse(s.evaluate_completion({"exit_code": 1})[0])
 
+    def test_observation_evidence_creates_linked_artifact(self):
+        s = self._state()
+        s.record_observation("shell_command", {
+            "success": True, "summary": "ran", "data": {"exit_code": 0},
+            "evidence": {"id": "ev-1", "sha256": "abc123"},
+        })
+        self.assertEqual(s.observations[0].evidence_ref, "ev-1")
+        self.assertEqual(s.observations[0].evidence_hash, "abc123")
+        self.assertEqual(len(s.artifacts), 1)
+        art = s.artifacts[0]
+        self.assertEqual(art.evidence_id, "ev-1")
+        self.assertEqual(art.related_step, 1)
+        self.assertEqual(art.action, "shell_command")
+
+    def test_observation_without_evidence_makes_no_artifact(self):
+        s = self._state()
+        s.record_observation("process_list", {"success": True, "summary": "ok"})
+        self.assertEqual(len(s.artifacts), 0)
+
     def test_mark_status(self):
         s = self._state()
         s.mark("complete")

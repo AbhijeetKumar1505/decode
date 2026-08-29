@@ -266,12 +266,19 @@ class UniversalAgent:
         def _observe(result: Any) -> dict[str, Any]:
             ok = result.status == ExecutionStatus.SUCCESS
             value = result.value
+            evidence = (
+                {"id": result.evidence.id, "sha256": result.evidence.sha256}
+                if getattr(result, "evidence", None) is not None
+                else {}
+            )
             if hasattr(value, "normalized"):  # AgentResult (host capability)
-                return {"success": ok, "summary": (value.summary or result.error or "")[:400], "data": value.normalized}
+                return {"success": ok, "summary": (value.summary or result.error or "")[:400],
+                        "data": value.normalized, "evidence": evidence}
             return {
                 "success": ok,
                 "summary": (result.error or "ok")[:400],
                 "data": redact_sensitive(value) if value is not None else {},
+                "evidence": evidence,
             }
 
         async def invoke(name: str, params: dict[str, Any]) -> dict[str, Any]:

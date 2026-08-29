@@ -201,6 +201,17 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
         self.assertTrue(all(s["observation"]["success"] for s in result["steps"]))
         self.assertIn("loop-works", result["steps"][1]["observation"]["data"]["stdout"])
 
+    def test_evidence_is_linked_as_a_task_artifact(self):
+        replies = [
+            json.dumps({"tool": "shell_command", "params": {"command": "echo artifact-test"}}),
+            json.dumps({"message": "done"}),
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            agent = self._build_agent(Path(d), replies)
+            result = self._loop(agent, "run echo")
+        # the captured evidence flowed into the task state as a linked artifact
+        self.assertIn("Artifacts:", result["state_summary"])
+
     def test_missing_tool_is_reported_in_the_loop(self):
         replies = [
             json.dumps({"tool": "shell_command",

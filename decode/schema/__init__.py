@@ -8,6 +8,7 @@ observations, findings, open questions, and completion conditions.
 
 from .task_state import (
     ActionRecord,
+    Artifact,
     Finding,
     Hypothesis,
     Observation,
@@ -19,6 +20,7 @@ from .task_state import (
 
 __all__ = [
     "ActionRecord",
+    "Artifact",
     "Finding",
     "Hypothesis",
     "Observation",
