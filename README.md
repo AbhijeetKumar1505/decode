@@ -32,7 +32,7 @@ It is designed for security researchers, penetration testers, students, and defe
 
 ### Roadmap
 
-The verified implementation baseline and prioritized release gates are maintained in [ROADMAP.md](ROADMAP.md). Execution governance, universal capability/tool convergence, planning/recovery/memory, model orchestration, and Kali coverage are in place; the in-tree plugin SDK was built and then **removed** in favor of markdown playbooks and native capabilities. The current direction is the De-code subsystem plan — the task-state spine (Neural Schema, prompt composition, a verification pass, and role→model routing) — described in [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md).
+The verified implementation baseline and prioritized release gates are maintained in [ROADMAP.md](ROADMAP.md). Execution governance, universal capability/tool convergence, planning/recovery/memory, model orchestration, and Kali coverage are in place; the in-tree plugin SDK was built and then **removed** in favor of markdown playbooks and native capabilities. The De-code task-state spine (Neural Schema, prompt composition, verification/replan, role→model routing) is now implemented, along with the extension layer — MCP servers and declarative plugin packages behind a unified capability registry (`decode mcp …` / `decode plugin …`), with scoped config. See [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) and [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md).
 
 ## Architecture
 

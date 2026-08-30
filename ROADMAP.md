@@ -37,6 +37,24 @@ governed session across turns (12, `session_open/exec/close`), task-state↔evid
 artifact linking (09), and an opt-in reviewer-model verifier backend
 (10, `ModelVerifier` / `DECODE_MODEL_REVIEW=1`).
 
+### Extension layer (implemented)
+
+Three tool sources behind one source-tagged capability registry — native,
+system (discovered/shell-driven), and external providers — with scoped config
+(project > user > system):
+
+- **Scoped config + ExtensionManager** (`decode/extensions/`).
+- **MCP servers** — `decode mcp add/list/remove/enable/disable`; lazy `tools/list`
+  discovery, per-server declared risk, governed execution via `MCPExecutor`.
+- **Unified CapabilityRegistry** — native/system/skill/MCP resolved per task mode;
+  system tools stay behind `list_tools`/`shell_command` (no per-binary entries).
+- **Plugin packages** — `decode plugin install/list/remove/enable/disable`;
+  declarative bundles (manifest + markdown skills + MCP configs + docs), verified
+  and fail-closed, never in-process code.
+
+Deferred: a remote registry (`decode mcp/plugin search`) and per-server
+target-scope declarations for MCP.
+
 ## Status legend
 
 - **Implemented** — source exists and is exercised by the test suite.

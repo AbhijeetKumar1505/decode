@@ -8,6 +8,7 @@ decode/
   bootstrap/       Startup and host preparation
   capabilities/    Host + coding capability specs, per-turn resolver
   execution/       Local, Docker, WSL, SSH, and MCP providers
+  extensions/      Scoped config, MCP server manager, plugin packages (subsystems: extension layer)
   governance/      Scope and pre-execution policy
   hostcontrol/     Filesystem/command policy, operations, sessions, hooks
   kernel/          Context, safety, model provider
