@@ -210,6 +210,109 @@ def bootstrap(
     console.print("[green]Report saved:[/green] data/bootstrap_report.json")
 
 
+mcp_app = typer.Typer(help="Manage MCP servers (external tool providers)")
+app.add_typer(mcp_app, name="mcp")
+
+
+def _mcp_manager():
+    from .extensions import ExtensionManager
+
+    return ExtensionManager().mcp
+
+
+def _parse_scope(scope: str):
+    from .extensions import Scope
+
+    try:
+        return Scope(scope)
+    except ValueError:
+        console.print(f"[red]Unknown scope '{scope}'. Use user, project, or system.[/red]")
+        raise typer.Exit(1) from None
+
+
+@mcp_app.command("add")
+def mcp_add(
+    name: str = typer.Argument(..., help="Server name, e.g. mongodb"),
+    command_parts: list[str] = typer.Argument(
+        None, help="Launcher after `--`, e.g. -- npx -y mongodb-mcp-server"
+    ),
+    transport: str = typer.Option("stdio", "--transport", help="stdio | http"),
+    url: str = typer.Option("", "--url", help="Endpoint for http/sse transports"),
+    risk: str = typer.Option("write", "--risk", help="Declared risk: read | write | destructive"),
+    scope: str = typer.Option("user", "--scope", help="user | project | system"),
+):
+    """Register an MCP server, e.g. `decode mcp add mongodb -- npx -y mongodb-mcp-server`."""
+    from .extensions.mcp_manager import MCPServerSpec
+
+    parts = command_parts or []
+    spec = MCPServerSpec(
+        name=name, transport=transport, url=url, risk=risk,
+        command=parts[0] if parts else "", args=parts[1:],
+    )
+    try:
+        _mcp_manager().add(spec, scope=_parse_scope(scope))
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from None
+    console.print(f"[green]Added MCP server '{name}' ({scope} scope).[/green]")
+
+
+@mcp_app.command("list")
+def mcp_list():
+    """List configured MCP servers."""
+    servers = _mcp_manager().list_servers()
+    if not servers:
+        console.print("[dim]No MCP servers configured. Add one with `decode mcp add`.[/dim]")
+        return
+    table = Table(title="MCP Servers", box=box.ROUNDED)
+    table.add_column("Name", style="cyan")
+    table.add_column("Transport")
+    table.add_column("Launcher")
+    table.add_column("Risk")
+    table.add_column("Enabled", style="bold")
+    for name, spec in sorted(servers.items()):
+        launcher = spec.url or " ".join([spec.command, *spec.args]).strip()
+        table.add_row(name, spec.transport, launcher, spec.risk, "yes" if spec.enabled else "no")
+    console.print(table)
+
+
+@mcp_app.command("remove")
+def mcp_remove(
+    name: str = typer.Argument(..., help="Server name"),
+    scope: str = typer.Option("user", "--scope", help="user | project | system"),
+):
+    """Remove a configured MCP server."""
+    removed = _mcp_manager().remove(name, scope=_parse_scope(scope))
+    if removed:
+        console.print(f"[green]Removed MCP server '{name}' ({scope} scope).[/green]")
+    else:
+        console.print(f"[yellow]No MCP server '{name}' in {scope} scope.[/yellow]")
+
+
+@mcp_app.command("enable")
+def mcp_enable(
+    name: str = typer.Argument(...),
+    scope: str = typer.Option("user", "--scope", help="user | project | system"),
+):
+    """Enable a configured MCP server."""
+    ok = _mcp_manager().set_enabled(name, True, scope=_parse_scope(scope))
+    console.print(
+        f"[green]Enabled '{name}'.[/green]" if ok else f"[yellow]No MCP server '{name}'.[/yellow]"
+    )
+
+
+@mcp_app.command("disable")
+def mcp_disable(
+    name: str = typer.Argument(...),
+    scope: str = typer.Option("user", "--scope", help="user | project | system"),
+):
+    """Disable a configured MCP server (kept, but not started or exposed)."""
+    ok = _mcp_manager().set_enabled(name, False, scope=_parse_scope(scope))
+    console.print(
+        f"[green]Disabled '{name}'.[/green]" if ok else f"[yellow]No MCP server '{name}'.[/yellow]"
+    )
+
+
 def run_setup() -> None:
     console.print("[bold yellow]Setup Decode[/bold yellow]")
     provider = Prompt.ask(
