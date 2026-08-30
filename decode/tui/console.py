@@ -131,7 +131,10 @@ class DecodeConsole(App):
         text = Text()
         text.append("DE-CODE ", style="bold")
         text.append(f" {icon} {v.status.upper()} ", style="bold cyan")
-        text.append(f" │ {v.mode} │ {v.session_tokens} tok │ {Path.cwd().name}", style="dim")
+        text.append(
+            f" │ {v.mode} │ {self._perm_mode.value} │ {v.session_tokens} tok │ {Path.cwd().name}",
+            style="dim",
+        )
         return text
 
     def _tools_text(self) -> Text:
@@ -217,11 +220,36 @@ class DecodeConsole(App):
         return approved
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        goal = (event.value or "").strip()
-        if not goal:
-            return
+        text = (event.value or "").strip()
         self.query_one("#input", Input).value = ""
-        self.run_worker(self._drive(goal), exclusive=True)
+        if not text:
+            return
+        if text.startswith("/"):
+            self._handle_command(text)
+            return
+        self.run_worker(self._drive(text), exclusive=True)
+
+    def _handle_command(self, text: str) -> None:
+        """Slash commands (the command palette essentials)."""
+        log = self.query_one("#session", RichLog)
+        parts = text[1:].split()
+        cmd = parts[0].lower() if parts else ""
+        if cmd == "clear":
+            log.clear()
+        elif cmd == "help":
+            log.write(Text("Commands: /mode <ask|auto|plan>  /clear  /help  /quit", style="dim"))
+        elif cmd == "quit":
+            self.exit()
+        elif cmd == "mode" and len(parts) > 1:
+            try:
+                self._perm_mode = PermissionMode(parts[1].lower())
+            except ValueError:
+                log.write(Text("usage: /mode ask|auto|plan", style="red"))
+                return
+            log.write(Text(f"permission mode → {self._perm_mode.value}", style="green"))
+            self.query_one("#header", Static).update(self._header_text())
+        else:
+            log.write(Text(f"unknown command: /{cmd}  (try /help)", style="red"))
 
     async def _drive(self, goal: str) -> None:
         try:

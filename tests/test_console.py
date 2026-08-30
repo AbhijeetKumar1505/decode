@@ -68,6 +68,21 @@ class TestDecodeConsole(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_slash_mode_command_changes_permission_mode(self):
+        async def scenario():
+            from decode.hostcontrol import PermissionMode
+
+            app = DecodeConsole(_FakeAgent())
+            async with app.run_test() as pilot:
+                from textual.widgets import Input
+
+                app.query_one("#input", Input).value = "/mode auto"
+                await pilot.press("enter")
+                await pilot.pause()
+                self.assertEqual(app._perm_mode, PermissionMode.AUTO)
+
+        asyncio.run(scenario())
+
     def test_auto_approve_returns_true_without_modal(self):
         async def scenario():
             app = DecodeConsole(_FakeAgent())
