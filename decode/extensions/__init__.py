@@ -1,0 +1,20 @@
+"""Extension layer: scoped config, MCP servers, and plugin packages.
+
+Three tool sources sit behind one registry — native/built-in capabilities,
+system tools (discovered, shell-driven), and external providers (MCP servers and
+plugin packages). This package owns configuration and installation of the
+external providers; execution still flows through the governed coordinator.
+"""
+
+from .manager import ExtensionManager
+from .paths import PRECEDENCE, Scope, scope_root
+from .store import ScopedStore, deep_merge
+
+__all__ = [
+    "ExtensionManager",
+    "PRECEDENCE",
+    "Scope",
+    "scope_root",
+    "ScopedStore",
+    "deep_merge",
+]
