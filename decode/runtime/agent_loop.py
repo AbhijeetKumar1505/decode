@@ -15,6 +15,15 @@ import json
 import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
+from ..events import (
+    AgentStatus,
+    AgentThought,
+    FinalMessage,
+    PlanUpdated,
+    TokensUpdated,
+    ToolCompleted,
+    ToolStarted,
+)
 from ..prompting import compose_system_prompt
 from ..schema import TaskMode
 from ..utils import parse_llm_response
@@ -38,6 +47,7 @@ class ToolUseLoop:
         project_rules: str = "",
         verifier: Any = None,
         max_replans: int = 2,
+        event_bus: Any = None,
     ) -> None:
         self._provider = provider
         self._tools = tools
@@ -53,11 +63,19 @@ class ToolUseLoop:
         self._verifier = verifier
         self._max_replans = max(0, max_replans)
         self._replans = 0
+        # Optional typed-event stream (subsystem: event bus) for richer frontends
+        # like the Textual console. The dict-based on_step is preserved for the
+        # inline REPL; both are emitted when present.
+        self._events = event_bus
         # Optional live task-state (Neural Schema, subsystem 04). When present the
         # loop renders a compact view of it into the prompt each turn and records
         # every action/observation into it, so reasoning is not driven by the raw
         # message log alone.
         self._task_state = task_state
+
+    async def _publish(self, event: Any) -> None:
+        if self._events is not None:
+            await self._events.emit(event)
 
     def _emit(self, event: Dict[str, Any]) -> None:
         if self._on_step is None:
@@ -84,6 +102,7 @@ class ToolUseLoop:
             state_message = self._state_message()
             if state_message is not None:
                 messages.append(state_message)
+            await self._publish(AgentStatus(status="thinking"))
             start = time.monotonic()
             tokens_before = getattr(self._provider, "session_tokens", 0)
             raw = await self._provider.chat(messages)
@@ -91,6 +110,10 @@ class ToolUseLoop:
             step_tokens = getattr(self._provider, "session_tokens", 0) - tokens_before
             if state_message is not None:
                 messages.remove(state_message)
+            await self._publish(TokensUpdated(
+                session_tokens=int(getattr(self._provider, "session_tokens", 0)),
+                step_tokens=int(step_tokens),
+            ))
             decision = parse_llm_response(raw)
             thought = str(decision.get("thought") or decision.get("reasoning") or "").strip()
             tool = decision.get("tool")
@@ -120,6 +143,11 @@ class ToolUseLoop:
                     self._task_state.mark("complete")
                 self._emit({"phase": "final", "thought": thought, "message": decision.get("message", ""),
                             "elapsed": elapsed, "tokens": step_tokens, "state_summary": self._state_summary()})
+                if thought:
+                    await self._publish(AgentThought(text=thought))
+                await self._publish(FinalMessage(message=decision.get("message", "")))
+                await self._publish(PlanUpdated(summary=self._state_summary()))
+                await self._publish(AgentStatus(status="complete"))
                 return {"final": decision.get("message", ""), "thought": thought, "steps": steps,
                         "stopped": "final", "state_summary": self._state_summary()}
             params = decision.get("params") or {}
@@ -127,6 +155,10 @@ class ToolUseLoop:
                 self._task_state.record_action(tool, params, thought)
             self._emit({"phase": "call", "thought": thought, "tool": tool, "params": params,
                         "elapsed": elapsed, "tokens": step_tokens})
+            if thought:
+                await self._publish(AgentThought(text=thought))
+            await self._publish(ToolStarted(tool=tool, params=params))
+            await self._publish(AgentStatus(status="executing"))
             if tool not in self._tool_names:
                 observation = {"success": False, "summary": f"unknown tool '{tool}'"}
             else:
@@ -135,6 +167,11 @@ class ToolUseLoop:
             if self._task_state is not None:
                 self._task_state.record_observation(tool, observation)
             self._emit({"phase": "result", "tool": tool, "observation": observation})
+            await self._publish(ToolCompleted(
+                tool=tool, success=bool(observation.get("success")),
+                summary=str(observation.get("summary", "")), data=observation.get("data") or {},
+            ))
+            await self._publish(PlanUpdated(summary=self._state_summary()))
             steps.append({"tool": tool, "params": params, "thought": thought, "observation": observation})
             messages.append({"role": "assistant", "content": raw})
             messages.append({

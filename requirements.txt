@@ -2,6 +2,7 @@ typer>=0.25.0
 defusedxml>=0.7.1
 rich>=15.0.0
 prompt_toolkit>=3.0.0
+textual>=0.60.0
 faiss-cpu>=1.8.0
 python-dotenv>=1.2.2
 langchain>=0.1.0

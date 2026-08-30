@@ -203,6 +203,7 @@ class UniversalAgent:
         max_steps: int = 8,
         on_step: Any = None,
         mcp_manager: Any = None,
+        event_bus: Any = None,
     ) -> dict[str, Any]:
         """Drive a bounded tool-use loop over host + playbook capabilities.
 
@@ -361,10 +362,14 @@ class UniversalAgent:
                 verifier: Any = ModelVerifier(self.provider_for_role("reviewer"))
             else:
                 verifier = Verifier()
+            if event_bus is not None:
+                from .events import SessionStarted
+
+                await event_bus.emit(SessionStarted(goal=goal, mode=task_state.mode.value))
             loop = ToolUseLoop(
                 self.provider_for_role("worker"), tools, invoke,
                 max_steps=max_steps, on_step=on_step,
-                task_state=task_state, verifier=verifier,
+                task_state=task_state, verifier=verifier, event_bus=event_bus,
             )
             return await loop.run(goal)
         finally:
