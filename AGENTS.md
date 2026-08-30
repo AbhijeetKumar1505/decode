@@ -310,22 +310,37 @@ Agent Ready
 
 Startup should report degraded optional capabilities. Missing safety, governance, or mandatory audit prerequisites must prevent execution.
 
-## Frontends and the event bus
+## TUI Architecture
 
-There are two frontends over one runtime, decoupled by a typed **event bus**
-(`decode/events/`): the runtime publishes typed events; each frontend folds them
-into its own view via `TUIStore` (`decode/tui/state.py`). Never let a frontend
-drive tools directly — it sends the goal to `run_tool_loop` and renders events.
+The TUI in `decode/tui/` is a Rich + prompt_toolkit inline REPL, not a full-screen Textual application.
 
-- **Inline REPL** (default `decode`): `decode/tui/app.py`, a Rich + prompt_toolkit
-  synchronous REPL consuming the loop's `on_step` callback.
-- **Full-screen console** (`decode tui`): `decode/tui/console.py`, a Textual app
-  (header / workspace / session / input) consuming the event bus, with a
-  first-class approval modal and slash commands (`/mode`, `/clear`, `/help`).
+```text
+AgentREPL
+  +-- Rich Console
+  +-- PromptSession with history
+  +-- Synchronous run loop
+        +-- command dispatch
+        +-- asyncio.run() for async agent calls
+```
 
-Both are governed identically (same coordinator, scope, approval). When adding a
-runtime signal, emit a typed event (`decode/events/types.py`) so every frontend
-can render it; keep the `on_step` dict in sync for the inline REPL.
+- `decode/cli.py` calls `AgentREPL.run()`.
+- Commands execute sequentially.
+- There are no screens, widgets, custom messages, or implemented event bus.
+- Preserve this architecture unless the user explicitly requests a TUI redesign.
+
+Supported REPL commands include:
+
+```text
+/start
+/chain
+/session
+/findings
+/evidence
+/plugins
+/resume <id>
+/clear
+/exit
+```
 
 ## Testing
 

@@ -55,19 +55,6 @@ system (discovered/shell-driven), and external providers — with scoped config
 Deferred: a remote registry (`decode mcp/plugin search`) and per-server
 target-scope declarations for MCP.
 
-### Frontends / event bus (implemented)
-
-One runtime, two frontends, decoupled by a typed event bus:
-
-- **Event layer** (`decode/events/`) — typed events + async `EventBus`; the loop
-  publishes; `decode/tui/state.py` folds them into a view.
-- **Inline REPL** — the default `decode` (Rich + prompt_toolkit, `on_step`).
-- **Textual console** — `decode tui` (full-screen: header / workspace / session /
-  input, tool cards, approval modal, `/mode`·`/clear`·`/help`).
-
-Deferred: findings emitted as `FindingCreated` events from the runtime, a context-
-graph view, an agent switcher, and Web/API frontends over the same event bus.
-
 ## Status legend
 
 - **Implemented** — source exists and is exercised by the test suite.

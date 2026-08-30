@@ -21,10 +21,8 @@ registry, or event bus — those earlier designs were removed.
 User / Operator  (natural-language goal or question)
         |
         v
-Frontends (over one runtime, via a typed event bus)   Implemented
-  inline REPL (decode/tui/app.py, default `decode`)
-  Textual console (decode/tui/console.py, `decode tui`)
-  events: decode/events/ · state: decode/tui/state.py
+CLI and REPL                                    Implemented
+  decode/cli.py, decode/tui/app.py
         |
         v
 Universal agent loop                            Implemented
