@@ -7,11 +7,17 @@ external providers; execution still flows through the governed coordinator.
 """
 
 from .manager import ExtensionManager
+from .mcp_manager import MCPManager, MCPServerSpec
 from .paths import PRECEDENCE, Scope, scope_root
+from .plugin_manager import PluginManager, PluginManifest
 from .store import ScopedStore, deep_merge
 
 __all__ = [
     "ExtensionManager",
+    "MCPManager",
+    "MCPServerSpec",
+    "PluginManager",
+    "PluginManifest",
     "PRECEDENCE",
     "Scope",
     "scope_root",

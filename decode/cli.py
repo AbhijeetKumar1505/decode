@@ -54,6 +54,24 @@ _audit = AuditLayer()
 _feedback = FeedbackStore()
 
 
+def _apply_plugin_playbook_dirs() -> None:
+    """Add enabled plugins' skill directories to DECODE_PLAYBOOKS_DIR so the
+    SkillRegistry (built when the agent starts) discovers plugin playbooks."""
+    import os
+
+    try:
+        from .extensions import ExtensionManager
+
+        dirs = [str(d) for d in ExtensionManager().playbook_dirs()]
+    except Exception:
+        return
+    if not dirs:
+        return
+    existing = os.environ.get("DECODE_PLAYBOOKS_DIR", "")
+    parts = [p for p in existing.split(os.pathsep) if p] + dirs
+    os.environ["DECODE_PLAYBOOKS_DIR"] = os.pathsep.join(dict.fromkeys(parts))
+
+
 def start_repl(
     domain: str = "redteam",
     provider: str | None = None,
@@ -63,6 +81,8 @@ def start_repl(
     _configure_output_encoding()
 
     display_banner()
+
+    _apply_plugin_playbook_dirs()
 
     try:
         from .universal_agent import UniversalAgent
@@ -310,6 +330,88 @@ def mcp_disable(
     ok = _mcp_manager().set_enabled(name, False, scope=_parse_scope(scope))
     console.print(
         f"[green]Disabled '{name}'.[/green]" if ok else f"[yellow]No MCP server '{name}'.[/yellow]"
+    )
+
+
+plugin_app = typer.Typer(help="Manage plugin packages (declarative capability bundles)")
+app.add_typer(plugin_app, name="plugin")
+
+
+def _plugin_manager():
+    from .extensions import ExtensionManager
+
+    return ExtensionManager().plugins
+
+
+@plugin_app.command("install")
+def plugin_install(
+    source: str = typer.Argument(..., help="Path to a plugin package directory"),
+    scope: str = typer.Option("user", "--scope", help="user | project | system"),
+):
+    """Install a plugin package from a local directory (verifies its manifest)."""
+    from pathlib import Path as _Path
+
+    try:
+        manifest = _plugin_manager().install(_Path(source), scope=_parse_scope(scope))
+    except (ValueError, OSError) as exc:
+        console.print(f"[red]Install failed: {exc}[/red]")
+        raise typer.Exit(1) from None
+    console.print(
+        f"[green]Installed plugin '{manifest.name}' v{manifest.version} ({scope} scope).[/green]"
+    )
+
+
+@plugin_app.command("list")
+def plugin_list():
+    """List installed plugins."""
+    plugins = _plugin_manager().list_plugins()
+    if not plugins:
+        console.print("[dim]No plugins installed. Install one with `decode plugin install`.[/dim]")
+        return
+    table = Table(title="Plugins", box=box.ROUNDED)
+    table.add_column("Name", style="cyan")
+    table.add_column("Version")
+    table.add_column("Description")
+    table.add_column("Enabled", style="bold")
+    for name, record in sorted(plugins.items()):
+        table.add_row(name, record.version, record.description, "yes" if record.enabled else "no")
+    console.print(table)
+
+
+@plugin_app.command("remove")
+def plugin_remove(
+    name: str = typer.Argument(...),
+    scope: str = typer.Option("user", "--scope", help="user | project | system"),
+):
+    """Remove an installed plugin (and the MCP servers it registered)."""
+    removed = _plugin_manager().remove(name, scope=_parse_scope(scope))
+    console.print(
+        f"[green]Removed plugin '{name}'.[/green]" if removed
+        else f"[yellow]No plugin '{name}' in {scope} scope.[/yellow]"
+    )
+
+
+@plugin_app.command("enable")
+def plugin_enable(
+    name: str = typer.Argument(...),
+    scope: str = typer.Option("user", "--scope", help="user | project | system"),
+):
+    """Enable an installed plugin."""
+    ok = _plugin_manager().set_enabled(name, True, scope=_parse_scope(scope))
+    console.print(
+        f"[green]Enabled '{name}'.[/green]" if ok else f"[yellow]No plugin '{name}'.[/yellow]"
+    )
+
+
+@plugin_app.command("disable")
+def plugin_disable(
+    name: str = typer.Argument(...),
+    scope: str = typer.Option("user", "--scope", help="user | project | system"),
+):
+    """Disable an installed plugin (kept, but its components are not exposed)."""
+    ok = _plugin_manager().set_enabled(name, False, scope=_parse_scope(scope))
+    console.print(
+        f"[green]Disabled '{name}'.[/green]" if ok else f"[yellow]No plugin '{name}'.[/yellow]"
     )
 
 
