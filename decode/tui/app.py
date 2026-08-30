@@ -151,6 +151,7 @@ class AgentREPL:
         self._cmd_policy = CommandPolicy()
         self._host_ctl = None
         self._host_gate = None
+        self._mcp_manager = None
         self._domain = domain
         self._model = getattr(agent, 'provider_name', 'openrouter')
         self._store = create_store()
@@ -967,8 +968,17 @@ class AgentREPL:
             permission_mode=self._perm_mode,
             approval_callback=self._host_approval,
             on_step=on_step,
+            mcp_manager=self._mcp(),
         )
         console.print(f"\n[bold]{result.get('final', '')}[/bold]\n")
+
+    def _mcp(self):
+        """Lazily build the MCP manager so configured servers are usable in the REPL."""
+        if self._mcp_manager is None:
+            from decode.extensions import ExtensionManager
+
+            self._mcp_manager = ExtensionManager().mcp
+        return self._mcp_manager
 
     def _render_host(self, capability, result):
         from decode.runtime.coordinator import ExecutionStatus

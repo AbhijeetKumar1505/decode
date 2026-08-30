@@ -212,6 +212,46 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
         # the captured evidence flowed into the task state as a linked artifact
         self.assertIn("Artifacts:", result["state_summary"])
 
+    def test_mcp_tool_is_exposed_and_routed_through_the_coordinator(self):
+        from decode.execution.mcp import MCPExecutor
+        from decode.extensions.mcp_manager import MCPToolDescriptor
+
+        class _Client:
+            async def call_tool(self, name, arguments):
+                return {"found": 1, "tool": name, "args": arguments}
+
+            async def check(self):
+                return True
+
+        class _FakeMCPManager:
+            def __init__(self):
+                self._client = _Client()
+
+            async def available_tools(self):
+                return [MCPToolDescriptor(server="db", name="db.find", tool="find",
+                                          description="find docs", risk="read")]
+
+            def executor_for(self, server):
+                return MCPExecutor(server=server, client=self._client)
+
+        replies = [
+            json.dumps({"tool": "db.find", "params": {"q": 1}}),
+            json.dumps({"message": "done"}),
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            agent = self._build_agent(Path(d), replies)
+            result = asyncio.run(agent.run_tool_loop(
+                "query the database",
+                filesystem_scope=FilesystemScope(read_roots=[Path.cwd()]),
+                command_policy=CommandPolicy(),
+                permission_mode=PermissionMode.AUTO,
+                mcp_manager=_FakeMCPManager(),
+            ))
+        self.assertEqual(result["steps"][0]["tool"], "db.find")
+        obs = result["steps"][0]["observation"]
+        self.assertTrue(obs["success"])
+        self.assertIn("found", obs["data"]["stdout"])
+
     def test_missing_tool_is_reported_in_the_loop(self):
         replies = [
             json.dumps({"tool": "shell_command",

@@ -148,8 +148,12 @@ class MCPManager:
     async def available_tools(self) -> List[MCPToolDescriptor]:
         tools: List[MCPToolDescriptor] = []
         for name, spec in self.list_servers().items():
-            if spec.enabled:
+            if not spec.enabled:
+                continue
+            try:  # a broken server must not disable the others
                 tools.extend(await self.discover(name))
+            except Exception:
+                continue
         return tools
 
     def executor_for(self, name: str) -> MCPExecutor:
