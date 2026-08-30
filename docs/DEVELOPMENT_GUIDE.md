@@ -7,6 +7,7 @@ decode/
   agents/          Agent base + HostAgent (governed host capabilities)
   bootstrap/       Startup and host preparation
   capabilities/    Host + coding capability specs, per-turn resolver
+  events/          Typed runtime events + async EventBus (frontend-agnostic)
   execution/       Local, Docker, WSL, SSH, and MCP providers
   extensions/      Scoped config, MCP server manager, plugin packages (subsystems: extension layer)
   governance/      Scope and pre-execution policy
@@ -22,7 +23,7 @@ decode/
   runtime/         ExecutionCoordinator, HostController, ToolUseLoop
   schema/          TaskState — the live Neural Schema (subsystem 04)
   skills/          SkillRegistry + markdown playbooks (SKILL.md)
-  tui/             Rich + prompt_toolkit REPL
+  tui/             Inline Rich REPL (app.py) + Textual console (console.py) + event state store (state.py)
   verification/    Completion verifier + bounded replan (subsystem 10)
   universal_agent.py  The universal agent (run_tool_loop)
 tests/             pytest suite
