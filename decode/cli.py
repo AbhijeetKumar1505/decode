@@ -209,6 +209,26 @@ def knowledge(
 
 
 @app.command()
+def tui(
+    provider: str | None = typer.Option(None, "--provider", "-p", help="LLM provider"),
+):
+    """Launch the full-screen Textual console (the inline REPL remains the default `decode`)."""
+    _configure_output_encoding()
+    _apply_plugin_playbook_dirs()
+    try:
+        from .extensions import ExtensionManager
+        from .tui.console import run_console
+        from .universal_agent import UniversalAgent
+
+        agent = UniversalAgent(provider=provider or Config.PROVIDER)
+    except ImportError as e:
+        console.print(f"[bold red]Dependency Error:[/bold red] {e}")
+        console.print("[yellow]Run 'pip install -r requirements.txt' (textual is required for the console).[/yellow]")
+        raise typer.Exit(1) from None
+    run_console(agent, mcp_manager=ExtensionManager().mcp)
+
+
+@app.command()
 def bootstrap(
     update: bool = typer.Option(False, "--update", "-u", help="Run system update"),
 ):
