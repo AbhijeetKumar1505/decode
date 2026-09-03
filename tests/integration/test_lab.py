@@ -19,13 +19,18 @@ class TestLabCapabilityCoverage(unittest.TestCase):
     def _run(self, capability: str, params: dict, tool: str):
         if shutil.which(tool) is None:
             self.skipTest(f"{tool} not installed in this environment")
-        from decode.capabilities.registry import CapabilityRegistry
         from decode.discovery.engine import DiscoveryEngine
+
+        from decode.capabilities.registry import CapabilityRegistry
 
         report = DiscoveryEngine().discover_sync()
         registry = CapabilityRegistry(report)
         resolution = registry.resolve(capability, params)
-        return asyncio.run(registry.execute(capability, params, tool=resolution.tool.name, resolution=resolution))
+        return asyncio.run(
+            registry.execute(
+                capability, params, tool=resolution.tool.name, resolution=resolution
+            )
+        )
 
     def test_port_scan_finds_web_port(self):
         result = self._run("port_scan", {"target": LAB_TARGET, "ports": "80"}, "nmap")
@@ -34,7 +39,9 @@ class TestLabCapabilityCoverage(unittest.TestCase):
         self.assertIn(80, ports)
 
     def test_http_fingerprint_identifies_server(self):
-        result = self._run("http_fingerprint", {"target": f"http://{LAB_TARGET}"}, "httpx")
+        result = self._run(
+            "http_fingerprint", {"target": f"http://{LAB_TARGET}"}, "httpx"
+        )
         self.assertTrue(result.success or result.partial)
 
 

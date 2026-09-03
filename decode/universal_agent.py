@@ -21,9 +21,9 @@ from .models import (
 from .runtime import (
     ApprovalRequest,
     CoordinatedResult,
-    credential_refs_from_params,
     ExecutionCoordinator,
     ExecutionRequest,
+    credential_refs_from_params,
     redact_sensitive,
     target_from_params,
 )
@@ -93,7 +93,9 @@ class UniversalAgent:
             return self.llm
         return self.model_gateway.for_role(role)
 
-    def select_model(self, task_class: str = "analysis", **constraints: Any) -> RoutingDecision:
+    def select_model(
+        self, task_class: str = "analysis", **constraints: Any
+    ) -> RoutingDecision:
         """Policy-aware, reproducible model selection with a recorded public reason.
 
         Data and locality policy are hard filters; cost and latency optimize.
@@ -287,14 +289,31 @@ class UniversalAgent:
                 if getattr(result, "evidence", None) is not None
                 else {}
             )
-            if value is not None and hasattr(value, "stdout") and hasattr(value, "exit_code"):
+            if (
+                value is not None
+                and hasattr(value, "stdout")
+                and hasattr(value, "exit_code")
+            ):
                 # ExecutionResult (shell / MCP provider)
-                return {"success": ok, "summary": (getattr(value, "summary", "") or result.error or "")[:400],
-                        "data": {"stdout": value.stdout, "stderr": value.stderr, "exit_code": value.exit_code},
-                        "evidence": evidence}
+                return {
+                    "success": ok,
+                    "summary": (getattr(value, "summary", "") or result.error or "")[
+                        :400
+                    ],
+                    "data": {
+                        "stdout": value.stdout,
+                        "stderr": value.stderr,
+                        "exit_code": value.exit_code,
+                    },
+                    "evidence": evidence,
+                }
             if hasattr(value, "normalized"):  # AgentResult (host capability)
-                return {"success": ok, "summary": (value.summary or result.error or "")[:400],
-                        "data": value.normalized, "evidence": evidence}
+                return {
+                    "success": ok,
+                    "summary": (value.summary or result.error or "")[:400],
+                    "data": value.normalized,
+                    "evidence": evidence,
+                }
             return {
                 "success": ok,
                 "summary": (result.error or "ok")[:400],
@@ -357,14 +376,22 @@ class UniversalAgent:
         try:
             # Opt in to a reviewer-model verifier with DECODE_MODEL_REVIEW=1;
             # otherwise the deterministic rule-based verifier gates completion.
-            if os.getenv("DECODE_MODEL_REVIEW", "").strip().lower() in {"1", "true", "yes"}:
+            if os.getenv("DECODE_MODEL_REVIEW", "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+            }:
                 verifier: Any = ModelVerifier(self.provider_for_role("reviewer"))
             else:
                 verifier = Verifier()
             loop = ToolUseLoop(
-                self.provider_for_role("worker"), tools, invoke,
-                max_steps=max_steps, on_step=on_step,
-                task_state=task_state, verifier=verifier,
+                self.provider_for_role("worker"),
+                tools,
+                invoke,
+                max_steps=max_steps,
+                on_step=on_step,
+                task_state=task_state,
+                verifier=verifier,
             )
             return await loop.run(goal)
         finally:

@@ -15,7 +15,6 @@ from decode.skills.markdown_skill import (
 )
 from decode.skills.registry import SkillRegistry
 
-
 _SAMPLE = """---
 name: sample_playbook
 description: A synthetic playbook for tests.

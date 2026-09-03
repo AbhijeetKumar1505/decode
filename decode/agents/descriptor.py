@@ -10,8 +10,6 @@ never broaden scope, risk, memory access, or budget.
 
 from __future__ import annotations
 
-from typing import List
-
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..skills.base import RiskLevel
@@ -26,7 +24,7 @@ def risk_at_most(candidate: RiskLevel, ceiling: RiskLevel) -> bool:
     return _RISK_ORDER[candidate] <= _RISK_ORDER[ceiling]
 
 
-def max_risk(risks: List[RiskLevel]) -> RiskLevel:
+def max_risk(risks: list[RiskLevel]) -> RiskLevel:
     return max(risks, key=lambda r: _RISK_ORDER[r]) if risks else RiskLevel.READ
 
 
@@ -40,14 +38,14 @@ class AgentPermissions(BaseModel):
 class AgentMemoryScopes(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    read: List[str] = Field(default_factory=list)
-    write: List[str] = Field(default_factory=list)
+    read: list[str] = Field(default_factory=list)
+    write: list[str] = Field(default_factory=list)
 
 
 class AgentModelRequirements(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    required_capabilities: List[str] = Field(default_factory=list)
+    required_capabilities: list[str] = Field(default_factory=list)
     max_data_classification: str = "internal"
     pinned_model: str = ""
 
@@ -69,15 +67,15 @@ class AgentDescriptor(BaseModel):
     id: str = Field(min_length=1, max_length=64)
     version: int = Field(default=DESCRIPTOR_SCHEMA_VERSION, ge=1)
     purpose: str = ""
-    capabilities: List[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
     permissions: AgentPermissions = Field(default_factory=AgentPermissions)
-    allow_capabilities: List[str] = Field(default_factory=list)
+    allow_capabilities: list[str] = Field(default_factory=list)
     memory: AgentMemoryScopes = Field(default_factory=AgentMemoryScopes)
     models: AgentModelRequirements = Field(default_factory=AgentModelRequirements)
     limits: AgentLimits = Field(default_factory=AgentLimits)
 
     @model_validator(mode="after")
-    def _validate_envelope(self) -> "AgentDescriptor":
+    def _validate_envelope(self) -> AgentDescriptor:
         if not self.allow_capabilities:
             object.__setattr__(self, "allow_capabilities", list(self.capabilities))
         unlisted = set(self.capabilities) - set(self.allow_capabilities)
@@ -93,13 +91,13 @@ class AgentDescriptor(BaseModel):
     def delegate(
         self,
         child_id: str,
-        capabilities: List[str],
+        capabilities: list[str],
         *,
         maximum_risk: RiskLevel | None = None,
         token_budget: int | None = None,
-        memory_read: List[str] | None = None,
-        memory_write: List[str] | None = None,
-    ) -> "AgentDescriptor":
+        memory_read: list[str] | None = None,
+        memory_write: list[str] | None = None,
+    ) -> AgentDescriptor:
         """Derive a child descriptor as a strict subset of this one.
 
         Raises ``ValueError`` if the child would broaden capabilities, risk,
@@ -117,7 +115,9 @@ class AgentDescriptor(BaseModel):
         if not risk_at_most(child_risk, self.permissions.maximum_risk):
             raise ValueError("delegation cannot raise maximum risk")
 
-        child_budget = self.limits.token_budget if token_budget is None else token_budget
+        child_budget = (
+            self.limits.token_budget if token_budget is None else token_budget
+        )
         if child_budget > self.limits.token_budget:
             raise ValueError("delegation cannot raise the token budget")
 
@@ -156,10 +156,8 @@ def descriptor_for_agent(agent: object) -> AgentDescriptor:
     """
     from ..capabilities import CAPABILITIES
 
-    capabilities = list(getattr(agent, "capabilities"))
-    risks = [
-        CAPABILITIES[name].risk for name in capabilities if name in CAPABILITIES
-    ]
+    capabilities = list(agent.capabilities)
+    risks = [CAPABILITIES[name].risk for name in capabilities if name in CAPABILITIES]
     return AgentDescriptor(
         id=getattr(agent, "domain", "generic"),
         purpose=(agent.__doc__ or "").strip().split("\n")[0][:200],

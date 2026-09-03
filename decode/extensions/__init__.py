@@ -13,14 +13,14 @@ from .plugin_manager import PluginManager, PluginManifest
 from .store import ScopedStore, deep_merge
 
 __all__ = [
+    "PRECEDENCE",
     "ExtensionManager",
     "MCPManager",
     "MCPServerSpec",
     "PluginManager",
     "PluginManifest",
-    "PRECEDENCE",
     "Scope",
-    "scope_root",
     "ScopedStore",
     "deep_merge",
+    "scope_root",
 ]

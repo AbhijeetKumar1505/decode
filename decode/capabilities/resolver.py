@@ -8,7 +8,7 @@ capabilities (files, search, shell, discovery) are universal and always present.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from ..schema import TaskMode
 from .coding import coding_tool_list
@@ -16,12 +16,12 @@ from .coding import coding_tool_list
 
 def resolve_tools(
     mode: TaskMode,
-    host_tools: List[Dict[str, Any]],
-    skill_tools: List[Dict[str, Any]],
+    host_tools: list[dict[str, Any]],
+    skill_tools: list[dict[str, Any]],
     *,
     include_coding: bool | None = None,
     include_skills: bool | None = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return the tool subset to expose for ``mode``.
 
     - CODING: host + coding capabilities (no security playbooks).
@@ -35,7 +35,7 @@ def resolve_tools(
     if include_skills is None:
         include_skills = mode in (TaskMode.SECURITY, TaskMode.HYBRID)
 
-    tools: List[Dict[str, Any]] = list(host_tools)
+    tools: list[dict[str, Any]] = list(host_tools)
     if include_coding:
         tools += coding_tool_list()
     if include_skills:
@@ -43,7 +43,7 @@ def resolve_tools(
 
     # De-duplicate by name, preserving first occurrence (host wins).
     seen: set[str] = set()
-    unique: List[Dict[str, Any]] = []
+    unique: list[dict[str, Any]] = []
     for tool in tools:
         name = tool.get("name", "")
         if name and name not in seen:

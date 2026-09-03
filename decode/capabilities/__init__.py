@@ -11,11 +11,11 @@ from .models import (
 )
 
 __all__ = [
+    "ARGUMENT_SCHEMA_VERSION",
     "CAPABILITIES",
     "CAPABILITY_SCHEMA_VERSION",
-    "ARGUMENT_SCHEMA_VERSION",
-    "RESULT_SCHEMA_VERSION",
     "PARSER_SCHEMA_VERSION",
+    "RESULT_SCHEMA_VERSION",
     "ArgumentType",
     "CapabilityArgument",
     "CapabilityResultField",

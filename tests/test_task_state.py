@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from decode.planner.dag import CompletionCriterion
 from decode.persistence.store import SessionStore
+from decode.planner.dag import CompletionCriterion
 from decode.schema import ScopeView, TaskMode, TaskState, TaskStatus
 from decode.schema.store import TaskStateStore
 
@@ -24,7 +24,9 @@ class TestCompletionCriterion(unittest.TestCase):
         crit = CompletionCriterion(kind="present", field="a.b")
         self.assertTrue(crit.check({"a": {"b": 1}})[0])
         self.assertFalse(crit.check({"a": {}})[0])
-        self.assertFalse(CompletionCriterion(kind="weird", field="x").check({"x": 1})[0])
+        self.assertFalse(
+            CompletionCriterion(kind="weird", field="x").check({"x": 1})[0]
+        )
 
     def test_non_required_always_passes(self):
         crit = CompletionCriterion(kind="present", field="x", required=False)
@@ -60,16 +62,23 @@ class TestTaskState(unittest.TestCase):
         # no conditions -> never auto-complete
         ok, _failures = s.evaluate_completion({"exit_code": 0})
         self.assertFalse(ok)
-        s.completion_conditions.append(CompletionCriterion(kind="equals", field="exit_code", expected=0))
+        s.completion_conditions.append(
+            CompletionCriterion(kind="equals", field="exit_code", expected=0)
+        )
         self.assertTrue(s.evaluate_completion({"exit_code": 0})[0])
         self.assertFalse(s.evaluate_completion({"exit_code": 1})[0])
 
     def test_observation_evidence_creates_linked_artifact(self):
         s = self._state()
-        s.record_observation("shell_command", {
-            "success": True, "summary": "ran", "data": {"exit_code": 0},
-            "evidence": {"id": "ev-1", "sha256": "abc123"},
-        })
+        s.record_observation(
+            "shell_command",
+            {
+                "success": True,
+                "summary": "ran",
+                "data": {"exit_code": 0},
+                "evidence": {"id": "ev-1", "sha256": "abc123"},
+            },
+        )
         self.assertEqual(s.observations[0].evidence_ref, "ev-1")
         self.assertEqual(s.observations[0].evidence_hash, "abc123")
         self.assertEqual(len(s.artifacts), 1)
@@ -95,7 +104,9 @@ class TestTaskState(unittest.TestCase):
             scope=ScopeView(targets=["10.0.0.5"], allow_destructive=False),
         )
         s.record_action("shell_command", {"command": "nmap 10.0.0.5"}, "scan")
-        s.record_observation("shell_command", {"success": True, "summary": "ports open"})
+        s.record_observation(
+            "shell_command", {"success": True, "summary": "ports open"}
+        )
         s.add_finding("open ssh", severity="low")
         text = s.render_compact()
         self.assertIn("assess the lab", text)

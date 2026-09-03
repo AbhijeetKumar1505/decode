@@ -8,14 +8,13 @@ out-of-scope target is refused before a command is ever built.
 """
 
 import ipaddress
-from typing import List, Optional
 from urllib.parse import urlparse
 
 
 class ScopePolicy:
-    def __init__(self, allowed: Optional[List[str]] = None, allow_all: bool = False):
+    def __init__(self, allowed: list[str] | None = None, allow_all: bool = False):
         self.allow_all = allow_all
-        self._networks: List[ipaddress._BaseNetwork] = []
+        self._networks: list[ipaddress._BaseNetwork] = []
         self._hosts: set = set()
         self._domains: set = set()  # suffixes from *.example.com -> example.com
         for entry in allowed or []:
@@ -64,7 +63,9 @@ class ScopePolicy:
         # A network target (e.g. 10.0.0.0/24) must be a subnet of an allowed net
         try:
             net = ipaddress.ip_network(host, strict=False)
-            return any(net.subnet_of(a) for a in self._networks if a.version == net.version)
+            return any(
+                net.subnet_of(a) for a in self._networks if a.version == net.version
+            )
         except ValueError:
             pass
 
@@ -76,5 +77,9 @@ class ScopePolicy:
     def describe(self) -> str:
         if self.allow_all:
             return "ALLOW ALL (no scope restriction)"
-        parts = [str(n) for n in self._networks] + sorted(self._hosts) + [f"*.{d}" for d in sorted(self._domains)]
+        parts = (
+            [str(n) for n in self._networks]
+            + sorted(self._hosts)
+            + [f"*.{d}" for d in sorted(self._domains)]
+        )
         return ", ".join(parts) if parts else "(empty scope — everything denied)"

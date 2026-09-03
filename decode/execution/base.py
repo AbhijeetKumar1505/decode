@@ -1,12 +1,11 @@
+import shlex
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from contextvars import ContextVar
 from functools import wraps
-import shlex
-from typing import Optional, Dict, Any
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
 
 Command = str | Sequence[str]
 
@@ -87,8 +86,8 @@ class ExecutionResult(BaseModel):
     exit_code: int = 0
     duration: float = 0.0
     timed_out: bool = False
-    error: Optional[str] = None
-    normalized: Dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    normalized: dict[str, Any] = Field(default_factory=dict)
     partial: bool = False
     parser_warnings: list[str] = Field(default_factory=list)
     tool_version: str = ""
@@ -96,7 +95,7 @@ class ExecutionResult(BaseModel):
     adapter_version: str = ""
     parser_id: str = ""
     parser_version: str = ""
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("command", mode="before")
     @classmethod
@@ -163,7 +162,7 @@ class ExecutionProvider(ABC):
 
     @abstractmethod
     async def execute(
-        self, command: Command, timeout: int = 60, env: Optional[Dict[str, str]] = None
+        self, command: Command, timeout: int = 60, env: dict[str, str] | None = None
     ) -> ExecutionResult:
         pass
 

@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import Optional, Dict
+
 from .base import Command, ExecutionProvider, ExecutionResult, command_display
 
 
@@ -17,7 +17,7 @@ class LocalExecutor(ExecutionProvider):
         self,
         command: Command,
         timeout: int = DEFAULT_TIMEOUT,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
     ) -> ExecutionResult:
         start = time.time()
         proc = None
@@ -48,7 +48,7 @@ class LocalExecutor(ExecutionProvider):
                 exit_code=proc.returncode if proc.returncode is not None else 0,
                 duration=duration,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if proc is not None:
                 try:
                     proc.kill()

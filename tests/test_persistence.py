@@ -1,16 +1,17 @@
 import json
 import stat
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
-from decode.persistence.store import SessionStore
-from decode.persistence.target_tracker import TargetContextTracker, TargetFinding
+
 from decode.persistence.evidence import (
     Evidence,
     EvidenceCollector,
     EvidenceReference,
     ProtectedEvidenceStore,
 )
+from decode.persistence.store import SessionStore
+from decode.persistence.target_tracker import TargetContextTracker, TargetFinding
 
 
 class TestSessionStore(unittest.TestCase):

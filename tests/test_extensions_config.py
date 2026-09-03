@@ -13,7 +13,9 @@ class TestPaths(unittest.TestCase):
             self.assertEqual(user_root(), Path("/tmp/decode-home"))
 
     def test_project_root_honors_env(self):
-        with mock.patch.dict("os.environ", {"DECODE_PROJECT_HOME": "/tmp/proj/.decode"}):
+        with mock.patch.dict(
+            "os.environ", {"DECODE_PROJECT_HOME": "/tmp/proj/.decode"}
+        ):
             self.assertEqual(project_root(), Path("/tmp/proj/.decode"))
 
     def test_project_root_finds_nearest_dot_decode(self):
@@ -24,6 +26,7 @@ class TestPaths(unittest.TestCase):
             nested.mkdir(parents=True)
             with mock.patch.dict("os.environ", {}, clear=False):
                 import os
+
                 os.environ.pop("DECODE_PROJECT_HOME", None)
                 self.assertEqual(project_root(nested), root / ".decode")
 
@@ -32,16 +35,21 @@ class TestDeepMerge(unittest.TestCase):
     def test_overlay_wins_and_nested_merges(self):
         base = {"a": 1, "n": {"x": 1, "y": 2}}
         overlay = {"a": 2, "n": {"y": 3, "z": 4}}
-        self.assertEqual(deep_merge(base, overlay), {"a": 2, "n": {"x": 1, "y": 3, "z": 4}})
+        self.assertEqual(
+            deep_merge(base, overlay), {"a": 2, "n": {"x": 1, "y": 3, "z": 4}}
+        )
 
 
 class TestScopedStore(unittest.TestCase):
     def _env(self, user, project):
-        return mock.patch.dict("os.environ", {
-            "DECODE_HOME": str(user),
-            "DECODE_PROJECT_HOME": str(project),
-            "DECODE_SYSTEM_HOME": str(user / "nonexistent-system"),
-        })
+        return mock.patch.dict(
+            "os.environ",
+            {
+                "DECODE_HOME": str(user),
+                "DECODE_PROJECT_HOME": str(project),
+                "DECODE_SYSTEM_HOME": str(user / "nonexistent-system"),
+            },
+        )
 
     def test_write_read_and_precedence(self):
         with tempfile.TemporaryDirectory() as d:
@@ -49,7 +57,10 @@ class TestScopedStore(unittest.TestCase):
             user, project = base / "user", base / "project"
             store = ScopedStore("mcp.json")
             with self._env(user, project):
-                store.write_scope(Scope.USER, {"mongodb": {"enabled": True}, "github": {"enabled": True}})
+                store.write_scope(
+                    Scope.USER,
+                    {"mongodb": {"enabled": True}, "github": {"enabled": True}},
+                )
                 store.write_scope(Scope.PROJECT, {"github": {"enabled": False}})
                 merged = store.read_merged()
                 # project overrides user for the same key
@@ -74,10 +85,14 @@ class TestExtensionManager(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             base = Path(d)
             user, project = base / "user", base / "project"
-            with mock.patch.dict("os.environ", {
-                "DECODE_HOME": str(user), "DECODE_PROJECT_HOME": str(project),
-                "DECODE_SYSTEM_HOME": str(base / "nope"),
-            }):
+            with mock.patch.dict(
+                "os.environ",
+                {
+                    "DECODE_HOME": str(user),
+                    "DECODE_PROJECT_HOME": str(project),
+                    "DECODE_SYSTEM_HOME": str(base / "nope"),
+                },
+            ):
                 mgr = ExtensionManager()
                 mgr.config.write_scope(Scope.USER, {"theme": "dark", "verbose": False})
                 mgr.config.write_scope(Scope.PROJECT, {"verbose": True})

@@ -10,7 +10,11 @@ HOST = [
     {"name": "session_exec", "description": "session", "risk": "write"},
 ]
 SKILLS = [{"name": "web_recon", "description": "recon", "risk": "read"}]
-MCP = [MCPToolDescriptor(server="db", name="db.find", tool="find", description="find", risk="read")]
+MCP = [
+    MCPToolDescriptor(
+        server="db", name="db.find", tool="find", description="find", risk="read"
+    )
+]
 
 
 def _names(descriptors):
@@ -37,7 +41,7 @@ class TestCapabilityRegistry(unittest.TestCase):
     def test_resolve_coding_excludes_playbooks_keeps_mcp(self):
         names = _names(build_registry(HOST, SKILLS, MCP).resolve(TaskMode.CODING))
         self.assertIn("git_diff", names)
-        self.assertIn("db.find", names)       # mcp always available
+        self.assertIn("db.find", names)  # mcp always available
         self.assertNotIn("web_recon", names)  # security playbooks excluded
 
     def test_resolve_security_excludes_coding_keeps_mcp(self):

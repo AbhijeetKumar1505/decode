@@ -9,7 +9,7 @@ transport only) and bound via ``MCPServerManager.executor_for``.
 """
 
 import json
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Protocol
 
 from .base import Command, ExecutionProvider, ExecutionResult, command_display
 
@@ -17,13 +17,18 @@ from .base import Command, ExecutionProvider, ExecutionResult, command_display
 class MCPClient(Protocol):
     """Minimal transport contract an MCP client must satisfy."""
 
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any: ...
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any: ...
 
     async def check(self) -> bool: ...
 
 
 class MCPExecutor(ExecutionProvider):
-    def __init__(self, server: str = "", client: Optional[MCPClient] = None, config: Optional[Dict] = None):
+    def __init__(
+        self,
+        server: str = "",
+        client: MCPClient | None = None,
+        config: dict | None = None,
+    ):
         self._server = server
         self._client = client
         self._config = config or {}
@@ -33,12 +38,12 @@ class MCPExecutor(ExecutionProvider):
         return f"mcp/{self._server}" if self._server else "mcp"
 
     @staticmethod
-    def encode(tool: str, arguments: Optional[Dict[str, Any]] = None) -> str:
+    def encode(tool: str, arguments: dict[str, Any] | None = None) -> str:
         """Helper: build the JSON command string this provider expects."""
         return json.dumps({"tool": tool, "arguments": arguments or {}})
 
     async def execute(
-        self, command: Command, timeout: int = 60, env: Optional[Dict[str, str]] = None
+        self, command: Command, timeout: int = 60, env: dict[str, str] | None = None
     ) -> ExecutionResult:
         display = command_display(command)
         if not isinstance(command, str):
@@ -52,8 +57,11 @@ class MCPExecutor(ExecutionProvider):
             )
         if self._client is None:
             return ExecutionResult(
-                command=display, provider=self.name, success=False,
-                stderr="No MCP client configured for this server", exit_code=-1,
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr="No MCP client configured for this server",
+                exit_code=-1,
                 error="mcp_not_configured",
             )
         try:
@@ -62,22 +70,33 @@ class MCPExecutor(ExecutionProvider):
             arguments = payload.get("arguments", {})
         except (json.JSONDecodeError, KeyError, TypeError):
             return ExecutionResult(
-                command=display, provider=self.name, success=False,
+                command=display,
+                provider=self.name,
+                success=False,
                 stderr='MCP command must be JSON: {"tool": "<name>", "arguments": {...}}',
-                exit_code=-1, error="invalid_mcp_command",
+                exit_code=-1,
+                error="invalid_mcp_command",
             )
         try:
             result = await self._client.call_tool(tool, arguments)
         except Exception as e:
             return ExecutionResult(
-                command=display, provider=self.name, success=False,
-                stderr=str(e), exit_code=-1, error=str(e),
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr=str(e),
+                exit_code=-1,
+                error=str(e),
                 metadata={"tool": tool},
             )
         stdout = result if isinstance(result, str) else json.dumps(result, default=str)
         return ExecutionResult(
-            command=display, provider=self.name, success=True,
-            stdout=stdout, exit_code=0, metadata={"tool": tool},
+            command=display,
+            provider=self.name,
+            success=True,
+            stdout=stdout,
+            exit_code=0,
+            metadata={"tool": tool},
         )
 
     async def check_health(self) -> bool:

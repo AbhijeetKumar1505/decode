@@ -1,9 +1,10 @@
 import json
-from typing import Dict, Any, List, Optional, Set
-from pathlib import Path
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pathlib import Path
+from typing import Any
 from uuid import uuid4
+
+from pydantic import BaseModel, Field
 
 
 class KnowledgeNode(BaseModel):
@@ -11,7 +12,7 @@ class KnowledgeNode(BaseModel):
     type: str
     name: str
     description: str = ""
-    properties: Dict[str, Any] = Field(default_factory=dict)
+    properties: dict[str, Any] = Field(default_factory=dict)
     source: str = "internal"
     created: str = Field(default_factory=lambda: datetime.now().isoformat())
 
@@ -20,7 +21,7 @@ class KnowledgeEdge(BaseModel):
     source_id: str
     target_id: str
     relationship: str
-    properties: Dict[str, Any] = Field(default_factory=dict)
+    properties: dict[str, Any] = Field(default_factory=dict)
 
 
 NODE_TYPES = {
@@ -36,11 +37,11 @@ NODE_TYPES = {
 
 
 class KnowledgeGraph:
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(self, path: Path | None = None):
         self._path = path or Path("data/knowledge_graph.json")
-        self._nodes: Dict[str, KnowledgeNode] = {}
-        self._edges: List[KnowledgeEdge] = []
-        self._index: Dict[str, Set[str]] = {}
+        self._nodes: dict[str, KnowledgeNode] = {}
+        self._edges: list[KnowledgeEdge] = []
+        self._index: dict[str, set[str]] = {}
         self._load()
 
     def _load(self):
@@ -198,11 +199,11 @@ class KnowledgeGraph:
         self._edges.append(edge)
         self._save()
 
-    def search(self, query: str) -> List[KnowledgeNode]:
+    def search(self, query: str) -> list[KnowledgeNode]:
         words = query.lower().split()
         if not words:
             return []
-        matching_ids: Optional[Set[str]] = None
+        matching_ids: set[str] | None = None
         for word in words:
             ids = self._index.get(word, set())
             if matching_ids is None:
@@ -215,8 +216,8 @@ class KnowledgeGraph:
                 matching_ids.update(self._index.get(word, set()))
         return [self._nodes[nid] for nid in matching_ids if nid in self._nodes][:10]
 
-    def get_related(self, node_id: str, max_depth: int = 2) -> Dict[str, Any]:
-        visited: Set[str] = set()
+    def get_related(self, node_id: str, max_depth: int = 2) -> dict[str, Any]:
+        visited: set[str] = set()
         queue = [(node_id, 0)]
         related_nodes = []
         related_edges = []
@@ -239,7 +240,7 @@ class KnowledgeGraph:
             "edges": [e.model_dump() for e in related_edges],
         }
 
-    def find_path(self, source_id: str, target_id: str) -> List[List[str]]:
+    def find_path(self, source_id: str, target_id: str) -> list[list[str]]:
         paths = []
         queue = [[source_id]]
         while queue:
@@ -255,7 +256,7 @@ class KnowledgeGraph:
                     queue.append(path + [edge.source_id])
         return paths[:5]
 
-    def query(self, query: str) -> Dict[str, Any]:
+    def query(self, query: str) -> dict[str, Any]:
         nodes = self.search(query)
         all_edges = []
         node_ids = {n.id for n in nodes}
@@ -267,7 +268,7 @@ class KnowledgeGraph:
             "edges": [e.model_dump() for e in all_edges],
         }
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         type_counts = {}
         for node in self._nodes.values():
             type_counts[node.type] = type_counts.get(node.type, 0) + 1

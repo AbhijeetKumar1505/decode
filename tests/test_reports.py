@@ -1,18 +1,35 @@
 import json
 import unittest
 
-from decode.reports import render, render_sarif, extension_for, FORMATS
+from decode.reports import FORMATS, extension_for, render, render_sarif
 
 
 def _ctx():
     return {
         "session": {"goal": "scan 10.0.0.5", "target_focus": "10.0.0.5"},
-        "targets": [{"ip_address": "10.0.0.5", "ports": [
-            {"port": 22, "protocol": "tcp", "service": "ssh", "product": "OpenSSH", "version": "9.0"}
-        ]}],
+        "targets": [
+            {
+                "ip_address": "10.0.0.5",
+                "ports": [
+                    {
+                        "port": 22,
+                        "protocol": "tcp",
+                        "service": "ssh",
+                        "product": "OpenSSH",
+                        "version": "9.0",
+                    }
+                ],
+            }
+        ],
         "findings": [
-            {"title": "port_scan on 10.0.0.5", "severity": "high", "category": "recon",
-             "technique_id": "T1046", "mitre_tactic": "Discovery", "description": "open ports"},
+            {
+                "title": "port_scan on 10.0.0.5",
+                "severity": "high",
+                "category": "recon",
+                "technique_id": "T1046",
+                "mitre_tactic": "Discovery",
+                "description": "open ports",
+            },
             {"title": "info note", "severity": "info", "category": "recon"},
         ],
     }

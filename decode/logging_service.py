@@ -1,7 +1,8 @@
 import json
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from pathlib import Path
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -14,7 +15,7 @@ class LogEntry(BaseModel):
     duration: float = 0.0
     output_file: str = ""
     error: str = ""
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class LoggingService:
@@ -53,7 +54,9 @@ class LoggingService:
         filepath.write_text(entry.model_dump_json(indent=2))
         return filepath
 
-    def get_logs(self, limit: int = 20, tool_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_logs(
+        self, limit: int = 20, tool_filter: str | None = None
+    ) -> list[dict[str, Any]]:
         logs = []
         pattern = "*.json"
         if tool_filter:
@@ -85,7 +88,7 @@ class LoggingService:
         duration: float = 0.0,
         output_file: str = "",
         error: str = "",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Path:
         entry = LogEntry(
             timestamp=datetime.now().isoformat(),

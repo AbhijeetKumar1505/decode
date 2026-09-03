@@ -17,14 +17,28 @@ def _make_plugin(base: Path, name: str = "web-security") -> Path:
         encoding="utf-8",
     )
     (pkg / "mcp" / "servers.json").write_text(
-        json.dumps({"db": {"transport": "stdio", "command": "npx", "args": ["-y", "x"], "risk": "read"}}),
+        json.dumps(
+            {
+                "db": {
+                    "transport": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "x"],
+                    "risk": "read",
+                }
+            }
+        ),
         encoding="utf-8",
     )
     (pkg / "manifest.json").write_text(
-        json.dumps({
-            "name": name, "version": "1.0.0", "description": "web sec toolkit",
-            "skills": ["skills"], "mcp": ["mcp/servers.json"],
-        }),
+        json.dumps(
+            {
+                "name": name,
+                "version": "1.0.0",
+                "description": "web sec toolkit",
+                "skills": ["skills"],
+                "mcp": ["mcp/servers.json"],
+            }
+        ),
         encoding="utf-8",
     )
     return pkg
@@ -38,9 +52,8 @@ class TestVerifyManifest(unittest.TestCase):
             self.assertEqual(manifest.name, "web-security")
 
     def test_missing_manifest(self):
-        with tempfile.TemporaryDirectory() as d:
-            with self.assertRaises(ValueError):
-                verify_manifest(Path(d))
+        with tempfile.TemporaryDirectory() as d, self.assertRaises(ValueError):
+            verify_manifest(Path(d))
 
     def test_path_traversal_rejected(self):
         with tempfile.TemporaryDirectory() as d:
@@ -67,11 +80,14 @@ class TestPluginManager(unittest.TestCase):
         base = Path(self._tmp.name)
         self._src = base / "src"
         self._src.mkdir()
-        self._env = mock.patch.dict("os.environ", {
-            "DECODE_HOME": str(base / "home"),
-            "DECODE_PROJECT_HOME": str(base / "project"),
-            "DECODE_SYSTEM_HOME": str(base / "system"),
-        })
+        self._env = mock.patch.dict(
+            "os.environ",
+            {
+                "DECODE_HOME": str(base / "home"),
+                "DECODE_PROJECT_HOME": str(base / "project"),
+                "DECODE_SYSTEM_HOME": str(base / "system"),
+            },
+        )
         self._env.start()
 
     def tearDown(self):

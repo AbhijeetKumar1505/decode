@@ -33,10 +33,14 @@ class TestToolUseLoop(unittest.TestCase):
         return asyncio.run(loop.run(goal))
 
     def test_calls_tool_then_finishes(self):
-        provider = _ScriptedProvider([
-            json.dumps({"tool": "file_read", "params": {"path": "/etc/os-release"}}),
-            json.dumps({"message": "The host runs Linux."}),
-        ])
+        provider = _ScriptedProvider(
+            [
+                json.dumps(
+                    {"tool": "file_read", "params": {"path": "/etc/os-release"}}
+                ),
+                json.dumps({"message": "The host runs Linux."}),
+            ]
+        )
         calls = []
 
         async def invoke(name, params):
@@ -52,10 +56,12 @@ class TestToolUseLoop(unittest.TestCase):
         self.assertEqual(len(result["steps"]), 1)
 
     def test_unknown_tool_is_reported_not_executed(self):
-        provider = _ScriptedProvider([
-            json.dumps({"tool": "delete_everything", "params": {}}),
-            json.dumps({"message": "stopping"}),
-        ])
+        provider = _ScriptedProvider(
+            [
+                json.dumps({"tool": "delete_everything", "params": {}}),
+                json.dumps({"message": "stopping"}),
+            ]
+        )
 
         async def invoke(name, params):  # must NOT be called for an unknown tool
             raise AssertionError("invoke called for unknown tool")
@@ -67,7 +73,9 @@ class TestToolUseLoop(unittest.TestCase):
 
     def test_step_budget_is_bounded(self):
         # always returns a tool call; the loop must stop at the budget
-        provider = _ScriptedProvider([json.dumps({"tool": "process_list", "params": {}})] * 10)
+        provider = _ScriptedProvider(
+            [json.dumps({"tool": "process_list", "params": {}})] * 10
+        )
 
         async def invoke(name, params):
             return {"success": True, "summary": "ok"}
@@ -78,14 +86,18 @@ class TestToolUseLoop(unittest.TestCase):
         self.assertEqual(len(result["steps"]), 3)
 
     def test_first_person_thought_is_captured_and_streamed(self):
-        provider = _ScriptedProvider([
-            json.dumps({
-                "thought": "I'll list the processes first.",
-                "tool": "process_list",
-                "params": {},
-            }),
-            json.dumps({"thought": "Done — reporting back.", "message": "ok"}),
-        ])
+        provider = _ScriptedProvider(
+            [
+                json.dumps(
+                    {
+                        "thought": "I'll list the processes first.",
+                        "tool": "process_list",
+                        "params": {},
+                    }
+                ),
+                json.dumps({"thought": "Done — reporting back.", "message": "ok"}),
+            ]
+        )
 
         async def invoke(name, params):
             return {"success": True, "summary": "ok"}
@@ -95,7 +107,9 @@ class TestToolUseLoop(unittest.TestCase):
         result = self._run(loop, "list processes")
 
         # the tool step records the thought
-        self.assertEqual(result["steps"][0]["thought"], "I'll list the processes first.")
+        self.assertEqual(
+            result["steps"][0]["thought"], "I'll list the processes first."
+        )
         # on_step saw a call, a result, and a final phase, carrying the thoughts
         phases = [e["phase"] for e in events]
         self.assertEqual(phases, ["call", "result", "final"])
@@ -121,10 +135,14 @@ class TestToolUseLoopTaskState(unittest.TestCase):
     def test_loop_records_actions_observations_and_completes(self):
         from decode.schema import TaskState, TaskStatus
 
-        provider = _ScriptedProvider([
-            json.dumps({"thought": "list procs", "tool": "process_list", "params": {}}),
-            json.dumps({"message": "done"}),
-        ])
+        provider = _ScriptedProvider(
+            [
+                json.dumps(
+                    {"thought": "list procs", "tool": "process_list", "params": {}}
+                ),
+                json.dumps({"message": "done"}),
+            ]
+        )
 
         async def invoke(name, params):
             return {"success": True, "summary": "ok", "data": {"n": 3}}
@@ -153,7 +171,9 @@ class TestToolUseLoopTaskState(unittest.TestCase):
                 return json.dumps({"message": "ok"})
 
         state = TaskState(objective="inspect the repo")
-        loop = ToolUseLoop(_Recorder(), TOOLS, lambda n, p: None, max_steps=2, task_state=state)
+        loop = ToolUseLoop(
+            _Recorder(), TOOLS, lambda n, p: None, max_steps=2, task_state=state
+        )
         asyncio.run(loop.run("inspect the repo"))
         # a transient system state-message is appended for the model call
         self.assertGreaterEqual(seen[0].count("system"), 2)
@@ -165,9 +185,11 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
     def _build_agent(self, tmp, replies):
         import decode.universal_agent as ua
 
-        with mock.patch.object(ua.Config, "validate", return_value=None), \
-             mock.patch.object(ua, "create_provider", return_value=mock.Mock()), \
-             mock.patch.object(ua, "SelfLearningMemory", return_value=mock.Mock()):
+        with (
+            mock.patch.object(ua.Config, "validate", return_value=None),
+            mock.patch.object(ua, "create_provider", return_value=mock.Mock()),
+            mock.patch.object(ua, "SelfLearningMemory", return_value=mock.Mock()),
+        ):
             agent = ua.UniversalAgent(provider="openrouter")
         agent.llm = _ScriptedProvider(replies)
         agent.audit = AuditLayer(base_path=tmp / "audit")
@@ -178,17 +200,21 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
         return agent
 
     def _loop(self, agent, goal):
-        return asyncio.run(agent.run_tool_loop(
-            goal,
-            filesystem_scope=FilesystemScope(read_roots=[Path.cwd()]),
-            command_policy=CommandPolicy(),
-            permission_mode=PermissionMode.AUTO,
-        ))
+        return asyncio.run(
+            agent.run_tool_loop(
+                goal,
+                filesystem_scope=FilesystemScope(read_roots=[Path.cwd()]),
+                command_policy=CommandPolicy(),
+                permission_mode=PermissionMode.AUTO,
+            )
+        )
 
     def test_discovers_then_runs_a_tool_then_answers(self):
         replies = [
             json.dumps({"tool": "list_tools", "params": {"query": "echo"}}),
-            json.dumps({"tool": "shell_command", "params": {"command": "echo loop-works"}}),
+            json.dumps(
+                {"tool": "shell_command", "params": {"command": "echo loop-works"}}
+            ),
             json.dumps({"message": "done"}),
         ]
         with tempfile.TemporaryDirectory() as d:
@@ -203,7 +229,9 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
 
     def test_evidence_is_linked_as_a_task_artifact(self):
         replies = [
-            json.dumps({"tool": "shell_command", "params": {"command": "echo artifact-test"}}),
+            json.dumps(
+                {"tool": "shell_command", "params": {"command": "echo artifact-test"}}
+            ),
             json.dumps({"message": "done"}),
         ]
         with tempfile.TemporaryDirectory() as d:
@@ -228,8 +256,15 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
                 self._client = _Client()
 
             async def available_tools(self):
-                return [MCPToolDescriptor(server="db", name="db.find", tool="find",
-                                          description="find docs", risk="read")]
+                return [
+                    MCPToolDescriptor(
+                        server="db",
+                        name="db.find",
+                        tool="find",
+                        description="find docs",
+                        risk="read",
+                    )
+                ]
 
             def executor_for(self, server):
                 return MCPExecutor(server=server, client=self._client)
@@ -240,13 +275,15 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as d:
             agent = self._build_agent(Path(d), replies)
-            result = asyncio.run(agent.run_tool_loop(
-                "query the database",
-                filesystem_scope=FilesystemScope(read_roots=[Path.cwd()]),
-                command_policy=CommandPolicy(),
-                permission_mode=PermissionMode.AUTO,
-                mcp_manager=_FakeMCPManager(),
-            ))
+            result = asyncio.run(
+                agent.run_tool_loop(
+                    "query the database",
+                    filesystem_scope=FilesystemScope(read_roots=[Path.cwd()]),
+                    command_policy=CommandPolicy(),
+                    permission_mode=PermissionMode.AUTO,
+                    mcp_manager=_FakeMCPManager(),
+                )
+            )
         self.assertEqual(result["steps"][0]["tool"], "db.find")
         obs = result["steps"][0]["observation"]
         self.assertTrue(obs["success"])
@@ -254,8 +291,12 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
 
     def test_missing_tool_is_reported_in_the_loop(self):
         replies = [
-            json.dumps({"tool": "shell_command",
-                        "params": {"argv": ["decode-nonexistent-xyz"]}}),
+            json.dumps(
+                {
+                    "tool": "shell_command",
+                    "params": {"argv": ["decode-nonexistent-xyz"]},
+                }
+            ),
             json.dumps({"message": "that tool is not installed"}),
         ]
         with tempfile.TemporaryDirectory() as d:

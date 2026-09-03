@@ -10,9 +10,9 @@ The plan/action DAG is a reused :class:`PlanGraph`; completion conditions reuse
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Dict, List, Tuple
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -21,7 +21,7 @@ from ..planner.dag import CompletionCriterion, PlanGraph
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _uuid() -> str:
@@ -51,7 +51,7 @@ class Hypothesis(BaseModel):
 class ActionRecord(BaseModel):
     step: int
     tool: str
-    params: Dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
     thought: str = ""
     ts: str = Field(default_factory=_now)
 
@@ -61,7 +61,7 @@ class Observation(BaseModel):
     tool: str
     success: bool = False
     summary: str = ""
-    data: Dict[str, Any] = Field(default_factory=dict)
+    data: dict[str, Any] = Field(default_factory=dict)
     evidence_ref: str = ""
     evidence_hash: str = ""
     ts: str = Field(default_factory=_now)
@@ -94,9 +94,9 @@ class Finding(BaseModel):
 class ScopeView(BaseModel):
     """A read-only snapshot of the active governance scope for the prompt."""
 
-    read_roots: List[str] = Field(default_factory=list)
-    write_roots: List[str] = Field(default_factory=list)
-    targets: List[str] = Field(default_factory=list)
+    read_roots: list[str] = Field(default_factory=list)
+    write_roots: list[str] = Field(default_factory=list)
+    targets: list[str] = Field(default_factory=list)
     allow_destructive: bool = False
 
 
@@ -105,16 +105,16 @@ class TaskState(BaseModel):
     objective: str = ""
     mode: TaskMode = TaskMode.HYBRID
     scope: ScopeView = Field(default_factory=ScopeView)
-    constraints: List[str] = Field(default_factory=list)
-    environment: Dict[str, Any] = Field(default_factory=dict)
-    hypotheses: List[Hypothesis] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    environment: dict[str, Any] = Field(default_factory=dict)
+    hypotheses: list[Hypothesis] = Field(default_factory=list)
     plan: PlanGraph = Field(default_factory=PlanGraph)
-    actions: List[ActionRecord] = Field(default_factory=list)
-    observations: List[Observation] = Field(default_factory=list)
-    findings: List[Finding] = Field(default_factory=list)
-    artifacts: List[Artifact] = Field(default_factory=list)
-    unresolved_questions: List[str] = Field(default_factory=list)
-    completion_conditions: List[CompletionCriterion] = Field(default_factory=list)
+    actions: list[ActionRecord] = Field(default_factory=list)
+    observations: list[Observation] = Field(default_factory=list)
+    findings: list[Finding] = Field(default_factory=list)
+    artifacts: list[Artifact] = Field(default_factory=list)
+    unresolved_questions: list[str] = Field(default_factory=list)
+    completion_conditions: list[CompletionCriterion] = Field(default_factory=list)
     status: TaskStatus = TaskStatus.INVESTIGATING
     created_at: str = Field(default_factory=_now)
     updated_at: str = Field(default_factory=_now)
@@ -124,7 +124,7 @@ class TaskState(BaseModel):
         self.updated_at = _now()
 
     def record_action(
-        self, tool: str, params: Dict[str, Any] | None = None, thought: str = ""
+        self, tool: str, params: dict[str, Any] | None = None, thought: str = ""
     ) -> ActionRecord:
         action = ActionRecord(
             step=len(self.actions) + 1, tool=tool, params=params or {}, thought=thought
@@ -133,7 +133,7 @@ class TaskState(BaseModel):
         self._touch()
         return action
 
-    def record_observation(self, tool: str, observation: Dict[str, Any]) -> Observation:
+    def record_observation(self, tool: str, observation: dict[str, Any]) -> Observation:
         evidence = observation.get("evidence") or {}
         obs = Observation(
             step=len(self.observations) + 1,
@@ -148,8 +148,12 @@ class TaskState(BaseModel):
         # Link the immutable evidence captured for this step as a task artifact.
         if obs.evidence_ref:
             self.add_artifact(
-                source=tool, action=tool, related_step=obs.step, summary=obs.summary,
-                evidence_id=obs.evidence_ref, evidence_hash=obs.evidence_hash,
+                source=tool,
+                action=tool,
+                related_step=obs.step,
+                summary=obs.summary,
+                evidence_id=obs.evidence_ref,
+                evidence_hash=obs.evidence_hash,
             )
         self._touch()
         return obs
@@ -166,8 +170,13 @@ class TaskState(BaseModel):
         confidence: str = "medium",
     ) -> Artifact:
         artifact = Artifact(
-            source=source, action=action, related_step=related_step, summary=summary,
-            evidence_id=evidence_id, evidence_hash=evidence_hash, confidence=confidence,
+            source=source,
+            action=action,
+            related_step=related_step,
+            summary=summary,
+            evidence_id=evidence_id,
+            evidence_hash=evidence_hash,
+            confidence=confidence,
         )
         self.artifacts.append(artifact)
         self._touch()
@@ -200,7 +209,7 @@ class TaskState(BaseModel):
         self._touch()
 
     # ── completion ──────────────────────────────────────────────────────
-    def evaluate_completion(self, values: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    def evaluate_completion(self, values: dict[str, Any]) -> tuple[bool, list[str]]:
         """Check the objective-level completion conditions against a result dict.
 
         Reuses :meth:`CompletionCriterion.check`. Returns ``(complete, failures)``;
@@ -208,7 +217,7 @@ class TaskState(BaseModel):
         """
         if not self.completion_conditions:
             return False, ["no completion conditions declared"]
-        failures: List[str] = []
+        failures: list[str] = []
         for criterion in self.completion_conditions:
             ok, reason = criterion.check(values)
             if not ok:
@@ -222,7 +231,7 @@ class TaskState(BaseModel):
         Deliberately compact (recent items only) so the state stays a world-model,
         not a second chat log.
         """
-        lines: List[str] = ["TASK STATE"]
+        lines: list[str] = ["TASK STATE"]
         lines.append(f"Objective: {self.objective or '(unset)'}")
         lines.append(f"Mode: {self.mode.value} | Status: {self.status.value}")
         scope = self.scope
@@ -234,7 +243,9 @@ class TaskState(BaseModel):
         if self.constraints:
             lines.append("Constraints: " + "; ".join(self.constraints[:max_items]))
         if self.environment:
-            env = ", ".join(f"{k}={v}" for k, v in list(self.environment.items())[:max_items])
+            env = ", ".join(
+                f"{k}={v}" for k, v in list(self.environment.items())[:max_items]
+            )
             lines.append(f"Environment: {env}")
         if self.hypotheses:
             lines.append("Hypotheses:")
@@ -244,7 +255,8 @@ class TaskState(BaseModel):
             lines.append("Recent actions:")
             for action in self.actions[-max_items:]:
                 obs = next(
-                    (o for o in reversed(self.observations) if o.step == action.step), None
+                    (o for o in reversed(self.observations) if o.step == action.step),
+                    None,
                 )
                 outcome = "ok" if (obs and obs.success) else ("failed" if obs else "…")
                 lines.append(f"  {action.step}. {action.tool} -> {outcome}")
@@ -259,5 +271,7 @@ class TaskState(BaseModel):
             for question in self.unresolved_questions[-max_items:]:
                 lines.append(f"  - {question}")
         if self.completion_conditions:
-            lines.append(f"Completion conditions: {len(self.completion_conditions)} declared")
+            lines.append(
+                f"Completion conditions: {len(self.completion_conditions)} declared"
+            )
         return "\n".join(lines)

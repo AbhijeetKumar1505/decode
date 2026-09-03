@@ -1,8 +1,9 @@
 import platform
 import subprocess
-from pathlib import Path
-from typing import Dict, Any, List
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -28,7 +29,7 @@ class BootstrapEngine:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.report_path = data_dir / "bootstrap_report.json"
 
-    def detect_distro(self) -> Dict[str, str]:
+    def detect_distro(self) -> dict[str, str]:
         result = {"system": platform.system(), "version": platform.version()}
         if platform.system() == "Linux":
             try:
@@ -41,13 +42,13 @@ class BootstrapEngine:
                 pass
         return result
 
-    def system_update(self) -> Dict[str, Any]:
+    def system_update(self) -> dict[str, Any]:
         raise RuntimeError(
             "system update is disabled; use a separately approved maintenance "
             "capability through ExecutionCoordinator"
         )
 
-    def check_security(self) -> List[SecurityCheck]:
+    def check_security(self) -> list[SecurityCheck]:
         checks = []
         items = [
             ("sudo access", self._check_command("sudo", "-V")),
@@ -94,8 +95,8 @@ class BootstrapEngine:
         self.report_path.write_text(report.model_dump_json(indent=2))
         return report
 
-    def run(self, do_update: bool = False) -> Dict[str, Any]:
-        result: Dict[str, Any] = {
+    def run(self, do_update: bool = False) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "distro": self.detect_distro(),
             "security_checks": [c.model_dump() for c in self.check_security()],
             "bootstrap_report": self.generate_report().model_dump(),

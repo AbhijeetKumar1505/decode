@@ -2,7 +2,6 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import List
 
 import faiss
 import numpy as np
@@ -31,11 +30,11 @@ class OpenRouterEmbeddings:
             base_url=self.BASE_URL,
         )
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
         response = self._client.embeddings.create(model=self._model, input=texts)
         return [item.embedding for item in response.data]
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         return self.embed_documents([text])[0]
 
 
@@ -47,10 +46,13 @@ class SelfLearningMemory:
         self.knowledge = self.load_initial_knowledge()
         self._load_or_init_index()
 
-    def load_initial_knowledge(self) -> List[str]:
+    def load_initial_knowledge(self) -> list[str]:
         """Preload pentest knowledge"""
         # decode/memory/self_learning.py -> repo root is three parents up
-        initial_path = Path(__file__).resolve().parent.parent.parent / "data/initial_knowledge.json"
+        initial_path = (
+            Path(__file__).resolve().parent.parent.parent
+            / "data/initial_knowledge.json"
+        )
         with open(initial_path) as f:
             data = json.load(f)
         return data["exploits"] + data["techniques"]
@@ -69,7 +71,9 @@ class SelfLearningMemory:
         try:
             embeddings = self.embeddings.embed_documents(texts)
         except Exception as e:
-            logging.warning("Failed to build initial index (embedding API error): %s", e)
+            logging.warning(
+                "Failed to build initial index (embedding API error): %s", e
+            )
             self.index = faiss.IndexFlatL2(768)
             return
         self.vectors = np.array(embeddings).astype("float32")
@@ -93,7 +97,7 @@ class SelfLearningMemory:
         self.vectors = np.vstack([self.vectors, embedding])
         self.save()
 
-    def retrieve_relevant(self, query: str, k: int = 5) -> List[str]:
+    def retrieve_relevant(self, query: str, k: int = 5) -> list[str]:
         try:
             query_emb = (
                 np.array(self.embeddings.embed_query(query))
@@ -106,7 +110,7 @@ class SelfLearningMemory:
         if self.index is None or self.index.ntotal == 0:
             return []
         try:
-            distances, indices = self.index.search(query_emb, k)
+            _distances, indices = self.index.search(query_emb, k)
         except Exception as e:
             logging.warning("FAISS search error: %s", e)
             return []

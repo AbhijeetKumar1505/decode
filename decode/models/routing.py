@@ -9,8 +9,6 @@ action (a caller concern the router does not trigger).
 
 from __future__ import annotations
 
-from typing import Dict, List
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from .registry import ModelRegistry, ModelSpec
@@ -27,10 +25,10 @@ class RoutingRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     task_class: str = "analysis"
-    required_capabilities: List[str] = Field(default_factory=list)
+    required_capabilities: list[str] = Field(default_factory=list)
     data_classification: str = "internal"
     local_only: bool = False
-    allowlist: List[str] = Field(default_factory=list)
+    allowlist: list[str] = Field(default_factory=list)
     max_context: int = 0
     quality_threshold: float = 0.0
     latency_deadline_class: str = ""
@@ -46,14 +44,15 @@ class RoutingRule(BaseModel):
     when_task_class: str = ""
     when_data_classification: str = ""
     require_locality: str = ""
-    require_capabilities: List[str] = Field(default_factory=list)
+    require_capabilities: list[str] = Field(default_factory=list)
 
     def matches(self, request: RoutingRequest) -> bool:
         if self.when_task_class and self.when_task_class != request.task_class:
             return False
-        if self.when_data_classification and self.when_data_classification != request.data_classification:
-            return False
-        return True
+        return not (
+            self.when_data_classification
+            and self.when_data_classification != request.data_classification
+        )
 
 
 class RoutingDecision(BaseModel):
@@ -62,12 +61,12 @@ class RoutingDecision(BaseModel):
     model_id: str = ""
     selected: bool = False
     reason: str = ""
-    matched_rules: List[str] = Field(default_factory=list)
-    fallback_candidates: List[str] = Field(default_factory=list)
-    tried: List[str] = Field(default_factory=list)
+    matched_rules: list[str] = Field(default_factory=list)
+    fallback_candidates: list[str] = Field(default_factory=list)
+    tried: list[str] = Field(default_factory=list)
 
 
-DEFAULT_RULES: List[RoutingRule] = [
+DEFAULT_RULES: list[RoutingRule] = [
     RoutingRule(
         name="confidential-local",
         when_data_classification="confidential",
@@ -90,13 +89,13 @@ class ModelRouter:
     def __init__(
         self,
         registry: ModelRegistry,
-        rules: List[RoutingRule] | None = None,
+        rules: list[RoutingRule] | None = None,
     ) -> None:
         self._registry = registry
         self._rules = rules if rules is not None else list(DEFAULT_RULES)
 
-    def _effective(self, request: RoutingRequest) -> tuple[RoutingRequest, List[str]]:
-        matched: List[str] = []
+    def _effective(self, request: RoutingRequest) -> tuple[RoutingRequest, list[str]]:
+        matched: list[str] = []
         local_only = request.local_only
         required = list(request.required_capabilities)
         for rule in self._rules:
@@ -108,13 +107,19 @@ class ModelRouter:
             for capability in rule.require_capabilities:
                 if capability not in required:
                     required.append(capability)
-        effective = request.model_copy(update={"local_only": local_only, "required_capabilities": required})
+        effective = request.model_copy(
+            update={"local_only": local_only, "required_capabilities": required}
+        )
         return effective, matched
 
     def _passes_hard_filters(self, spec: ModelSpec, request: RoutingRequest) -> bool:
         if not spec.available or spec.rate_limited:
             return False
-        if request.allowlist and spec.id not in request.allowlist and spec.provider not in request.allowlist:
+        if (
+            request.allowlist
+            and spec.id not in request.allowlist
+            and spec.provider not in request.allowlist
+        ):
             return False
         if not spec.data_policy.accepts(request.data_classification):
             return False
@@ -124,13 +129,19 @@ class ModelRouter:
             return False
         if request.max_context and spec.context_limit < request.max_context:
             return False
-        if request.quality_threshold and spec.quality_for(request.task_class) < request.quality_threshold:
+        if (
+            request.quality_threshold
+            and spec.quality_for(request.task_class) < request.quality_threshold
+        ):
             return False
-        if request.latency_deadline_class and _latency_rank(spec.latency_class) > _latency_rank(request.latency_deadline_class):
+        if request.latency_deadline_class and _latency_rank(
+            spec.latency_class
+        ) > _latency_rank(request.latency_deadline_class):
             return False
-        if request.cost_budget_per_mtok and spec.cost.input_per_mtok > request.cost_budget_per_mtok:
-            return False
-        return True
+        return not (
+            request.cost_budget_per_mtok
+            and spec.cost.input_per_mtok > request.cost_budget_per_mtok
+        )
 
     def _rank_key(self, spec: ModelSpec, task_class: str):
         # quality desc, latency asc, cost asc, id asc — deterministic/reproducible
@@ -145,18 +156,31 @@ class ModelRouter:
         if request.pinned_model:
             spec = self._registry.get(request.pinned_model)
             if spec is None:
-                return RoutingDecision(reason=f"pinned model '{request.pinned_model}' is not registered")
+                return RoutingDecision(
+                    reason=f"pinned model '{request.pinned_model}' is not registered"
+                )
             if not self._passes_hard_filters(spec, request):
-                return RoutingDecision(reason=f"pinned model '{request.pinned_model}' fails a hard policy filter")
+                return RoutingDecision(
+                    reason=f"pinned model '{request.pinned_model}' fails a hard policy filter"
+                )
             return RoutingDecision(
-                model_id=spec.id, selected=True, reason="pinned model", tried=[spec.id],
+                model_id=spec.id,
+                selected=True,
+                reason="pinned model",
+                tried=[spec.id],
                 fallback_candidates=self._fallback_pool(spec, request, [spec.id]),
             )
 
         effective, matched = self._effective(request)
-        eligible = [s for s in self._registry.all() if self._passes_hard_filters(s, effective)]
+        eligible = [
+            s for s in self._registry.all() if self._passes_hard_filters(s, effective)
+        ]
         if not eligible:
-            detail = "local-only requirement with no registered local model" if effective.local_only else "no model satisfies the policy and capability filters"
+            detail = (
+                "local-only requirement with no registered local model"
+                if effective.local_only
+                else "no model satisfies the policy and capability filters"
+            )
             return RoutingDecision(reason=detail, matched_rules=matched)
 
         eligible.sort(key=lambda s: self._rank_key(s, effective.task_class))
@@ -174,7 +198,9 @@ class ModelRouter:
             fallback_candidates=self._fallback_pool(chosen, effective, [chosen.id]),
         )
 
-    def _fallback_pool(self, current: ModelSpec, request: RoutingRequest, tried: List[str]) -> List[str]:
+    def _fallback_pool(
+        self, current: ModelSpec, request: RoutingRequest, tried: list[str]
+    ) -> list[str]:
         pool = []
         for spec in self._registry.in_group(current.fallback_group):
             if spec.id in tried:
@@ -184,16 +210,24 @@ class ModelRouter:
             if not self._passes_hard_filters(spec, request):
                 continue
             pool.append(spec.id)
-        pool.sort(key=lambda sid: self._rank_key(self._registry.get(sid), request.task_class))
+        pool.sort(
+            key=lambda sid: self._rank_key(self._registry.get(sid), request.task_class)
+        )
         return pool
 
-    def fallback(self, decision: RoutingDecision, request: RoutingRequest) -> RoutingDecision:
+    def fallback(
+        self, decision: RoutingDecision, request: RoutingRequest
+    ) -> RoutingDecision:
         """Select the next safe alternative after a model-inference failure."""
         if not request.allow_fallback:
-            return RoutingDecision(reason="fallback disabled for this request", tried=decision.tried)
+            return RoutingDecision(
+                reason="fallback disabled for this request", tried=decision.tried
+            )
         current = self._registry.get(decision.model_id)
         if current is None:
-            return RoutingDecision(reason="no current model to fall back from", tried=decision.tried)
+            return RoutingDecision(
+                reason="no current model to fall back from", tried=decision.tried
+            )
         pool = self._fallback_pool(current, request, decision.tried)
         if not pool:
             return RoutingDecision(
@@ -208,5 +242,7 @@ class ModelRouter:
             reason=f"fallback from {decision.model_id} within {current.fallback_group}; same locality and data policy",
             matched_rules=decision.matched_rules,
             tried=tried,
-            fallback_candidates=self._fallback_pool(self._registry.get(chosen_id), request, tried),
+            fallback_candidates=self._fallback_pool(
+                self._registry.get(chosen_id), request, tried
+            ),
         )

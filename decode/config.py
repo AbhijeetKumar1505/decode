@@ -34,7 +34,9 @@ class Config:
     AUDIT_PATH = Path(os.getenv("AUDIT_PATH", "./audit/"))
     FEEDBACK_PATH = Path(os.getenv("FEEDBACK_PATH", "./feedback/"))
     EVIDENCE_PATH = Path(os.getenv("EVIDENCE_PATH", "./evidence/"))
-    TOOL_REGISTRY_PATH = Path(os.getenv("TOOL_REGISTRY_PATH", "./data/tool_registry.json"))
+    TOOL_REGISTRY_PATH = Path(
+        os.getenv("TOOL_REGISTRY_PATH", "./data/tool_registry.json")
+    )
     PROFILES_PATH = Path(os.getenv("PROFILES_PATH", "./profiles/"))
     MONGODB_URI = os.getenv("MONGODB_URI")
     MONGODB_DB = os.getenv("MONGODB_DB", "decode")
@@ -56,7 +58,9 @@ class Config:
         cls.AUDIT_PATH = Path(os.getenv("AUDIT_PATH", "./audit/"))
         cls.FEEDBACK_PATH = Path(os.getenv("FEEDBACK_PATH", "./feedback/"))
         cls.EVIDENCE_PATH = Path(os.getenv("EVIDENCE_PATH", "./evidence/"))
-        cls.TOOL_REGISTRY_PATH = Path(os.getenv("TOOL_REGISTRY_PATH", "./data/tool_registry.json"))
+        cls.TOOL_REGISTRY_PATH = Path(
+            os.getenv("TOOL_REGISTRY_PATH", "./data/tool_registry.json")
+        )
         cls.PROFILES_PATH = Path(os.getenv("PROFILES_PATH", "./profiles/"))
         cls.MONGODB_URI = os.getenv("MONGODB_URI")
         cls.MONGODB_DB = os.getenv("MONGODB_DB", "decode")

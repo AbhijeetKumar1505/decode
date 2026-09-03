@@ -1,8 +1,9 @@
 import json
 import uuid
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from pathlib import Path
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -12,7 +13,7 @@ class ExecutionFeedback(BaseModel):
     execution_time: float = 0.0
     dependency_missing: bool = False
     error: str = ""
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class DependencyFeedback(BaseModel):
@@ -26,7 +27,7 @@ class DependencyFeedback(BaseModel):
 class AgentDecisionFeedback(BaseModel):
     planner: str
     confidence: float = 0.0
-    alternatives: List[str] = []
+    alternatives: list[str] = []
     execution_time: float = 0.0
     success: bool = True
 
@@ -66,16 +67,18 @@ class FeedbackStore:
             f.write(line)
         return entry["id"]
 
-    def get_execution_feedback(self, skill: Optional[str] = None) -> List[Dict[str, Any]]:
-        return self._query_log(self._exec_log, lambda e: not skill or e.get("skill") == skill)
+    def get_execution_feedback(self, skill: str | None = None) -> list[dict[str, Any]]:
+        return self._query_log(
+            self._exec_log, lambda e: not skill or e.get("skill") == skill
+        )
 
-    def get_dependency_feedback(self) -> List[Dict[str, Any]]:
+    def get_dependency_feedback(self) -> list[dict[str, Any]]:
         return self._query_log(self._dep_log)
 
-    def get_decision_feedback(self) -> List[Dict[str, Any]]:
+    def get_decision_feedback(self) -> list[dict[str, Any]]:
         return self._query_log(self._decision_log)
 
-    def _query_log(self, path: Path, filter_fn=None) -> List[Dict[str, Any]]:
+    def _query_log(self, path: Path, filter_fn=None) -> list[dict[str, Any]]:
         if not path.exists():
             return []
         results = []

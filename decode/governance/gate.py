@@ -11,12 +11,12 @@ executions.
 
 import re
 from enum import Enum
-from typing import Optional
+
 from pydantic import BaseModel
 
-from .scope import ScopePolicy
-from ..audit import AuditLayer, AuditEvent
+from ..audit import AuditEvent, AuditLayer
 from ..hostcontrol.policy import PermissionMode
+from .scope import ScopePolicy
 
 
 class Decision(str, Enum):
@@ -39,7 +39,7 @@ class GovernanceGate:
     def __init__(
         self,
         scope: ScopePolicy,
-        audit: Optional[AuditLayer] = None,
+        audit: AuditLayer | None = None,
         allow_destructive: bool = False,
         mode: PermissionMode = PermissionMode.ASK,
     ):
@@ -97,11 +97,20 @@ class GovernanceGate:
         # Plan mode never executes — it only surfaces what would run.
         if self._mode is PermissionMode.PLAN:
             reason = "plan mode: execution disabled"
-            self._record("rejection", capability, self._safe_text(target), risk, approved=False, detail=reason)
+            self._record(
+                "rejection",
+                capability,
+                self._safe_text(target),
+                risk,
+                approved=False,
+                detail=reason,
+            )
             return GovernanceDecision(decision=Decision.DENY, reason=reason)
 
         if risk == "READ":
-            return GovernanceDecision(decision=Decision.ALLOW, reason="read-only, in scope")
+            return GovernanceDecision(
+                decision=Decision.ALLOW, reason="read-only, in scope"
+            )
 
         if risk == "DESTRUCTIVE":
             if not self._allow_destructive:
@@ -122,14 +131,25 @@ class GovernanceGate:
 
         # WRITE (and anything else): auto mode allows in-scope writes; otherwise approval.
         if self._mode is PermissionMode.AUTO:
-            return GovernanceDecision(decision=Decision.ALLOW, reason="auto mode: write allowed in scope")
-        return GovernanceDecision(decision=Decision.NEEDS_APPROVAL, reason="requires human approval")
+            return GovernanceDecision(
+                decision=Decision.ALLOW, reason="auto mode: write allowed in scope"
+            )
+        return GovernanceDecision(
+            decision=Decision.NEEDS_APPROVAL, reason="requires human approval"
+        )
 
     def _record(self, event, capability, target, risk, approved, detail):
-        self._audit.record(AuditEvent(
-            timestamp="", event=event, tool=capability, target=target,
-            risk=risk, approved=approved, detail=detail,
-        ))
+        self._audit.record(
+            AuditEvent(
+                timestamp="",
+                event=event,
+                tool=capability,
+                target=target,
+                risk=risk,
+                approved=approved,
+                detail=detail,
+            )
+        )
 
     @classmethod
     def _safe_text(cls, value: str) -> str:

@@ -11,17 +11,38 @@ from __future__ import annotations
 
 import re
 import shlex
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 # name -> (description, baseline risk label for the tool listing)
-CODING_CAPABILITIES: Dict[str, Dict[str, str]] = {
-    "git_status": {"description": "Show the working-tree status (git status --short)", "risk": "read"},
-    "git_diff": {"description": "Show the working-tree diff, optionally for a path", "risk": "read"},
-    "git_log": {"description": "Show recent commit history (git log --oneline)", "risk": "read"},
-    "git_commit": {"description": "Commit staged changes with a message", "risk": "write"},
-    "test_run": {"description": "Run the test suite (default: pytest -q)", "risk": "write"},
-    "build_run": {"description": "Run the project build (default: make)", "risk": "write"},
-    "patch_apply": {"description": "Apply a unified diff to the working tree (git apply)", "risk": "write"},
+CODING_CAPABILITIES: dict[str, dict[str, str]] = {
+    "git_status": {
+        "description": "Show the working-tree status (git status --short)",
+        "risk": "read",
+    },
+    "git_diff": {
+        "description": "Show the working-tree diff, optionally for a path",
+        "risk": "read",
+    },
+    "git_log": {
+        "description": "Show recent commit history (git log --oneline)",
+        "risk": "read",
+    },
+    "git_commit": {
+        "description": "Commit staged changes with a message",
+        "risk": "write",
+    },
+    "test_run": {
+        "description": "Run the test suite (default: pytest -q)",
+        "risk": "write",
+    },
+    "build_run": {
+        "description": "Run the project build (default: make)",
+        "risk": "write",
+    },
+    "patch_apply": {
+        "description": "Apply a unified diff to the working tree (git apply)",
+        "risk": "write",
+    },
 }
 
 
@@ -29,7 +50,7 @@ def is_coding_capability(name: str) -> bool:
     return name in CODING_CAPABILITIES
 
 
-def coding_tool_list() -> List[Dict[str, str]]:
+def coding_tool_list() -> list[dict[str, str]]:
     return [
         {"name": name, "description": meta["description"], "risk": meta["risk"]}
         for name, meta in CODING_CAPABILITIES.items()
@@ -43,7 +64,9 @@ def _clean(value: Any) -> str:
     return text
 
 
-def build_coding_command(name: str, params: Dict[str, Any]) -> Tuple[List[str], Optional[str]]:
+def build_coding_command(
+    name: str, params: dict[str, Any]
+) -> tuple[list[str], str | None]:
     """Translate a coding capability to ``(argv, stdin)``.
 
     Raises ``ValueError`` on an unknown capability or invalid arguments.
@@ -96,13 +119,13 @@ _PYTEST_FAIL = re.compile(r"(\d+)\s+failed")
 _PYTEST_ERROR = re.compile(r"(\d+)\s+error")
 
 
-def summarize_coding_result(name: str, data: Dict[str, Any]) -> Dict[str, Any]:
+def summarize_coding_result(name: str, data: dict[str, Any]) -> dict[str, Any]:
     """Extract structured signals from a coding capability's shell result.
 
     Returns extra fields to merge into the observation ``data`` (richer
     observations, subsystem 08). Never raises.
     """
-    extra: Dict[str, Any] = {}
+    extra: dict[str, Any] = {}
     stdout = str(data.get("stdout", ""))
     stderr = str(data.get("stderr", ""))
     exit_code = data.get("exit_code")

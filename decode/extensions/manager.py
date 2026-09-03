@@ -9,7 +9,7 @@ through the governed coordinator.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from .paths import Scope
 from .store import ScopedStore
@@ -37,13 +37,15 @@ class ExtensionManager:
         if self._plugins is None:
             from .plugin_manager import PluginManager
 
-            self._plugins = PluginManager(default_scope=self.default_scope, mcp_manager=self.mcp)
+            self._plugins = PluginManager(
+                default_scope=self.default_scope, mcp_manager=self.mcp
+            )
         return self._plugins
 
     def playbook_dirs(self) -> list:
         """Skill directories contributed by enabled plugins (for DECODE_PLAYBOOKS_DIR)."""
         return self.plugins.enabled_skill_dirs()
 
-    def settings(self) -> Dict[str, Any]:
+    def settings(self) -> dict[str, Any]:
         """Merged settings across all scopes (project over user over system)."""
         return self.config.read_merged()

@@ -11,7 +11,6 @@ from __future__ import annotations
 import os
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
 
 
 class Scope(str, Enum):
@@ -21,7 +20,7 @@ class Scope(str, Enum):
 
 
 #: Merge order: later scopes override earlier ones.
-PRECEDENCE: List[Scope] = [Scope.SYSTEM, Scope.USER, Scope.PROJECT]
+PRECEDENCE: list[Scope] = [Scope.SYSTEM, Scope.USER, Scope.PROJECT]
 
 
 def user_root() -> Path:
@@ -30,7 +29,7 @@ def user_root() -> Path:
     return Path(override) if override else (Path.home() / ".decode")
 
 
-def project_root(start: Optional[Path] = None) -> Path:
+def project_root(start: Path | None = None) -> Path:
     """Project scope: the nearest ancestor ``.decode`` dir, else ``<cwd>/.decode``.
 
     Honors ``$DECODE_PROJECT_HOME`` for tests and explicit overrides.
@@ -46,7 +45,7 @@ def project_root(start: Optional[Path] = None) -> Path:
     return origin / ".decode"
 
 
-def system_root() -> Optional[Path]:
+def system_root() -> Path | None:
     """System scope: ``$DECODE_SYSTEM_HOME`` or ``/etc/decode`` on POSIX; None on Windows."""
     override = os.environ.get("DECODE_SYSTEM_HOME")
     if override:
@@ -56,7 +55,7 @@ def system_root() -> Optional[Path]:
     return None
 
 
-def scope_root(scope: Scope) -> Optional[Path]:
+def scope_root(scope: Scope) -> Path | None:
     if scope is Scope.USER:
         return user_root()
     if scope is Scope.PROJECT:

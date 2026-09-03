@@ -86,13 +86,16 @@ def start_repl(
 
     try:
         from .universal_agent import UniversalAgent
+
         agent = UniversalAgent(provider=provider or Config.PROVIDER)
     except ImportError as e:
-        console.print(f"[bold red]Dependency Error:[/bold red] {str(e)}")
+        console.print(f"[bold red]Dependency Error:[/bold red] {e!s}")
         console.print("[yellow]Run 'pip install -r requirements.txt'[/yellow]")
         return
 
-    repl = AgentREPL(agent=agent, domain=domain, resume=resume, continue_last=continue_last)
+    repl = AgentREPL(
+        agent=agent, domain=domain, resume=resume, continue_last=continue_last
+    )
     repl.run()
 
 
@@ -103,8 +106,12 @@ def main(
     provider: str | None = typer.Option(None, "--provider", "-p", help="LLM provider"),
     setup: bool = typer.Option(False, "--setup", help="Run setup"),
     doctor: bool = typer.Option(False, "--doctor", help="Check dependencies"),
-    resume: str | None = typer.Option(None, "--resume", "-r", help="Resume a saved session by id"),
-    continue_last: bool = typer.Option(False, "--continue", "-c", help="Continue the most recent session"),
+    resume: str | None = typer.Option(
+        None, "--resume", "-r", help="Resume a saved session by id"
+    ),
+    continue_last: bool = typer.Option(
+        False, "--continue", "-c", help="Continue the most recent session"
+    ),
 ) -> None:
     """Decode v2 — Governed Universal Agent"""
     _configure_output_encoding()
@@ -124,7 +131,9 @@ def main(
     if ctx.invoked_subcommand is None:
         Config.ensure_dirs()
         _bootstrap.generate_report()
-        start_repl(domain, selected_provider, resume=resume, continue_last=continue_last)
+        start_repl(
+            domain, selected_provider, resume=resume, continue_last=continue_last
+        )
 
 
 @app.command()
@@ -137,7 +146,7 @@ def doctor():
 @app.command()
 def providers():
     """List execution providers and their health status"""
-    from .execution import create_executor, available_provider_names
+    from .execution import available_provider_names, create_executor
 
     table = Table(title="Execution Providers", box=box.ROUNDED)
     table.add_column("Provider", style="cyan")
@@ -157,7 +166,9 @@ def providers():
         status = "[green]available[/green]" if ok else "[yellow]unavailable[/yellow]"
         table.add_row(key, name, status)
     console.print(table)
-    console.print(f"[dim]Active provider: [bold]{Config.EXECUTOR}[/bold] (set DECODE_EXECUTOR to change)[/dim]")
+    console.print(
+        f"[dim]Active provider: [bold]{Config.EXECUTOR}[/bold] (set DECODE_EXECUTOR to change)[/dim]"
+    )
 
 
 @app.command()
@@ -188,7 +199,9 @@ def tools(
 
 @app.command()
 def knowledge(
-    query: str = typer.Argument(..., help="Search the knowledge base (techniques, threats, mitigations)"),
+    query: str = typer.Argument(
+        ..., help="Search the knowledge base (techniques, threats, mitigations)"
+    ),
 ):
     """Search the knowledge base for relevant techniques and references"""
     Config.ensure_dirs()
@@ -223,7 +236,9 @@ def bootstrap(
         result = _bootstrap.run(do_update=update)
     distro = result["distro"]
     report = result["bootstrap_report"]
-    console.print(f"[green]System:[/green] {distro.get('id', 'unknown')} {distro.get('version_id', '')}")
+    console.print(
+        f"[green]System:[/green] {distro.get('id', 'unknown')} {distro.get('version_id', '')}"
+    )
     console.print(f"[green]Python:[/green] {report['python']}")
     console.print(f"[green]Docker:[/green] {report['docker']}")
     console.print(f"[green]Nmap:[/green] {report['nmap']}")
@@ -246,7 +261,9 @@ def _parse_scope(scope: str):
     try:
         return Scope(scope)
     except ValueError:
-        console.print(f"[red]Unknown scope '{scope}'. Use user, project, or system.[/red]")
+        console.print(
+            f"[red]Unknown scope '{scope}'. Use user, project, or system.[/red]"
+        )
         raise typer.Exit(1) from None
 
 
@@ -258,7 +275,9 @@ def mcp_add(
     ),
     transport: str = typer.Option("stdio", "--transport", help="stdio | http"),
     url: str = typer.Option("", "--url", help="Endpoint for http/sse transports"),
-    risk: str = typer.Option("write", "--risk", help="Declared risk: read | write | destructive"),
+    risk: str = typer.Option(
+        "write", "--risk", help="Declared risk: read | write | destructive"
+    ),
     scope: str = typer.Option("user", "--scope", help="user | project | system"),
 ):
     """Register an MCP server, e.g. `decode mcp add mongodb -- npx -y mongodb-mcp-server`."""
@@ -266,8 +285,12 @@ def mcp_add(
 
     parts = command_parts or []
     spec = MCPServerSpec(
-        name=name, transport=transport, url=url, risk=risk,
-        command=parts[0] if parts else "", args=parts[1:],
+        name=name,
+        transport=transport,
+        url=url,
+        risk=risk,
+        command=parts[0] if parts else "",
+        args=parts[1:],
     )
     try:
         _mcp_manager().add(spec, scope=_parse_scope(scope))
@@ -282,7 +305,9 @@ def mcp_list():
     """List configured MCP servers."""
     servers = _mcp_manager().list_servers()
     if not servers:
-        console.print("[dim]No MCP servers configured. Add one with `decode mcp add`.[/dim]")
+        console.print(
+            "[dim]No MCP servers configured. Add one with `decode mcp add`.[/dim]"
+        )
         return
     table = Table(title="MCP Servers", box=box.ROUNDED)
     table.add_column("Name", style="cyan")
@@ -292,7 +317,9 @@ def mcp_list():
     table.add_column("Enabled", style="bold")
     for name, spec in sorted(servers.items()):
         launcher = spec.url or " ".join([spec.command, *spec.args]).strip()
-        table.add_row(name, spec.transport, launcher, spec.risk, "yes" if spec.enabled else "no")
+        table.add_row(
+            name, spec.transport, launcher, spec.risk, "yes" if spec.enabled else "no"
+        )
     console.print(table)
 
 
@@ -317,7 +344,9 @@ def mcp_enable(
     """Enable a configured MCP server."""
     ok = _mcp_manager().set_enabled(name, True, scope=_parse_scope(scope))
     console.print(
-        f"[green]Enabled '{name}'.[/green]" if ok else f"[yellow]No MCP server '{name}'.[/yellow]"
+        f"[green]Enabled '{name}'.[/green]"
+        if ok
+        else f"[yellow]No MCP server '{name}'.[/yellow]"
     )
 
 
@@ -329,7 +358,9 @@ def mcp_disable(
     """Disable a configured MCP server (kept, but not started or exposed)."""
     ok = _mcp_manager().set_enabled(name, False, scope=_parse_scope(scope))
     console.print(
-        f"[green]Disabled '{name}'.[/green]" if ok else f"[yellow]No MCP server '{name}'.[/yellow]"
+        f"[green]Disabled '{name}'.[/green]"
+        if ok
+        else f"[yellow]No MCP server '{name}'.[/yellow]"
     )
 
 
@@ -366,7 +397,9 @@ def plugin_list():
     """List installed plugins."""
     plugins = _plugin_manager().list_plugins()
     if not plugins:
-        console.print("[dim]No plugins installed. Install one with `decode plugin install`.[/dim]")
+        console.print(
+            "[dim]No plugins installed. Install one with `decode plugin install`.[/dim]"
+        )
         return
     table = Table(title="Plugins", box=box.ROUNDED)
     table.add_column("Name", style="cyan")
@@ -374,7 +407,9 @@ def plugin_list():
     table.add_column("Description")
     table.add_column("Enabled", style="bold")
     for name, record in sorted(plugins.items()):
-        table.add_row(name, record.version, record.description, "yes" if record.enabled else "no")
+        table.add_row(
+            name, record.version, record.description, "yes" if record.enabled else "no"
+        )
     console.print(table)
 
 
@@ -386,7 +421,8 @@ def plugin_remove(
     """Remove an installed plugin (and the MCP servers it registered)."""
     removed = _plugin_manager().remove(name, scope=_parse_scope(scope))
     console.print(
-        f"[green]Removed plugin '{name}'.[/green]" if removed
+        f"[green]Removed plugin '{name}'.[/green]"
+        if removed
         else f"[yellow]No plugin '{name}' in {scope} scope.[/yellow]"
     )
 
@@ -399,7 +435,9 @@ def plugin_enable(
     """Enable an installed plugin."""
     ok = _plugin_manager().set_enabled(name, True, scope=_parse_scope(scope))
     console.print(
-        f"[green]Enabled '{name}'.[/green]" if ok else f"[yellow]No plugin '{name}'.[/yellow]"
+        f"[green]Enabled '{name}'.[/green]"
+        if ok
+        else f"[yellow]No plugin '{name}'.[/yellow]"
     )
 
 
@@ -411,7 +449,9 @@ def plugin_disable(
     """Disable an installed plugin (kept, but its components are not exposed)."""
     ok = _plugin_manager().set_enabled(name, False, scope=_parse_scope(scope))
     console.print(
-        f"[green]Disabled '{name}'.[/green]" if ok else f"[yellow]No plugin '{name}'.[/yellow]"
+        f"[green]Disabled '{name}'.[/green]"
+        if ok
+        else f"[yellow]No plugin '{name}'.[/yellow]"
     )
 
 
@@ -451,6 +491,7 @@ def run_doctor():
         progress.add_task("[yellow]Checking environment...", total=None)
         _bootstrap.generate_report()
         from .hostcontrol import operations as ops
+
         installed = ops.list_tools(limit=5000)
 
     checks = _bootstrap.check_security()

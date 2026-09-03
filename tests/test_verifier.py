@@ -32,13 +32,19 @@ class TestVerifier(unittest.TestCase):
     def test_condition_on_nested_observation_field(self):
         state = TaskState(objective="x")
         state.completion_conditions.append(
-            CompletionCriterion(kind="equals", field="last_observation.exit_code", expected=0)
+            CompletionCriterion(
+                kind="equals", field="last_observation.exit_code", expected=0
+            )
         )
         state.record_action("test_run", {})
-        state.record_observation("test_run", {"success": True, "data": {"exit_code": 1}})
+        state.record_observation(
+            "test_run", {"success": True, "data": {"exit_code": 1}}
+        )
         self.assertFalse(Verifier().verify(state).valid)
         state.record_action("test_run", {})
-        state.record_observation("test_run", {"success": True, "data": {"exit_code": 0}})
+        state.record_observation(
+            "test_run", {"success": True, "data": {"exit_code": 0}}
+        )
         self.assertTrue(Verifier().verify(state).valid)
 
 
@@ -65,7 +71,9 @@ class TestModelVerifier(unittest.TestCase):
         self.assertTrue(result.valid)
 
     def test_model_rejects_with_reasons(self):
-        provider = _ScriptedProvider([json.dumps({"valid": False, "reasons": ["tests fail"]})])
+        provider = _ScriptedProvider(
+            [json.dumps({"valid": False, "reasons": ["tests fail"]})]
+        )
         result = asyncio.run(ModelVerifier(provider).verify(self._state()))
         self.assertFalse(result.valid)
         self.assertIn("tests fail", result.reasons)
@@ -93,23 +101,32 @@ class TestModelVerifier(unittest.TestCase):
 
 class TestLoopReplanWithModelReviewer(unittest.TestCase):
     def test_reviewer_model_drives_replan(self):
-        worker = _ScriptedProvider([
-            json.dumps({"message": "done (first attempt)"}),
-            json.dumps({"tool": "test_run", "params": {}}),
-            json.dumps({"message": "done for real"}),
-        ])
-        reviewer = _ScriptedProvider([
-            json.dumps({"valid": False, "reasons": ["not yet"]}),
-            json.dumps({"valid": True, "reasons": []}),
-        ])
+        worker = _ScriptedProvider(
+            [
+                json.dumps({"message": "done (first attempt)"}),
+                json.dumps({"tool": "test_run", "params": {}}),
+                json.dumps({"message": "done for real"}),
+            ]
+        )
+        reviewer = _ScriptedProvider(
+            [
+                json.dumps({"valid": False, "reasons": ["not yet"]}),
+                json.dumps({"valid": True, "reasons": []}),
+            ]
+        )
 
         async def invoke(name, params):
             return {"success": True, "summary": "ok"}
 
         state = TaskState(objective="do the thing")
         loop = ToolUseLoop(
-            worker, TOOLS, invoke, max_steps=6, task_state=state,
-            verifier=ModelVerifier(reviewer), max_replans=2,
+            worker,
+            TOOLS,
+            invoke,
+            max_steps=6,
+            task_state=state,
+            verifier=ModelVerifier(reviewer),
+            max_replans=2,
         )
         result = asyncio.run(loop.run("do the thing"))
         self.assertEqual(result["stopped"], "final")
@@ -120,11 +137,13 @@ class TestLoopReplanWithModelReviewer(unittest.TestCase):
 class TestLoopReplan(unittest.TestCase):
     def test_finalization_blocked_until_condition_met(self):
         # Model tries to finish immediately (fail), then runs the tool, then finishes.
-        provider = _ScriptedProvider([
-            json.dumps({"message": "done (prematurely)"}),
-            json.dumps({"tool": "test_run", "params": {}}),
-            json.dumps({"message": "tests pass now"}),
-        ])
+        provider = _ScriptedProvider(
+            [
+                json.dumps({"message": "done (prematurely)"}),
+                json.dumps({"tool": "test_run", "params": {}}),
+                json.dumps({"message": "tests pass now"}),
+            ]
+        )
 
         async def invoke(name, params):
             return {"success": True, "summary": "all passed"}
@@ -135,8 +154,14 @@ class TestLoopReplan(unittest.TestCase):
         )
         events = []
         loop = ToolUseLoop(
-            provider, TOOLS, invoke, max_steps=6, task_state=state,
-            verifier=Verifier(), max_replans=2, on_step=events.append,
+            provider,
+            TOOLS,
+            invoke,
+            max_steps=6,
+            task_state=state,
+            verifier=Verifier(),
+            max_replans=2,
+            on_step=events.append,
         )
         result = asyncio.run(loop.run("make tests pass"))
 
@@ -159,8 +184,13 @@ class TestLoopReplan(unittest.TestCase):
             CompletionCriterion(kind="equals", field="last_success", expected=True)
         )
         loop = ToolUseLoop(
-            provider, TOOLS, invoke, max_steps=6, task_state=state,
-            verifier=Verifier(), max_replans=2,
+            provider,
+            TOOLS,
+            invoke,
+            max_steps=6,
+            task_state=state,
+            verifier=Verifier(),
+            max_replans=2,
         )
         result = asyncio.run(loop.run("impossible"))
         # after max_replans it accepts the final message rather than looping forever

@@ -10,7 +10,8 @@ via :class:`decode.execution.mcp.MCPExecutor`; risk is not inferred from an argv
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -25,8 +26,8 @@ class MCPServerSpec(BaseModel):
     name: str
     transport: str = "stdio"  # stdio | http
     command: str = ""
-    args: List[str] = Field(default_factory=list)
-    env: Dict[str, str] = Field(default_factory=dict)
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
     url: str = ""
     enabled: bool = True
     #: Declared risk for governance (MCP payloads cannot be argv-classified).
@@ -40,14 +41,14 @@ class MCPToolDescriptor(BaseModel):
     tool: str  # raw tool name on the server
     description: str = ""
     risk: str = "write"
-    input_schema: Dict[str, Any] = Field(default_factory=dict)
+    input_schema: dict[str, Any] = Field(default_factory=dict)
 
 
 class MCPToolProvider(Protocol):
     """What a discovery client must satisfy (a superset of MCPExecutor's client)."""
 
-    async def list_tools(self) -> List[Dict[str, Any]]: ...
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any: ...
+    async def list_tools(self) -> list[dict[str, Any]]: ...
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any: ...
 
 
 ClientFactory = Callable[[MCPServerSpec], MCPToolProvider]
@@ -63,37 +64,39 @@ class MCPManager:
     def __init__(
         self,
         default_scope: Scope = Scope.USER,
-        store: Optional[ScopedStore] = None,
-        client_factory: Optional[ClientFactory] = None,
+        store: ScopedStore | None = None,
+        client_factory: ClientFactory | None = None,
     ) -> None:
         self._store = store or ScopedStore("mcp.json")
         self._default_scope = default_scope
         self._client_factory = client_factory or _default_client_factory
-        self._clients: Dict[str, MCPToolProvider] = {}
-        self._tools_cache: Dict[str, List[MCPToolDescriptor]] = {}
+        self._clients: dict[str, MCPToolProvider] = {}
+        self._tools_cache: dict[str, list[MCPToolDescriptor]] = {}
 
     # ── configuration (install/register) ────────────────────────────────
-    def add(self, spec: MCPServerSpec, scope: Optional[Scope] = None) -> None:
+    def add(self, spec: MCPServerSpec, scope: Scope | None = None) -> None:
         if spec.risk not in _VALID_RISK:
             raise ValueError(f"risk must be one of {sorted(_VALID_RISK)}")
-        self._store.update_scope(scope or self._default_scope, spec.name, spec.model_dump())
+        self._store.update_scope(
+            scope or self._default_scope, spec.name, spec.model_dump()
+        )
 
-    def remove(self, name: str, scope: Optional[Scope] = None) -> bool:
+    def remove(self, name: str, scope: Scope | None = None) -> bool:
         self._tools_cache.pop(name, None)
         self._clients.pop(name, None)
         return self._store.delete_key(scope or self._default_scope, name)
 
-    def list_servers(self) -> Dict[str, MCPServerSpec]:
+    def list_servers(self) -> dict[str, MCPServerSpec]:
         return {
             name: MCPServerSpec(**{**data, "name": name})
             for name, data in self._store.read_merged().items()
             if isinstance(data, dict)
         }
 
-    def get(self, name: str) -> Optional[MCPServerSpec]:
+    def get(self, name: str) -> MCPServerSpec | None:
         return self.list_servers().get(name)
 
-    def set_enabled(self, name: str, enabled: bool, scope: Optional[Scope] = None) -> bool:
+    def set_enabled(self, name: str, enabled: bool, scope: Scope | None = None) -> bool:
         target = scope or self._default_scope
         data = self._store.read_scope(target)
         if name not in data:
@@ -122,7 +125,9 @@ class MCPManager:
             self._clients[name] = client
         return self._clients[name]
 
-    async def discover(self, name: str, *, refresh: bool = False) -> List[MCPToolDescriptor]:
+    async def discover(
+        self, name: str, *, refresh: bool = False
+    ) -> list[MCPToolDescriptor]:
         spec = self.get(name)
         if spec is None or not spec.enabled:
             return []
@@ -145,8 +150,8 @@ class MCPManager:
         self._tools_cache[name] = descriptors
         return descriptors
 
-    async def available_tools(self) -> List[MCPToolDescriptor]:
-        tools: List[MCPToolDescriptor] = []
+    async def available_tools(self) -> list[MCPToolDescriptor]:
+        tools: list[MCPToolDescriptor] = []
         for name, spec in self.list_servers().items():
             if not spec.enabled:
                 continue

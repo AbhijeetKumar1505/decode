@@ -14,14 +14,15 @@ from __future__ import annotations
 
 import argparse
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any
 
 from .. import config  # noqa: F401  (loads .env so MONGODB_URI is available)
 from .mongo_store import MongoSessionStore
 
 # collection -> function mapping a source row to its stable _id
-_ID_STRATEGY: Dict[str, Callable[[Dict[str, Any]], str]] = {
+_ID_STRATEGY: dict[str, Callable[[dict[str, Any]], str]] = {
     "sessions": lambda r: r["id"],
     "targets": lambda r: r["id"],
     "ports": lambda r: r["id"],
@@ -37,7 +38,7 @@ _ID_STRATEGY: Dict[str, Callable[[Dict[str, Any]], str]] = {
 }
 
 
-def _existing_tables(conn: sqlite3.Connection) -> List[str]:
+def _existing_tables(conn: sqlite3.Connection) -> list[str]:
     rows = conn.execute(
         "SELECT name FROM sqlite_master WHERE type = 'table'"
     ).fetchall()
@@ -46,11 +47,11 @@ def _existing_tables(conn: sqlite3.Connection) -> List[str]:
 
 def migrate_sqlite_to_mongo(
     sqlite_path: Path, store: MongoSessionStore
-) -> List[Tuple[str, int]]:
+) -> list[tuple[str, int]]:
     """Copy all supported tables. Returns (collection, copied_count) pairs."""
     conn = sqlite3.connect(str(sqlite_path))
     conn.row_factory = sqlite3.Row
-    summary: List[Tuple[str, int]] = []
+    summary: list[tuple[str, int]] = []
     try:
         tables = set(_existing_tables(conn))
         for table, id_of in _ID_STRATEGY.items():
@@ -71,7 +72,9 @@ def migrate_sqlite_to_mongo(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Migrate SQLite store to MongoDB")
-    parser.add_argument("--sqlite", default="data/decode.db", help="SQLite database path")
+    parser.add_argument(
+        "--sqlite", default="data/decode.db", help="SQLite database path"
+    )
     args = parser.parse_args()
 
     sqlite_path = Path(args.sqlite)

@@ -16,17 +16,17 @@ gate without ever weakening the DESTRUCTIVE control.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from enum import Enum
 from pathlib import Path
-from typing import Iterable, List, Sequence
 
 from ..skills.base import RiskLevel
 
 
 class PermissionMode(str, Enum):
-    PLAN = "plan"      # never execute; only describe what would run
-    ASK = "ask"        # default: READ auto, WRITE/DESTRUCTIVE need approval
-    AUTO = "auto"      # READ + WRITE auto within scope; DESTRUCTIVE still gated
+    PLAN = "plan"  # never execute; only describe what would run
+    ASK = "ask"  # default: READ auto, WRITE/DESTRUCTIVE need approval
+    AUTO = "auto"  # READ + WRITE auto within scope; DESTRUCTIVE still gated
 
 
 class ScopeViolation(PermissionError):
@@ -46,8 +46,8 @@ class FilesystemScope:
         self._write_roots = self._resolve_roots(write_roots)
 
     @staticmethod
-    def _resolve_roots(roots: Iterable[str | Path] | None) -> List[Path]:
-        resolved: List[Path] = []
+    def _resolve_roots(roots: Iterable[str | Path] | None) -> list[Path]:
+        resolved: list[Path] = []
         for root in roots or []:
             try:
                 resolved.append(Path(root).expanduser().resolve(strict=False))
@@ -80,45 +80,100 @@ class FilesystemScope:
     def check(self, path: str | Path, *, write: bool = False) -> None:
         if not self.allows(path, write=write):
             kind = "write" if write else "read"
-            raise ScopeViolation(f"path '{path}' is outside the authorized {kind} scope")
+            raise ScopeViolation(
+                f"path '{path}' is outside the authorized {kind} scope"
+            )
 
     @property
     def is_empty(self) -> bool:
         return not self._read_roots and not self._write_roots
 
     @property
-    def read_roots(self) -> List[str]:
+    def read_roots(self) -> list[str]:
         """Resolved read-root paths as strings (write roots are implicitly readable)."""
         return [str(root) for root in self._read_roots]
 
     @property
-    def write_roots(self) -> List[str]:
+    def write_roots(self) -> list[str]:
         """Resolved write-root paths as strings."""
         return [str(root) for root in self._write_roots]
 
 
 # Argument-sensitive command risk. Presence of any token classifies upward.
-_DESTRUCTIVE_BINARIES = frozenset({
-    "rm", "rmdir", "dd", "mkfs", "shutdown", "reboot", "halt", "poweroff",
-    "kill", "pkill", "killall", "shred", "fdisk", "parted", "wipefs", "userdel",
-})
-_WRITE_BINARIES = frozenset({
-    "mv", "cp", "tee", "chmod", "chown", "ln", "touch", "mkdir", "install",
-    "apt", "apt-get", "pip", "pip3", "npm", "systemctl", "service", "sed",
-    "truncate", "git",
-})
+_DESTRUCTIVE_BINARIES = frozenset(
+    {
+        "rm",
+        "rmdir",
+        "dd",
+        "mkfs",
+        "shutdown",
+        "reboot",
+        "halt",
+        "poweroff",
+        "kill",
+        "pkill",
+        "killall",
+        "shred",
+        "fdisk",
+        "parted",
+        "wipefs",
+        "userdel",
+    }
+)
+_WRITE_BINARIES = frozenset(
+    {
+        "mv",
+        "cp",
+        "tee",
+        "chmod",
+        "chown",
+        "ln",
+        "touch",
+        "mkdir",
+        "install",
+        "apt",
+        "apt-get",
+        "pip",
+        "pip3",
+        "npm",
+        "systemctl",
+        "service",
+        "sed",
+        "truncate",
+        "git",
+    }
+)
 _DESTRUCTIVE_TOKENS = ("--force", "-rf", "-fr", "--no-preserve-root")
 
 # sudo flags that consume the following token as a value; used to find the real
 # command after a leading `sudo ...`.
-_SUDO_VALUE_FLAGS = frozenset({
-    "-u", "--user", "-g", "--group", "-p", "--prompt", "-C", "--close-from",
-    "-h", "--host", "-R", "--chroot", "-D", "--chdir", "-T", "--command-timeout",
-    "-r", "--role", "-t", "--type",
-})
+_SUDO_VALUE_FLAGS = frozenset(
+    {
+        "-u",
+        "--user",
+        "-g",
+        "--group",
+        "-p",
+        "--prompt",
+        "-C",
+        "--close-from",
+        "-h",
+        "--host",
+        "-R",
+        "--chroot",
+        "-D",
+        "--chdir",
+        "-T",
+        "--command-timeout",
+        "-r",
+        "--role",
+        "-t",
+        "--type",
+    }
+)
 
 
-def strip_sudo(argv: Sequence[str]) -> tuple[bool, List[str]]:
+def strip_sudo(argv: Sequence[str]) -> tuple[bool, list[str]]:
     """Return (is_sudo, inner_argv). Skips sudo's own options to find the command.
 
     ``sudo -S apt install nmap`` -> (True, ["apt", "install", "nmap"]).
@@ -158,9 +213,7 @@ class CommandPolicy:
         binary = self._binary(argv)
         if binary in self._denied:
             return False
-        if self._allowed is not None and binary not in self._allowed:
-            return False
-        return True
+        return not (self._allowed is not None and binary not in self._allowed)
 
     def check(self, argv: Sequence[str]) -> None:
         if not self.is_allowed(argv):
@@ -175,7 +228,9 @@ class CommandPolicy:
             return RiskLevel.WRITE if is_sudo else RiskLevel.READ
         binary = Path(str(target[0])).name
         tokens = {str(a).lower() for a in target[1:]}
-        if binary in _DESTRUCTIVE_BINARIES or any(t in tokens for t in _DESTRUCTIVE_TOKENS):
+        if binary in _DESTRUCTIVE_BINARIES or any(
+            t in tokens for t in _DESTRUCTIVE_TOKENS
+        ):
             return RiskLevel.DESTRUCTIVE
         if any(str(a).startswith(">") for a in target):  # output redirection
             return RiskLevel.DESTRUCTIVE

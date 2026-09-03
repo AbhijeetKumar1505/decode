@@ -28,11 +28,14 @@ class TestMCPManager(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         base = Path(self._tmp.name)
-        self._env = mock.patch.dict("os.environ", {
-            "DECODE_HOME": str(base / "user"),
-            "DECODE_PROJECT_HOME": str(base / "project"),
-            "DECODE_SYSTEM_HOME": str(base / "system"),
-        })
+        self._env = mock.patch.dict(
+            "os.environ",
+            {
+                "DECODE_HOME": str(base / "user"),
+                "DECODE_PROJECT_HOME": str(base / "project"),
+                "DECODE_SYSTEM_HOME": str(base / "system"),
+            },
+        )
         self._env.start()
 
     def tearDown(self):
@@ -44,7 +47,14 @@ class TestMCPManager(unittest.TestCase):
 
     def test_add_list_get_remove(self):
         mgr = self._mgr()
-        mgr.add(MCPServerSpec(name="mongodb", command="npx", args=["-y", "mongodb-mcp-server"], description="db"))
+        mgr.add(
+            MCPServerSpec(
+                name="mongodb",
+                command="npx",
+                args=["-y", "mongodb-mcp-server"],
+                description="db",
+            )
+        )
         servers = mgr.list_servers()
         self.assertIn("mongodb", servers)
         self.assertEqual(servers["mongodb"].command, "npx")
@@ -58,13 +68,19 @@ class TestMCPManager(unittest.TestCase):
 
     def test_discover_namespaces_tools_and_carries_risk(self):
         tools = [
-            {"name": "find", "description": "query documents", "inputSchema": {"type": "object"}},
+            {
+                "name": "find",
+                "description": "query documents",
+                "inputSchema": {"type": "object"},
+            },
             {"name": "aggregate", "description": "aggregation pipeline"},
         ]
         mgr = self._mgr(tools)
         mgr.add(MCPServerSpec(name="mongodb", command="npx", risk="read"))
         descriptors = asyncio.run(mgr.discover("mongodb"))
-        self.assertEqual([d.name for d in descriptors], ["mongodb.find", "mongodb.aggregate"])
+        self.assertEqual(
+            [d.name for d in descriptors], ["mongodb.find", "mongodb.aggregate"]
+        )
         self.assertEqual(descriptors[0].tool, "find")
         self.assertTrue(all(d.risk == "read" for d in descriptors))
 

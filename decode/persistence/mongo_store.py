@@ -13,9 +13,9 @@ import json
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import quote_plus
 
 from .evidence import ProtectedEvidenceStore
@@ -24,9 +24,7 @@ _DEFAULT_DB = "decode"
 _NO_ID = {"_id": 0}
 
 
-def build_mongo_uri(
-    uri: Optional[str] = None, password: Optional[str] = None
-) -> str:
+def build_mongo_uri(uri: str | None = None, password: str | None = None) -> str:
     """Resolve the connection string, substituting a password placeholder.
 
     Reads ``MONGODB_URI`` / ``MONGODB_PASSWORD`` from the environment when not
@@ -49,7 +47,10 @@ def mongo_client_from_env(**kwargs: Any):
 
     # Fail fast (5s) so a misconfigured/unreachable cluster does not hang startup;
     # callers may override via kwargs.
-    options: Dict[str, Any] = {"server_api": ServerApi("1"), "serverSelectionTimeoutMS": 5000}
+    options: dict[str, Any] = {
+        "server_api": ServerApi("1"),
+        "serverSelectionTimeoutMS": 5000,
+    }
     options.update(kwargs)
     return MongoClient(build_mongo_uri(), **options)
 
@@ -60,8 +61,8 @@ class MongoSessionStore:
     def __init__(
         self,
         client: Any = None,
-        db_name: Optional[str] = None,
-        evidence_path: Optional[Path] = None,
+        db_name: str | None = None,
+        evidence_path: Path | None = None,
     ) -> None:
         self._owns_client = client is None
         self._client = client if client is not None else mongo_client_from_env()
@@ -84,12 +85,14 @@ class MongoSessionStore:
         self._db.evidence.create_index("finding_id")
         self._db.artifacts.create_index("project_id")
         self._db.artifacts.create_index("session_id")
-        self._db.mission_nodes.create_index([("session_id", 1), ("node_id", 1)], unique=True)
+        self._db.mission_nodes.create_index(
+            [("session_id", 1), ("node_id", 1)], unique=True
+        )
         self._db.project_knowledge_nodes.create_index("project_id")
         self._db.project_knowledge_edges.create_index("project_id")
 
     def _now(self) -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     def _new_id(self) -> str:
         return str(uuid.uuid4())
@@ -99,16 +102,23 @@ class MongoSessionStore:
     def create_session(self, goal: str = "", target_focus: str = "") -> str:
         sid = self._new_id()
         now = self._now()
-        self._db.sessions.insert_one({
-            "_id": sid, "id": sid, "goal": goal, "target_focus": target_focus,
-            "status": "active", "created_at": now, "updated_at": now,
-        })
+        self._db.sessions.insert_one(
+            {
+                "_id": sid,
+                "id": sid,
+                "goal": goal,
+                "target_focus": target_focus,
+                "status": "active",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
         return sid
 
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session(self, session_id: str) -> dict[str, Any] | None:
         return self._db.sessions.find_one({"_id": session_id}, _NO_ID)
 
-    def list_sessions(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_sessions(self, limit: int = 20) -> list[dict[str, Any]]:
         return list(
             self._db.sessions.find({}, _NO_ID).sort("created_at", -1).limit(limit)
         )
@@ -133,13 +143,15 @@ class MongoSessionStore:
         ip: str = "",
         domain: str = "",
         os: str = "",
-        metadata: Optional[Dict] = None,
+        metadata: dict | None = None,
     ) -> str:
-        existing = self._db.targets.find_one({
-            "session_id": session_id,
-            "$or": [{"hostname": hostname}, {"ip_address": ip}],
-            "hostname": {"$ne": ""},
-        })
+        existing = self._db.targets.find_one(
+            {
+                "session_id": session_id,
+                "$or": [{"hostname": hostname}, {"ip_address": ip}],
+                "hostname": {"$ne": ""},
+            }
+        )
         now = self._now()
         if existing:
             tid = existing["_id"]
@@ -149,22 +161,33 @@ class MongoSessionStore:
             self._db.targets.update_one({"_id": tid}, {"$set": update})
             return tid
         tid = self._new_id()
-        self._db.targets.insert_one({
-            "_id": tid, "id": tid, "session_id": session_id, "hostname": hostname,
-            "ip_address": ip, "domain": domain, "os": os, "first_seen": now,
-            "last_seen": now, "metadata": json.dumps(metadata or {}),
-        })
+        self._db.targets.insert_one(
+            {
+                "_id": tid,
+                "id": tid,
+                "session_id": session_id,
+                "hostname": hostname,
+                "ip_address": ip,
+                "domain": domain,
+                "os": os,
+                "first_seen": now,
+                "last_seen": now,
+                "metadata": json.dumps(metadata or {}),
+            }
+        )
         return tid
 
-    def get_target(self, target_id: str) -> Optional[Dict[str, Any]]:
+    def get_target(self, target_id: str) -> dict[str, Any] | None:
         row = self._db.targets.find_one({"_id": target_id}, _NO_ID)
         if row:
             row["metadata"] = json.loads(row.get("metadata", "{}"))
         return row
 
-    def get_targets(self, session_id: str) -> List[Dict[str, Any]]:
+    def get_targets(self, session_id: str) -> list[dict[str, Any]]:
         return list(
-            self._db.targets.find({"session_id": session_id}, _NO_ID).sort("last_seen", -1)
+            self._db.targets.find({"session_id": session_id}, _NO_ID).sort(
+                "last_seen", -1
+            )
         )
 
     # ── Ports ──
@@ -186,22 +209,43 @@ class MongoSessionStore:
         now = self._now()
         if existing:
             pid = existing["_id"]
-            self._db.ports.update_one({"_id": pid}, {"$set": {
-                "state": state, "service": service, "product": product,
-                "version": version, "extra_info": extra, "last_seen": now,
-            }})
+            self._db.ports.update_one(
+                {"_id": pid},
+                {
+                    "$set": {
+                        "state": state,
+                        "service": service,
+                        "product": product,
+                        "version": version,
+                        "extra_info": extra,
+                        "last_seen": now,
+                    }
+                },
+            )
             return pid
         pid = self._new_id()
-        self._db.ports.insert_one({
-            "_id": pid, "id": pid, "target_id": target_id, "port": port,
-            "protocol": protocol, "state": state, "service": service,
-            "product": product, "version": version, "extra_info": extra,
-            "first_seen": now, "last_seen": now,
-        })
+        self._db.ports.insert_one(
+            {
+                "_id": pid,
+                "id": pid,
+                "target_id": target_id,
+                "port": port,
+                "protocol": protocol,
+                "state": state,
+                "service": service,
+                "product": product,
+                "version": version,
+                "extra_info": extra,
+                "first_seen": now,
+                "last_seen": now,
+            }
+        )
         return pid
 
-    def get_ports(self, target_id: str) -> List[Dict[str, Any]]:
-        return list(self._db.ports.find({"target_id": target_id}, _NO_ID).sort("port", 1))
+    def get_ports(self, target_id: str) -> list[dict[str, Any]]:
+        return list(
+            self._db.ports.find({"target_id": target_id}, _NO_ID).sort("port", 1)
+        )
 
     # ── Findings ──
 
@@ -216,22 +260,33 @@ class MongoSessionStore:
         technique_id: str = "",
         mitre_tactic: str = "",
         confidence: str = "medium",
-        target_id: Optional[str] = None,
+        target_id: str | None = None,
     ) -> str:
         fid = self._new_id()
-        self._db.findings.insert_one({
-            "_id": fid, "id": fid, "session_id": session_id, "target_id": target_id,
-            "title": title, "description": description, "severity": severity,
-            "category": category, "cve_id": cve_id, "technique_id": technique_id,
-            "mitre_tactic": mitre_tactic, "confidence": confidence,
-            "evidence_ids": "[]", "created_at": self._now(),
-        })
+        self._db.findings.insert_one(
+            {
+                "_id": fid,
+                "id": fid,
+                "session_id": session_id,
+                "target_id": target_id,
+                "title": title,
+                "description": description,
+                "severity": severity,
+                "category": category,
+                "cve_id": cve_id,
+                "technique_id": technique_id,
+                "mitre_tactic": mitre_tactic,
+                "confidence": confidence,
+                "evidence_ids": "[]",
+                "created_at": self._now(),
+            }
+        )
         return fid
 
     def get_findings(
-        self, session_id: str, severity: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        query: Dict[str, Any] = {"session_id": session_id}
+        self, session_id: str, severity: str | None = None
+    ) -> list[dict[str, Any]]:
+        query: dict[str, Any] = {"session_id": session_id}
         if severity:
             query["severity"] = severity
         return list(self._db.findings.find(query, _NO_ID).sort("created_at", -1))
@@ -254,34 +309,42 @@ class MongoSessionStore:
         session_id: str,
         type: str,
         label: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         source: str = "",
-        finding_id: Optional[str] = None,
+        finding_id: str | None = None,
     ) -> str:
         eid = self._new_id()
         now = self._now()
         reference = self._evidence_store.capture(data, evidence_id=eid)
-        self._db.evidence.insert_one({
-            "_id": eid, "id": eid, "session_id": session_id, "finding_id": finding_id,
-            "type": type, "label": label, "data": reference.model_dump_json(),
-            "source": source, "created_at": now,
-        })
+        self._db.evidence.insert_one(
+            {
+                "_id": eid,
+                "id": eid,
+                "session_id": session_id,
+                "finding_id": finding_id,
+                "type": type,
+                "label": label,
+                "data": reference.model_dump_json(),
+                "source": source,
+                "created_at": now,
+            }
+        )
         if finding_id:
             self.link_evidence_to_finding(finding_id, eid)
         return eid
 
     def get_evidence(
-        self, session_id: Optional[str] = None, finding_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self, session_id: str | None = None, finding_id: str | None = None
+    ) -> list[dict[str, Any]]:
         if finding_id:
-            query: Dict[str, Any] = {"finding_id": finding_id}
+            query: dict[str, Any] = {"finding_id": finding_id}
         elif session_id:
             query = {"session_id": session_id}
         else:
             query = {}
         return list(self._db.evidence.find(query, _NO_ID).sort("created_at", 1))
 
-    def get_session_context(self, session_id: str) -> Dict[str, Any]:
+    def get_session_context(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
         if not session:
             return {}
@@ -303,16 +366,21 @@ class MongoSessionStore:
 
     def create_project(self, name: str = "", scope: str = "") -> str:
         pid = self._new_id()
-        self._db.projects.insert_one({
-            "_id": pid, "id": pid, "name": name, "scope": scope,
-            "created_at": self._now(),
-        })
+        self._db.projects.insert_one(
+            {
+                "_id": pid,
+                "id": pid,
+                "name": name,
+                "scope": scope,
+                "created_at": self._now(),
+            }
+        )
         return pid
 
-    def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
+    def get_project(self, project_id: str) -> dict[str, Any] | None:
         return self._db.projects.find_one({"_id": project_id}, _NO_ID)
 
-    def list_projects(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def list_projects(self, limit: int = 50) -> list[dict[str, Any]]:
         return list(
             self._db.projects.find({}, _NO_ID).sort("created_at", -1).limit(limit)
         )
@@ -324,25 +392,33 @@ class MongoSessionStore:
         type: str,
         key: str,
         value: str = "",
-        session_id: Optional[str] = None,
-        project_id: Optional[str] = None,
+        session_id: str | None = None,
+        project_id: str | None = None,
         sensitive: bool = False,
     ) -> str:
         aid = self._new_id()
-        self._db.artifacts.insert_one({
-            "_id": aid, "id": aid, "project_id": project_id, "session_id": session_id,
-            "type": type, "key": key, "value": value,
-            "sensitive": 1 if sensitive else 0, "created_at": self._now(),
-        })
+        self._db.artifacts.insert_one(
+            {
+                "_id": aid,
+                "id": aid,
+                "project_id": project_id,
+                "session_id": session_id,
+                "type": type,
+                "key": key,
+                "value": value,
+                "sensitive": 1 if sensitive else 0,
+                "created_at": self._now(),
+            }
+        )
         return aid
 
     def get_artifacts(
         self,
-        session_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        type: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        query: Dict[str, Any] = {}
+        session_id: str | None = None,
+        project_id: str | None = None,
+        type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        query: dict[str, Any] = {}
         if session_id:
             query["session_id"] = session_id
         if project_id:
@@ -353,20 +429,22 @@ class MongoSessionStore:
 
     # ── Durable plans and safe recovery ──
 
-    def save_plan(self, session_id: str, plan: Dict[str, Any]) -> List[str]:
+    def save_plan(self, session_id: str, plan: dict[str, Any]) -> list[str]:
         existing = {
             doc["node_id"]: doc
             for doc in self._db.mission_nodes.find({"session_id": session_id})
         }
-        changed: List[str] = []
+        changed: list[str] = []
         now = self._now()
         self._db.missions.update_one(
             {"_id": session_id},
-            {"$set": {
-                "session_id": session_id,
-                "plan_json": json.dumps(plan, sort_keys=True),
-                "updated_at": now,
-            }},
+            {
+                "$set": {
+                    "session_id": session_id,
+                    "plan_json": json.dumps(plan, sort_keys=True),
+                    "updated_at": now,
+                }
+            },
             upsert=True,
         )
         for node_id, node in plan.get("nodes", {}).items():
@@ -378,26 +456,35 @@ class MongoSessionStore:
             if prior_fp is not None and prior_fp != fingerprint:
                 changed.append(node_id)
             if prior is None:
-                self._db.mission_nodes.insert_one({
-                    "_id": f"{session_id}:{node_id}", "session_id": session_id,
-                    "node_id": node_id, "material_fingerprint": fingerprint,
-                    "idempotency_key": node.get("idempotency_key", ""),
-                    "status": "pending", "attempts": 0, "result_summary": "",
-                    "updated_at": now,
-                })
+                self._db.mission_nodes.insert_one(
+                    {
+                        "_id": f"{session_id}:{node_id}",
+                        "session_id": session_id,
+                        "node_id": node_id,
+                        "material_fingerprint": fingerprint,
+                        "idempotency_key": node.get("idempotency_key", ""),
+                        "status": "pending",
+                        "attempts": 0,
+                        "result_summary": "",
+                        "updated_at": now,
+                    }
+                )
             else:
                 status = prior["status"] if prior_fp == fingerprint else "pending"
                 self._db.mission_nodes.update_one(
                     {"_id": f"{session_id}:{node_id}"},
-                    {"$set": {
-                        "material_fingerprint": fingerprint,
-                        "idempotency_key": node.get("idempotency_key", ""),
-                        "status": status, "updated_at": now,
-                    }},
+                    {
+                        "$set": {
+                            "material_fingerprint": fingerprint,
+                            "idempotency_key": node.get("idempotency_key", ""),
+                            "status": status,
+                            "updated_at": now,
+                        }
+                    },
                 )
         return changed
 
-    def load_plan(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def load_plan(self, session_id: str) -> dict[str, Any] | None:
         mission = self._db.missions.find_one({"_id": session_id})
         if not mission:
             return None
@@ -420,12 +507,16 @@ class MongoSessionStore:
         self._db.mission_nodes.update_one(
             {"_id": f"{session_id}:{node_id}"},
             {
-                "$set": {"status": status, "result_summary": summary, "updated_at": self._now()},
+                "$set": {
+                    "status": status,
+                    "result_summary": summary,
+                    "updated_at": self._now(),
+                },
                 "$inc": {"attempts": 1 if increment_attempts else 0},
             },
         )
 
-    def recover_interrupted_plan(self, session_id: str) -> List[str]:
+    def recover_interrupted_plan(self, session_id: str) -> list[str]:
         running = list(
             self._db.mission_nodes.find(
                 {"session_id": session_id, "status": "running"}, {"node_id": 1}
@@ -435,17 +526,25 @@ class MongoSessionStore:
         if node_ids:
             self._db.mission_nodes.update_many(
                 {"session_id": session_id, "status": "running"},
-                {"$set": {
-                    "status": "needs_review",
-                    "result_summary": "interrupted while running; verify before retry",
-                    "updated_at": self._now(),
-                }},
+                {
+                    "$set": {
+                        "status": "needs_review",
+                        "result_summary": "interrupted while running; verify before retry",
+                        "updated_at": self._now(),
+                    }
+                },
             )
         return node_ids
 
-    def reset_retryable_node(self, session_id: str, node_id: str, max_attempts: int) -> bool:
+    def reset_retryable_node(
+        self, session_id: str, node_id: str, max_attempts: int
+    ) -> bool:
         row = self._db.mission_nodes.find_one({"_id": f"{session_id}:{node_id}"})
-        if not row or row["status"] not in {"error", "timeout"} or row["attempts"] >= max_attempts:
+        if (
+            not row
+            or row["status"] not in {"error", "timeout"}
+            or row["attempts"] >= max_attempts
+        ):
             return False
         self.checkpoint_plan_node(session_id, node_id, "pending", "retry requested")
         return True
@@ -458,14 +557,21 @@ class MongoSessionStore:
         type: str,
         name: str,
         description: str = "",
-        provenance: Optional[Dict[str, Any]] = None,
+        provenance: dict[str, Any] | None = None,
     ) -> str:
         node_id = self._new_id()
-        self._db.project_knowledge_nodes.insert_one({
-            "_id": node_id, "id": node_id, "project_id": project_id, "type": type,
-            "name": name, "description": description,
-            "provenance": json.dumps(provenance or {}), "created_at": self._now(),
-        })
+        self._db.project_knowledge_nodes.insert_one(
+            {
+                "_id": node_id,
+                "id": node_id,
+                "project_id": project_id,
+                "type": type,
+                "name": name,
+                "description": description,
+                "provenance": json.dumps(provenance or {}),
+                "created_at": self._now(),
+            }
+        )
         return node_id
 
     def add_project_knowledge_edge(
@@ -474,26 +580,36 @@ class MongoSessionStore:
         source_id: str,
         target_id: str,
         relationship: str,
-        provenance: Optional[Dict[str, Any]] = None,
+        provenance: dict[str, Any] | None = None,
     ) -> str:
         edge_id = self._new_id()
-        self._db.project_knowledge_edges.insert_one({
-            "_id": edge_id, "id": edge_id, "project_id": project_id,
-            "source_id": source_id, "target_id": target_id,
-            "relationship": relationship, "provenance": json.dumps(provenance or {}),
-            "created_at": self._now(),
-        })
+        self._db.project_knowledge_edges.insert_one(
+            {
+                "_id": edge_id,
+                "id": edge_id,
+                "project_id": project_id,
+                "source_id": source_id,
+                "target_id": target_id,
+                "relationship": relationship,
+                "provenance": json.dumps(provenance or {}),
+                "created_at": self._now(),
+            }
+        )
         return edge_id
 
-    def search_project_knowledge(self, project_id: str, query: str) -> List[Dict[str, Any]]:
+    def search_project_knowledge(
+        self, project_id: str, query: str
+    ) -> list[dict[str, Any]]:
         words = [word for word in query.lower().split() if word]
         if not words:
             return []
         clauses = [
-            {"$or": [
-                {"name": {"$regex": re.escape(word), "$options": "i"}},
-                {"description": {"$regex": re.escape(word), "$options": "i"}},
-            ]}
+            {
+                "$or": [
+                    {"name": {"$regex": re.escape(word), "$options": "i"}},
+                    {"description": {"$regex": re.escape(word), "$options": "i"}},
+                ]
+            }
             for word in words
         ]
         rows = (
@@ -507,13 +623,21 @@ class MongoSessionStore:
 
     def record_memory_event(self, project_id: str, event: str, detail: str = "") -> str:
         event_id = self._new_id()
-        self._db.memory_events.insert_one({
-            "_id": event_id, "id": event_id, "project_id": project_id,
-            "event": event, "detail": detail, "created_at": self._now(),
-        })
+        self._db.memory_events.insert_one(
+            {
+                "_id": event_id,
+                "id": event_id,
+                "project_id": project_id,
+                "event": event,
+                "detail": detail,
+                "created_at": self._now(),
+            }
+        )
         return event_id
 
-    def export_project(self, project_id: str, include_sensitive: bool = False) -> Dict[str, Any]:
+    def export_project(
+        self, project_id: str, include_sensitive: bool = False
+    ) -> dict[str, Any]:
         project = self.get_project(project_id)
         if project is None:
             raise ValueError("unknown project")
@@ -524,12 +648,18 @@ class MongoSessionStore:
                 for item in artifacts
             ]
         nodes = list(
-            self._db.project_knowledge_nodes.find({"project_id": project_id}, _NO_ID).sort("created_at", 1)
+            self._db.project_knowledge_nodes.find(
+                {"project_id": project_id}, _NO_ID
+            ).sort("created_at", 1)
         )
         edges = list(
-            self._db.project_knowledge_edges.find({"project_id": project_id}, _NO_ID).sort("created_at", 1)
+            self._db.project_knowledge_edges.find(
+                {"project_id": project_id}, _NO_ID
+            ).sort("created_at", 1)
         )
-        self.record_memory_event(project_id, "export", "sensitive=" + str(include_sensitive).lower())
+        self.record_memory_event(
+            project_id, "export", "sensitive=" + str(include_sensitive).lower()
+        )
         return {
             "project": project,
             "artifacts": artifacts,
@@ -537,19 +667,25 @@ class MongoSessionStore:
             "knowledge_edges": edges,
         }
 
-    def compress_project_artifacts(self, project_id: str) -> Optional[str]:
+    def compress_project_artifacts(self, project_id: str) -> str | None:
         artifacts = self.get_artifacts(project_id=project_id)
         if not artifacts:
             return None
         types = sorted({item["type"] for item in artifacts})
         summary = f"{len(artifacts)} retained artifacts across: {', '.join(types)}"
-        artifact_id = self.add_artifact("memory_summary", "project_summary", summary, project_id=project_id)
-        self.record_memory_event(project_id, "compression", "source_artifacts=" + str(len(artifacts)))
+        artifact_id = self.add_artifact(
+            "memory_summary", "project_summary", summary, project_id=project_id
+        )
+        self.record_memory_event(
+            project_id, "compression", "source_artifacts=" + str(len(artifacts))
+        )
         return artifact_id
 
     def delete_project_memory(self, project_id: str) -> int:
         artifacts = self._db.artifacts.count_documents({"project_id": project_id})
-        self.record_memory_event(project_id, "deletion_requested", "artifact_count=" + str(artifacts))
+        self.record_memory_event(
+            project_id, "deletion_requested", "artifact_count=" + str(artifacts)
+        )
         self._db.artifacts.delete_many({"project_id": project_id})
         self._db.project_knowledge_edges.delete_many({"project_id": project_id})
         self._db.project_knowledge_nodes.delete_many({"project_id": project_id})

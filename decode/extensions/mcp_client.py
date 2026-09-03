@@ -14,7 +14,7 @@ once validated against live servers.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from .mcp_manager import MCPServerSpec, MCPToolProvider
 
@@ -27,10 +27,12 @@ class _StdioMCPClient:  # pragma: no cover - requires a live MCP server
         from mcp import StdioServerParameters
 
         return StdioServerParameters(
-            command=self._spec.command, args=list(self._spec.args), env=dict(self._spec.env) or None
+            command=self._spec.command,
+            args=list(self._spec.args),
+            env=dict(self._spec.env) or None,
         )
 
-    async def list_tools(self) -> List[Dict[str, Any]]:
+    async def list_tools(self) -> list[dict[str, Any]]:
         from mcp import ClientSession
         from mcp.client.stdio import stdio_client
 
@@ -39,11 +41,15 @@ class _StdioMCPClient:  # pragma: no cover - requires a live MCP server
                 await session.initialize()
                 listing = await session.list_tools()
                 return [
-                    {"name": t.name, "description": t.description or "", "inputSchema": getattr(t, "inputSchema", {})}
+                    {
+                        "name": t.name,
+                        "description": t.description or "",
+                        "inputSchema": getattr(t, "inputSchema", {}),
+                    }
                     for t in listing.tools
                 ]
 
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         from mcp import ClientSession
         from mcp.client.stdio import stdio_client
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import yaml
 
@@ -27,7 +27,7 @@ _ENV_DIRS = "DECODE_PLAYBOOKS_DIR"
 _PACKAGE_PLAYBOOKS = Path(__file__).parent / "playbooks"
 
 
-def _package_dirs() -> List[Path]:
+def _package_dirs() -> list[Path]:
     dirs = [_PACKAGE_PLAYBOOKS]
     extra = os.environ.get(_ENV_DIRS, "")
     for part in extra.split(os.pathsep):
@@ -37,7 +37,7 @@ def _package_dirs() -> List[Path]:
     return dirs
 
 
-def _split_frontmatter(text: str) -> Tuple[str, str]:
+def _split_frontmatter(text: str) -> tuple[str, str]:
     """Return (frontmatter, body). No leading ``---`` means no frontmatter."""
     stripped = text.lstrip()
     if not stripped.startswith("---"):
@@ -71,8 +71,8 @@ def _risk(value: Any) -> RiskLevel:
     return RiskLevel.READ
 
 
-def _input_schema(value: Any) -> Dict[str, SkillIO]:
-    schema: Dict[str, SkillIO] = {}
+def _input_schema(value: Any) -> dict[str, SkillIO]:
+    schema: dict[str, SkillIO] = {}
     if isinstance(value, dict):
         for name, field in value.items():
             field = field or {}
@@ -84,7 +84,7 @@ def _input_schema(value: Any) -> Dict[str, SkillIO]:
     return schema
 
 
-def spec_from_meta(meta: Dict[str, Any], *, fallback_name: str) -> SkillSpec:
+def spec_from_meta(meta: dict[str, Any], *, fallback_name: str) -> SkillSpec:
     tags = meta.get("tags") or []
     if not isinstance(tags, list):
         tags = [str(tags)]
@@ -94,7 +94,9 @@ def spec_from_meta(meta: Dict[str, Any], *, fallback_name: str) -> SkillSpec:
             tags.append(marker)
     return SkillSpec(
         name=str(meta.get("name") or fallback_name),
-        description=str(meta.get("description") or f"Markdown playbook '{fallback_name}'"),
+        description=str(
+            meta.get("description") or f"Markdown playbook '{fallback_name}'"
+        ),
         category=_category(meta.get("category")),
         risk_level=_risk(meta.get("risk")),
         input_schema=_input_schema(meta.get("inputs")),
@@ -104,7 +106,7 @@ def spec_from_meta(meta: Dict[str, Any], *, fallback_name: str) -> SkillSpec:
     )
 
 
-def parse_markdown_skill(text: str, *, fallback_name: str) -> "MarkdownSkill":
+def parse_markdown_skill(text: str, *, fallback_name: str) -> MarkdownSkill:
     frontmatter, body = _split_frontmatter(text)
     meta = yaml.safe_load(frontmatter) if frontmatter.strip() else {}
     if not isinstance(meta, dict):
@@ -113,19 +115,19 @@ def parse_markdown_skill(text: str, *, fallback_name: str) -> "MarkdownSkill":
     return MarkdownSkill(spec, body.strip())
 
 
-def load_markdown_skill(path: Path) -> "MarkdownSkill":
+def load_markdown_skill(path: Path) -> MarkdownSkill:
     text = path.read_text(encoding="utf-8")
     return parse_markdown_skill(text, fallback_name=path.stem)
 
 
-def discover_markdown_skills() -> List["MarkdownSkill"]:
+def discover_markdown_skills() -> list[MarkdownSkill]:
     """Load every ``.md`` playbook from the package and configured directories.
 
     A file that fails to parse is skipped so one bad playbook never breaks skill
     registration. On a name collision the later directory wins (env dirs override
     the packaged defaults).
     """
-    skills: Dict[str, MarkdownSkill] = {}
+    skills: dict[str, MarkdownSkill] = {}
     for directory in _package_dirs():
         if not directory.is_dir():
             continue
@@ -154,7 +156,7 @@ class MarkdownSkill(Skill):
     def _build_spec(self) -> SkillSpec:
         return self._spec
 
-    async def execute(self, **params: Any) -> Dict[str, Any]:
+    async def execute(self, **params: Any) -> dict[str, Any]:
         return {
             "playbook": self._spec.name,
             "risk": self._spec.risk_level.value,
