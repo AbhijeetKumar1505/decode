@@ -1,9 +1,0 @@
-{
-  "system": "kali",
-  "version": "2026.2",
-  "python": "Python 3.13.12",
-  "docker": "missing",
-  "nmap": "installed",
-  "ffuf": "installed",
-  "timestamp": "2026-08-27T22:52:56.130293"
-}

@@ -3,8 +3,9 @@
 MCP tools are structured calls (name + JSON arguments), not shell strings, so
 this provider interprets a command as JSON: ``{"tool": "<name>", "arguments":
 {...}}``. The transport is an injectable client (protocol below), so the
-provider is fully testable with a fake; a real stdio client lives behind an
-optional ``mcp`` import and is constructed from server config.
+provider is fully testable with a fake. The real client is built by
+:func:`decode.extensions.mcp_client.build_client` (optional ``mcp`` SDK, stdio
+transport only) and bound via ``MCPServerManager.executor_for``.
 """
 
 import json
@@ -86,18 +87,3 @@ class MCPExecutor(ExecutionProvider):
             return await self._client.check()
         except Exception:
             return False
-
-
-def build_stdio_client(command: str, args: Optional[list] = None):  # pragma: no cover
-    """Construct a real MCP stdio client (requires the optional ``mcp`` package).
-
-    Returns an object satisfying the MCPClient protocol. Untested in CI because
-    it needs a live MCP server; the executor itself is covered via a fake client.
-    """
-    try:
-        import mcp  # noqa: F401
-    except ImportError as e:
-        raise RuntimeError("The 'mcp' package is required for a real MCP client") from e
-    raise NotImplementedError(
-        "Real MCP stdio transport is wired here; provide an mcp-backed client."
-    )

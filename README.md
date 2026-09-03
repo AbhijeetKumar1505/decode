@@ -208,6 +208,19 @@ Drop `.md` files in `decode/skills/playbooks/`, or point
 [decode/skills/playbooks/web_recon.md](decode/skills/playbooks/web_recon.md)
 for a complete example.
 
+### Bundled engineering playbooks
+
+Beyond the security playbooks, Decode ships a vendored copy of the
+[mattpocock/skills](https://github.com/mattpocock/skills) engineering and
+productivity set — TDD, code review, domain modeling, bug diagnosis, spec/ticket
+writing, grilling, and more. Each upstream skill is imported as a single
+consolidated playbook (companion reference files inlined) with frontmatter
+conformed to Decode's schema (`category: agent_core`, `risk: READ`), so the agent
+surfaces them as guidance tools like any other playbook. They are discovered
+automatically from `decode/skills/playbooks/`. Because a playbook only returns
+guidance — the agent still executes every step through governed `shell_command` —
+these general-purpose procedures inherit the same scope, risk, and audit controls.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on:

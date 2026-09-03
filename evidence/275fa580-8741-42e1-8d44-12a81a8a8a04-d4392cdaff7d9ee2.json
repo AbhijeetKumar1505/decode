@@ -1,1 +1,0 @@
-{"command":"nmap -sV target","exit_code":0,"stderr":"stderr here","stdout":"stdout here"}

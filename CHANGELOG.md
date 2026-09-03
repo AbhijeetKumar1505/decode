@@ -6,9 +6,17 @@
 
 - Deleted the orphaned in-tree plugin/tools/planner layer: `decode/tools.py` (`PluginManager`/`ToolRegistry`), the `decode/plugins/` package (manifest, sandbox, lifecycle, and the bundled `recon`/`web`/`network`/`exploit` plugins), the legacy `decode/kernel/planner.py` (`Workflow`/`Planner`), and the test-only `decode/planner/planner.py` (`DAGPlanner`), with their tests. None were on the live agent-loop path. The `PlanGraph`/`PlanNode`/`CompletionCriterion` data types in `decode/planner/dag.py` are retained (used by `HostController`). Skill discovery no longer scans `decode.plugins`.
 - Documentation updated to the De-code ten-subsystem plan: extension is via markdown playbooks and native capabilities; an external-integration plugin surface is planned but unbuilt. ADR-004 marked Superseded.
+- Removed the dead `build_stdio_client` stub in `decode/execution/mcp.py` (it raised `NotImplementedError` and had no callers). The real MCP client is built by `decode.extensions.mcp_client.build_client`.
+- Deleted the leftover empty `decode/plugins/` directory (stale bytecode from the removed plugin layer; no tracked source).
+
+### Changed
+
+- Runtime output trees (`evidence/`, `audit/`, `feedback/`, `logs/`) and volatile `data/` files (session/workflow dumps, history, `bootstrap_report.json`, `tool_registry.json`, SQLite `-shm`/`-wal`) are now git-ignored and untracked; curated `data/evaluations/` and `data/initial_knowledge.json` stay tracked. `.gitkeep` placeholders preserve the runtime directories.
+- Declared `mcp` as an optional install extra (`pip install .[mcp]` / `poetry install -E mcp`); the real MCP transport supports `stdio` only (`http`/`sse` fail closed).
 
 ### Added
 
+- Vendored the [mattpocock/skills](https://github.com/mattpocock/skills) engineering, productivity, and misc sets as 29 markdown playbooks in `decode/skills/playbooks/` (TDD, code review, domain modeling, bug diagnosis, to-spec/to-tickets, grilling, wizard, and more). Each upstream skill is imported as one consolidated `.md` (companion reference files inlined so `rglob` discovery does not register them as separate playbooks) with frontmatter conformed to Decode's schema (`category: agent_core`, `risk: READ`, tags include `mattpocock`). The `in-progress/` and `deprecated/` upstream sets were not imported. Guaranteed-discovery coverage added in `tests/test_markdown_skills.py`.
 - Shared `ExecutionCoordinator` with typed requests/outcomes, material-action approval digests, audit fail-closed preflight, stable error categories, redacted structured logging, audit events, and execution feedback.
 - Governance regression coverage for scope, approval, dependency blocking, timeout, cancellation, redaction, and audit-service failure.
 - Typed target-requirement metadata and regression coverage for missing-target fail-closed behavior.

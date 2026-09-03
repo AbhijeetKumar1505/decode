@@ -1,1 +1,0 @@
-{"action":"shell_command","request_id":"ae3db76b-081e-4d1a-acf1-0023664a2092","status":"error","target":"","value":"agent='host' capability='shell_command' success=False summary='command timed out after 60s' output='' error='command timed out after 60s' normalized={} partial=False warnings=[]"}

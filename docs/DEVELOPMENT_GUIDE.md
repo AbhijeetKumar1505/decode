@@ -70,6 +70,16 @@ Reusable procedures are authored as markdown, not Python:
 
 Registration is automatic through `SkillRegistry` (see `decode/skills/markdown_skill.py`).
 
+Discovery is `rglob("*.md")` keyed by the frontmatter `name`, so **every** `.md`
+under `playbooks/` becomes a skill. When importing a multi-file skill (e.g. one
+with companion reference docs), consolidate it into a single `.md` — inline the
+companions under headings — or each loose file registers as its own playbook.
+
+The [mattpocock/skills](https://github.com/mattpocock/skills) engineering and
+productivity set is vendored this way (one consolidated playbook per upstream
+skill, companions inlined, `category: agent_core`, `risk: READ`). Guaranteed-
+discovery coverage lives in `tests/test_markdown_skills.py`.
+
 ## Extensions
 
 There is no in-tree plugin system — `decode/tools.py` and `decode/plugins/` were

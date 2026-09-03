@@ -1,1 +1,0 @@
-{"action":"shell_command","request_id":"0a814838-f7f0-40a5-8f56-5df1d945f65f","status":"error","target":"","value":"agent='host' capability='shell_command' success=False summary='command not found: command' output='' error='command not found: command' normalized={} partial=False warnings=[]"}

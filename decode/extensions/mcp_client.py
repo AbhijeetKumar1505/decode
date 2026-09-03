@@ -1,5 +1,9 @@
 """Real MCP transport adapters (optional ``mcp`` SDK).
 
+Only the ``stdio`` transport is supported; ``http``/``sse`` are not yet wired and
+fail closed in :func:`build_client`. Install the SDK with the ``mcp`` extra
+(``pip install .[mcp]`` / ``poetry install -E mcp``).
+
 Kept behind an optional import and excluded from coverage: exercising it needs a
 live MCP server. The manager and executor are fully tested with injected fake
 clients; this module only wires the actual SDK. Each call opens a short-lived
