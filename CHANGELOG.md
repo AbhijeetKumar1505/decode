@@ -14,6 +14,10 @@
 - Runtime output trees (`evidence/`, `audit/`, `feedback/`, `logs/`) and volatile `data/` files (session/workflow dumps, history, `bootstrap_report.json`, `tool_registry.json`, SQLite `-shm`/`-wal`) are now git-ignored and untracked; curated `data/evaluations/` and `data/initial_knowledge.json` stay tracked. `.gitkeep` placeholders preserve the runtime directories.
 - Declared `mcp` as an optional install extra (`pip install .[mcp]` / `poetry install -E mcp`); the real MCP transport supports `stdio` only (`http`/`sse` fail closed).
 
+### Changed
+
+- Per-turn tool surfacing now distinguishes general-purpose (engineering) playbooks from security-domain ones: playbooks whose `category` is in `GENERAL_SKILL_CATEGORIES` (currently `agent_core`, also the default) are offered in **every** task mode, including `CODING`, while security-domain playbooks (e.g. `web_scanning`) stay gated to `SECURITY`/`HYBRID`. Implemented in `decode/capabilities/registry.py` (`CapabilityRegistry.resolve`), mirrored in `decode/capabilities/resolver.py`, with the skill `category` threaded through `build_registry`/`Capability` and the descriptor built in `decode/universal_agent.py`. This makes the vendored engineering playbooks (TDD, code review, etc.) available during coding tasks.
+
 ### Added
 
 - Vendored the [mattpocock/skills](https://github.com/mattpocock/skills) engineering, productivity, and misc sets as 29 markdown playbooks in `decode/skills/playbooks/` (TDD, code review, domain modeling, bug diagnosis, to-spec/to-tickets, grilling, wizard, and more). Each upstream skill is imported as one consolidated `.md` (companion reference files inlined so `rglob` discovery does not register them as separate playbooks) with frontmatter conformed to Decode's schema (`category: agent_core`, `risk: READ`, tags include `mattpocock`). The `in-progress/` and `deprecated/` upstream sets were not imported. Guaranteed-discovery coverage added in `tests/test_markdown_skills.py`.

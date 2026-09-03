@@ -30,6 +30,13 @@ _SYSTEM_GATEWAY = {
     "session_close",
 }
 
+# Playbooks in these categories are general-purpose (engineering / agent core)
+# rather than security-domain, so they are offered in every task mode, including
+# CODING. Security-domain playbooks (e.g. ``web_scanning``) stay gated to
+# SECURITY/HYBRID. ``agent_core`` is also the default category for a markdown
+# playbook with no explicit category.
+GENERAL_SKILL_CATEGORIES = frozenset({"agent_core"})
+
 
 class Capability(BaseModel):
     name: str
@@ -41,6 +48,7 @@ class Capability(BaseModel):
     available: bool = True
     server: str = ""  # mcp routing
     tool: str = ""  # mcp raw tool name
+    category: str = ""  # skill category, used to gate playbooks by task mode
 
     def descriptor(self) -> dict[str, Any]:
         return {
@@ -72,7 +80,8 @@ class CapabilityRegistry:
     def resolve(self, mode: TaskMode) -> list[dict[str, Any]]:
         """The per-turn tool surface for ``mode`` (see the mode rules in the
         capability resolver): native/system always; coding for coding/hybrid;
-        playbooks for security/hybrid; MCP always (opt-in by being configured)."""
+        security-domain playbooks for security/hybrid; general-purpose
+        (engineering) playbooks always; MCP always (opt-in by being configured)."""
         include_coding = mode in (TaskMode.CODING, TaskMode.HYBRID)
         include_skills = mode in (TaskMode.SECURITY, TaskMode.HYBRID)
         out: list[dict[str, Any]] = []
@@ -82,7 +91,10 @@ class CapabilityRegistry:
             if cap.type == "coding" and not include_coding:
                 continue
             if cap.source == "skill" and not include_skills:
-                continue
+                # General-purpose (engineering) playbooks stay available even
+                # outside security/hybrid; only security-domain playbooks are gated.
+                if cap.category not in GENERAL_SKILL_CATEGORIES:
+                    continue
             out.append(cap.descriptor())
         return out
 
@@ -126,6 +138,7 @@ def build_registry(
                 type="playbook",
                 description=tool.get("description", ""),
                 risk=str(tool.get("risk", "write")),
+                category=str(tool.get("category", "")),
             )
         )
     for desc in mcp_descriptors or []:
