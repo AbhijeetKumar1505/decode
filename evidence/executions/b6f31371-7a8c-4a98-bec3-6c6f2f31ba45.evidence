@@ -1,1 +1,0 @@
-{"action":"list_tools","request_id":"b6f31371-7a8c-4a98-bec3-6c6f2f31ba45","status":"error","target":"","value":"agent='host' capability='list_tools' success=False summary=\"ValueError: invalid literal for int() with base 10: 'full'\" output='' error=\"ValueError: invalid literal for int() with base 10: 'full'\" normalized={} partial=False warnings=[]"}

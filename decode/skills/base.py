@@ -1,11 +1,11 @@
+from abc import ABC, abstractmethod
 from enum import Enum
 from functools import wraps
-from typing import Dict, Any, List
-from abc import ABC, abstractmethod
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from ..execution.base import _execution_matches
-
 
 SCOPED_TARGET_FIELDS = frozenset(
     {
@@ -72,11 +72,11 @@ class DependencyOption(BaseModel):
 
 class DependencyCondition(BaseModel):
     parameter: str = Field(min_length=1)
-    values: List[Any] = Field(default_factory=list)
-    excluded_values: List[Any] = Field(default_factory=list)
+    values: list[Any] = Field(default_factory=list)
+    excluded_values: list[Any] = Field(default_factory=list)
     default: Any = None
 
-    def matches(self, params: Dict[str, Any]) -> bool:
+    def matches(self, params: dict[str, Any]) -> bool:
         value = params.get(self.parameter, self.default)
         if self.values and value not in self.values:
             return False
@@ -84,10 +84,10 @@ class DependencyCondition(BaseModel):
 
 
 class SkillDependency(BaseModel):
-    alternatives: List[DependencyOption] = Field(min_length=1)
-    conditions: List[DependencyCondition] = Field(default_factory=list)
+    alternatives: list[DependencyOption] = Field(min_length=1)
+    conditions: list[DependencyCondition] = Field(default_factory=list)
 
-    def applies(self, params: Dict[str, Any]) -> bool:
+    def applies(self, params: dict[str, Any]) -> bool:
         return all(condition.matches(params) for condition in self.conditions)
 
     @property
@@ -100,11 +100,11 @@ class SkillSpec(BaseModel):
     description: str
     category: SkillCategory
     risk_level: RiskLevel
-    input_schema: Dict[str, SkillIO] = Field(default_factory=dict)
-    output_schema: Dict[str, SkillIO] = Field(default_factory=dict)
-    tags: List[str] = Field(default_factory=list)
-    dependencies: List[SkillDependency] = Field(default_factory=list)
-    required_privileges: List[str] = Field(default_factory=lambda: ["user"])
+    input_schema: dict[str, SkillIO] = Field(default_factory=dict)
+    output_schema: dict[str, SkillIO] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    dependencies: list[SkillDependency] = Field(default_factory=list)
+    required_privileges: list[str] = Field(default_factory=lambda: ["user"])
     requires_approval: bool = True
     target_required: bool | None = None
 
@@ -129,7 +129,7 @@ class Skill(ABC):
             self: "Skill",
             *args: Any,
             **execute_kwargs: Any,
-        ) -> Dict[str, Any]:
+        ) -> dict[str, Any]:
             if not _execution_matches(self.spec.name):
                 raise RuntimeError(
                     "Direct skill execution is disabled; use ExecutionCoordinator"
@@ -146,8 +146,8 @@ class Skill(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, **kwargs) -> Dict[str, Any]:
+    async def execute(self, **kwargs) -> dict[str, Any]:
         pass
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return self.spec.model_dump()

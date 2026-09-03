@@ -11,11 +11,30 @@ dist/
 build/
 *.whl
 
-# Data
+# Data — curated seed/eval data (data/evaluations/, data/initial_knowledge.json)
+# stays tracked; everything the runtime writes is ignored.
 data/*.db
+data/*.db-shm
+data/*.db-wal
 data/models/
 data/knowledge_graph.json
+data/bootstrap_report.json
+data/tool_registry.json
+data/prompt_history.txt
+data/repl_history.txt
+data/sessions/
+data/workflows/
 atlas-credentials.env
+
+# Runtime output (regenerated each run; not curated)
+/evidence/*
+!/evidence/.gitkeep
+/audit/*
+!/audit/.gitkeep
+/feedback/*
+!/feedback/.gitkeep
+/logs/*
+!/logs/.gitkeep
 
 # IDE
 .vscode/

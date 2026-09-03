@@ -1,9 +1,9 @@
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
@@ -34,7 +34,9 @@ class ProtectedEvidenceStore:
         digest = hashlib.sha256(payload).hexdigest()
         identifier = evidence_id or str(uuid4())
         if not identifier.replace("-", "").isalnum():
-            raise ValueError("evidence_id must contain only letters, numbers, or hyphens")
+            raise ValueError(
+                "evidence_id must contain only letters, numbers, or hyphens"
+            )
 
         self._ensure_root()
         path = self.base_path / f"{identifier}.evidence"
@@ -46,7 +48,9 @@ class ProtectedEvidenceStore:
                 raise RuntimeError("protected evidence path must be a regular file")
             existing = path.read_bytes()
             if hashlib.sha256(existing).hexdigest() != digest:
-                raise RuntimeError("immutable evidence path already contains other data")
+                raise RuntimeError(
+                    "immutable evidence path already contains other data"
+                )
             path.chmod(0o600)
         else:
             try:
@@ -65,7 +69,7 @@ class ProtectedEvidenceStore:
             sha256=digest,
             size_bytes=len(payload),
             mime_type=mime_type,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
 
     def verify(self, reference: EvidenceReference) -> bool:
@@ -121,9 +125,9 @@ class Evidence:
         self.reference = reference
         self.data = reference.model_dump()
         self.source = source
-        self.timestamp = datetime.now(timezone.utc).isoformat()
+        self.timestamp = datetime.now(UTC).isoformat()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "type": self.type,
@@ -136,11 +140,11 @@ class Evidence:
 
 class EvidenceCollector:
     def __init__(self, base_path: Path = Path("evidence")) -> None:
-        self._evidence: List[Evidence] = []
+        self._evidence: list[Evidence] = []
         self._store = ProtectedEvidenceStore(base_path)
 
     def collect(
-        self, type: str, label: str, data: Dict[str, Any], source: str = ""
+        self, type: str, label: str, data: dict[str, Any], source: str = ""
     ) -> Evidence:
         reference = self._store.capture(data)
         ev = Evidence(type, label, reference, source)
@@ -168,7 +172,7 @@ class EvidenceCollector:
         )
 
     def collect_scan_result(
-        self, scanner: str, target: str, raw: str, parsed: Optional[Dict] = None
+        self, scanner: str, target: str, raw: str, parsed: dict | None = None
     ) -> Evidence:
         return self.collect(
             type="scan_result",
@@ -183,7 +187,7 @@ class EvidenceCollector:
         )
 
     def collect_finding(
-        self, title: str, description: str, severity: str, detail: Optional[Dict] = None
+        self, title: str, description: str, severity: str, detail: dict | None = None
     ) -> Evidence:
         return self.collect(
             type="finding",
@@ -197,13 +201,13 @@ class EvidenceCollector:
             source="analyzer",
         )
 
-    def get_all(self) -> List[Evidence]:
+    def get_all(self) -> list[Evidence]:
         return list(self._evidence)
 
-    def get_by_type(self, type: str) -> List[Evidence]:
+    def get_by_type(self, type: str) -> list[Evidence]:
         return [e for e in self._evidence if e.type == type]
 
-    def get_by_source(self, source: str) -> List[Evidence]:
+    def get_by_source(self, source: str) -> list[Evidence]:
         return [e for e in self._evidence if e.source == source]
 
     def clear(self):

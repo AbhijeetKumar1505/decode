@@ -1,4 +1,5 @@
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from .store import SessionStore
 
 
@@ -22,14 +23,14 @@ class TargetFinding:
         self.technique_id = technique_id
         self.mitre_tactic = mitre_tactic
         self.confidence = confidence
-        self.evidence_refs: List[str] = []
+        self.evidence_refs: list[str] = []
 
 
 class TargetContextTracker:
-    def __init__(self, store: SessionStore, session_id: Optional[str] = None):
+    def __init__(self, store: SessionStore, session_id: str | None = None):
         self._store = store
-        self._current_session_id: Optional[str] = session_id
-        self._current_target_id: Optional[str] = None
+        self._current_session_id: str | None = session_id
+        self._current_target_id: str | None = None
 
     def start_session(self, goal: str = "", target_focus: str = ""):
         self._current_session_id = self._store.create_session(
@@ -41,7 +42,7 @@ class TargetContextTracker:
         self._current_session_id = session_id
 
     @property
-    def session_id(self) -> Optional[str]:
+    def session_id(self) -> str | None:
         return self._current_session_id
 
     @property
@@ -54,7 +55,7 @@ class TargetContextTracker:
         ip: str = "",
         domain: str = "",
         os: str = "",
-        metadata: Optional[Dict] = None,
+        metadata: dict | None = None,
     ) -> str:
         if not self._current_session_id:
             raise RuntimeError("No active session. Call start_session() first.")
@@ -69,7 +70,7 @@ class TargetContextTracker:
         return self._current_target_id
 
     @property
-    def target_id(self) -> Optional[str]:
+    def target_id(self) -> str | None:
         return self._current_target_id
 
     def record_port(
@@ -115,9 +116,9 @@ class TargetContextTracker:
         self,
         type: str,
         label: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         source: str = "",
-        finding_id: Optional[str] = None,
+        finding_id: str | None = None,
     ) -> str:
         if not self._current_session_id:
             raise RuntimeError("No active session.")
@@ -151,7 +152,7 @@ class TargetContextTracker:
                 lines.append(f"    [{f['severity'].upper()}] {f['title']}")
         return "\n".join(lines)
 
-    def get_open_ports_summary(self) -> List[Dict[str, Any]]:
+    def get_open_ports_summary(self) -> list[dict[str, Any]]:
         if not self._current_session_id:
             return []
         ctx = self._store.get_session_context(self._current_session_id)

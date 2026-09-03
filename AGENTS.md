@@ -229,23 +229,27 @@ This lets new tool workflows be added as prose without a hardcoded adapter.
 
 ## Extension Rules
 
-There is **no in-tree plugin system**. `decode/tools.py` (`PluginManager`) and
-`decode/plugins/` (manifest, sandbox, lifecycle, and bundled tool plugins) were
-removed. Do not reintroduce a tool catalog, an in-process plugin loader, or
-per-tool Python wrappers.
+Three tool sources sit behind one capability registry
+(`decode/capabilities/registry.py`): native built-ins, discovered system tools
+(shell-driven), and external providers (MCP servers + plugins). The old in-tree
+loader (`decode/tools.py`, `decode/plugins/`) was removed — **do not** reintroduce
+a tool catalog, an in-process plugin loader, or per-tool Python wrappers.
 
 Extend Decode through:
 
 - **Markdown playbooks** (`SKILL.md`, above) for repeatable procedures.
 - **Native capabilities** in `decode/hostcontrol/operations.py`, wired through
   `HostAgent`, for genuinely new OS primitives.
+- **MCP servers** — external tool providers (`decode/extensions/mcp_manager.py`,
+  `decode mcp add …`). Risk is **declared** per server (MCP payloads are opaque).
+- **Plugin packages** — declarative bundles only (manifest + markdown skills + MCP
+  configs + docs), never in-process code (`decode/extensions/plugin_manager.py`,
+  `decode plugin install …`).
 
-*Plugins* are reserved for optional, isolated connectors to **external** systems
-(issue trackers, cloud providers, hosted scanners, MCP servers) — never in-tree
-security tools and never core OS operations. That surface is planned, not built;
-any future design must pass typed I/O through `ExecutionCoordinator` under
-isolation, with the same audit/log/feedback telemetry as every other governed
-execution. See [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md).
+Rules: system tools and core OS operations are **never** packaged as plugins;
+every MCP/plugin call still routes through `ExecutionCoordinator`; extension
+config is scoped (project > user > system). See
+[docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md).
 
 ## Mandatory Execution Telemetry
 

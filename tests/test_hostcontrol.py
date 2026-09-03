@@ -22,7 +22,9 @@ class TestFilesystemScope(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.scope = FilesystemScope(read_roots=[self.root / "ro"], write_roots=[self.root / "rw"])
+        self.scope = FilesystemScope(
+            read_roots=[self.root / "ro"], write_roots=[self.root / "rw"]
+        )
         (self.root / "ro").mkdir()
         (self.root / "rw").mkdir()
 
@@ -36,7 +38,9 @@ class TestFilesystemScope(unittest.TestCase):
         self.assertFalse(self.scope.allows(self.root / "ro" / "a.txt", write=True))
 
     def test_traversal_cannot_escape(self):
-        self.assertFalse(self.scope.allows(self.root / "rw" / ".." / "escape.txt", write=True))
+        self.assertFalse(
+            self.scope.allows(self.root / "rw" / ".." / "escape.txt", write=True)
+        )
 
     def test_empty_scope_denies(self):
         self.assertFalse(FilesystemScope().allows(self.root / "x"))
@@ -55,8 +59,12 @@ class TestCommandPolicy(unittest.TestCase):
         # sudo elevates: a READ command becomes at least WRITE
         self.assertEqual(p.classify(["sudo", "cat", "/etc/shadow"]), RiskLevel.WRITE)
         # sudo options are skipped to find the real command
-        self.assertEqual(p.classify(["sudo", "-S", "apt", "install", "nmap"]), RiskLevel.WRITE)
-        self.assertEqual(p.classify(["sudo", "-u", "root", "cp", "a", "b"]), RiskLevel.WRITE)
+        self.assertEqual(
+            p.classify(["sudo", "-S", "apt", "install", "nmap"]), RiskLevel.WRITE
+        )
+        self.assertEqual(
+            p.classify(["sudo", "-u", "root", "cp", "a", "b"]), RiskLevel.WRITE
+        )
         # a destructive wrapped command stays DESTRUCTIVE
         self.assertEqual(p.classify(["sudo", "rm", "-rf", "/x"]), RiskLevel.DESTRUCTIVE)
         # sudo with no command (e.g. `sudo -v`) is still privileged
@@ -66,7 +74,7 @@ class TestCommandPolicy(unittest.TestCase):
         p = CommandPolicy(allowed_binaries={"cat", "ls"}, denied_binaries={"rm"})
         self.assertTrue(p.is_allowed(["cat", "x"]))
         self.assertFalse(p.is_allowed(["curl", "x"]))  # not on allowlist
-        self.assertFalse(p.is_allowed(["rm", "x"]))     # denied
+        self.assertFalse(p.is_allowed(["rm", "x"]))  # denied
 
 
 class TestFileOperations(unittest.TestCase):
@@ -144,7 +152,9 @@ class TestHostSession(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         Path(tmp.name, "sub").mkdir()
         scope = FilesystemScope(read_roots=[tmp.name])
-        session = HostSession(CommandPolicy(allowed_binaries={"echo", "pwd"}), scope=scope, cwd=tmp.name)
+        session = HostSession(
+            CommandPolicy(allowed_binaries={"echo", "pwd"}), scope=scope, cwd=tmp.name
+        )
         self.assertTrue(session.run(["cd", "sub"])["ok"])
         self.assertTrue(session.cwd.endswith("sub"))
         session.run(["echo", "hello"])
@@ -155,18 +165,30 @@ class TestHostSession(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         scope = FilesystemScope(read_roots=[Path(tmp.name) / "in"])
         (Path(tmp.name) / "in").mkdir()
-        session = HostSession(CommandPolicy(), scope=scope, cwd=str(Path(tmp.name) / "in"))
+        session = HostSession(
+            CommandPolicy(), scope=scope, cwd=str(Path(tmp.name) / "in")
+        )
         self.assertFalse(session.run(["cd", ".."])["ok"])
 
 
 class TestPermissionModes(unittest.TestCase):
     def test_mode_decisions(self):
-        self.assertEqual(resolve_mode_decision(PermissionMode.PLAN, RiskLevel.READ), "deny")
-        self.assertEqual(resolve_mode_decision(PermissionMode.ASK, RiskLevel.READ), "allow")
-        self.assertEqual(resolve_mode_decision(PermissionMode.ASK, RiskLevel.WRITE), "approve")
-        self.assertEqual(resolve_mode_decision(PermissionMode.AUTO, RiskLevel.WRITE), "allow")
+        self.assertEqual(
+            resolve_mode_decision(PermissionMode.PLAN, RiskLevel.READ), "deny"
+        )
+        self.assertEqual(
+            resolve_mode_decision(PermissionMode.ASK, RiskLevel.READ), "allow"
+        )
+        self.assertEqual(
+            resolve_mode_decision(PermissionMode.ASK, RiskLevel.WRITE), "approve"
+        )
+        self.assertEqual(
+            resolve_mode_decision(PermissionMode.AUTO, RiskLevel.WRITE), "allow"
+        )
         # DESTRUCTIVE is never auto-allowed
-        self.assertEqual(resolve_mode_decision(PermissionMode.AUTO, RiskLevel.DESTRUCTIVE), "approve")
+        self.assertEqual(
+            resolve_mode_decision(PermissionMode.AUTO, RiskLevel.DESTRUCTIVE), "approve"
+        )
 
 
 class TestHooks(unittest.TestCase):
@@ -188,7 +210,7 @@ class TestHooks(unittest.TestCase):
     def test_raising_pre_hook_fails_closed(self):
         reg = HookRegistry()
         reg.register_pre(lambda e: (_ for _ in ()).throw(RuntimeError("boom")))
-        allow, reason = reg.run_pre(HookEvent("pre", "file_read"))
+        allow, _reason = reg.run_pre(HookEvent("pre", "file_read"))
         self.assertFalse(allow)
 
 

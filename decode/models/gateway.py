@@ -13,20 +13,19 @@ per role's task class; providers are instantiated through the existing
 from __future__ import annotations
 
 import os
-from typing import Dict, Tuple
 
 from ..config import Config
 from ..kernel.provider import LLMProvider, create_provider
 from .registry import ModelRegistry
 from .routing import ModelRouter, RoutingDecision, RoutingRequest
 
-_ROLE_TASK_CLASS: Dict[str, str] = {
+_ROLE_TASK_CLASS: dict[str, str] = {
     "planner": "planning",
     "worker": "analysis",
     "reviewer": "analysis",
     "coder": "code",
 }
-_ROLE_ENV: Dict[str, str] = {
+_ROLE_ENV: dict[str, str] = {
     "planner": "DECODE_PLANNER_MODEL",
     "worker": "DECODE_WORKER_MODEL",
     "reviewer": "DECODE_REVIEWER_MODEL",
@@ -49,10 +48,14 @@ class ModelGateway:
     ) -> None:
         self._registry = registry
         self._router = router or ModelRouter(registry)
-        self._routing_enabled = _routing_default() if routing_enabled is None else routing_enabled
-        self._cache: Dict[Tuple[str, str], LLMProvider] = {}
+        self._routing_enabled = (
+            _routing_default() if routing_enabled is None else routing_enabled
+        )
+        self._cache: dict[tuple[str, str], LLMProvider] = {}
 
-    def register(self, provider_name: str, model_name: str, provider: LLMProvider) -> None:
+    def register(
+        self, provider_name: str, model_name: str, provider: LLMProvider
+    ) -> None:
         """Seed a pre-built provider (e.g. the agent's default llm) so the default
         role resolution returns the same instance and preserves its token accounting."""
         self._cache[(provider_name, model_name)] = provider
@@ -61,7 +64,7 @@ class ModelGateway:
         task_class = _ROLE_TASK_CLASS.get(role, "analysis")
         return self._router.route(RoutingRequest(task_class=task_class, **constraints))
 
-    def resolve_spec(self, role: str) -> Tuple[str, str]:
+    def resolve_spec(self, role: str) -> tuple[str, str]:
         """Return ``(provider_name, model_name)`` for a role."""
         override = os.getenv(_ROLE_ENV.get(role, ""), "").strip()
         if override:

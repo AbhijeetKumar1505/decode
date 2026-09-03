@@ -1,3 +1,4 @@
+from .agent_loop import ToolUseLoop
 from .coordinator import (
     ApprovalGrant,
     ApprovalRequest,
@@ -12,7 +13,6 @@ from .coordinator import (
     target_from_params,
 )
 from .host_controller import HostController
-from .agent_loop import ToolUseLoop
 
 __all__ = [
     "ApprovalGrant",
@@ -23,9 +23,9 @@ __all__ = [
     "ExecutionIdentity",
     "ExecutionRequest",
     "ExecutionStatus",
-    "credential_refs_from_params",
-    "redact_sensitive",
     "HostController",
     "ToolUseLoop",
+    "credential_refs_from_params",
+    "redact_sensitive",
     "target_from_params",
 ]

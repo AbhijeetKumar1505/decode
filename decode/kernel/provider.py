@@ -1,7 +1,7 @@
 import asyncio
 import os
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
+
 from ..config import Config
 
 
@@ -19,11 +19,11 @@ class LLMProvider(ABC):
         self.session_tokens = 0
 
     @abstractmethod
-    async def complete(self, prompt: str, system: Optional[str] = None) -> str:
+    async def complete(self, prompt: str, system: str | None = None) -> str:
         pass
 
     @abstractmethod
-    async def chat(self, messages: List[Dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, str]]) -> str:
         pass
 
     @property
@@ -68,14 +68,16 @@ class OpenRouterProvider(LLMProvider):
     RETRYABLE_STATUS = {429, 500, 502, 503, 529}
     MAX_RETRIES = 4
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         super().__init__()
         from openai import OpenAI
 
         self._api_key = api_key or Config.OPENROUTER_API_KEY
         self._model = model or Config.MODEL
         default_headers = {
-            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://github.com/decode"),
+            "HTTP-Referer": os.getenv(
+                "OPENROUTER_SITE_URL", "https://github.com/decode"
+            ),
             "X-Title": os.getenv("OPENROUTER_APP_NAME", "Decode"),
         }
         self._client = (
@@ -92,7 +94,7 @@ class OpenRouterProvider(LLMProvider):
     def name(self) -> str:
         return f"openrouter/{self._model}"
 
-    async def complete(self, prompt: str, system: Optional[str] = None) -> str:
+    async def complete(self, prompt: str, system: str | None = None) -> str:
         if not self._client:
             return "[OpenRouter not configured - set OPENROUTER_API_KEY]"
         messages = []
@@ -101,12 +103,12 @@ class OpenRouterProvider(LLMProvider):
         messages.append({"role": "user", "content": prompt})
         return await self._chat(messages)
 
-    async def chat(self, messages: List[Dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, str]]) -> str:
         if not self._client:
             return "[OpenRouter not configured - set OPENROUTER_API_KEY]"
         return await self._chat(messages)
 
-    async def _chat(self, messages: List[Dict[str, str]]) -> str:
+    async def _chat(self, messages: list[dict[str, str]]) -> str:
         # Free OpenRouter variants share a rate-limited upstream pool, so a
         # transient 429 (or 5xx) is expected under load. Retry with the server's
         # Retry-After hint before giving up, so a momentary limit does not abort
@@ -120,7 +122,10 @@ class OpenRouterProvider(LLMProvider):
                 return response.choices[0].message.content
             except Exception as exc:  # narrowed to retryable statuses below
                 status = getattr(exc, "status_code", None)
-                if status not in self.RETRYABLE_STATUS or attempt == self.MAX_RETRIES - 1:
+                if (
+                    status not in self.RETRYABLE_STATUS
+                    or attempt == self.MAX_RETRIES - 1
+                ):
                     raise
                 await asyncio.sleep(self._retry_delay(exc, attempt))
         # Unreachable: the loop either returns or re-raises on the final attempt.
@@ -138,11 +143,11 @@ class OpenRouterProvider(LLMProvider):
                     return max(0.0, float(raw))
                 except (TypeError, ValueError):
                     pass
-        return float(min(2 ** attempt, 8))
+        return float(min(2**attempt, 8))
 
 
 class OpenAIProvider(LLMProvider):
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         super().__init__()
         from openai import OpenAI
 
@@ -154,7 +159,7 @@ class OpenAIProvider(LLMProvider):
     def name(self) -> str:
         return f"openai/{self._model}"
 
-    async def complete(self, prompt: str, system: Optional[str] = None) -> str:
+    async def complete(self, prompt: str, system: str | None = None) -> str:
         if not self._client:
             return "[OpenAI not configured - set OPENAI_API_KEY]"
         messages = []
@@ -163,10 +168,10 @@ class OpenAIProvider(LLMProvider):
         messages.append({"role": "user", "content": prompt})
         return await self._chat(messages)
 
-    async def chat(self, messages: List[Dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, str]]) -> str:
         return await self._chat(messages)
 
-    async def _chat(self, messages: List[Dict[str, str]]) -> str:
+    async def _chat(self, messages: list[dict[str, str]]) -> str:
         response = self._client.chat.completions.create(
             model=self._model, messages=messages, temperature=0.1
         )
@@ -175,9 +180,7 @@ class OpenAIProvider(LLMProvider):
 
 
 class AnthropicProvider(LLMProvider):
-    def __init__(
-        self, api_key: Optional[str] = None, model: Optional[str] = None
-    ):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         super().__init__()
         from anthropic import Anthropic
 
@@ -189,7 +192,7 @@ class AnthropicProvider(LLMProvider):
     def name(self) -> str:
         return f"anthropic/{self._model}"
 
-    async def complete(self, prompt: str, system: Optional[str] = None) -> str:
+    async def complete(self, prompt: str, system: str | None = None) -> str:
         if not self._client:
             return "[Anthropic not configured - set ANTHROPIC_API_KEY]"
         response = self._client.messages.create(
@@ -202,7 +205,7 @@ class AnthropicProvider(LLMProvider):
         self._record_usage(getattr(response, "usage", None))
         return response.content[0].text
 
-    async def chat(self, messages: List[Dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, str]]) -> str:
         if not self._client:
             return "[Anthropic not configured - set ANTHROPIC_API_KEY]"
         # Anthropic requires system prompts as a top-level param, not inline messages.

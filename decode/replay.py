@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -26,8 +26,8 @@ class ReplayRecord(BaseModel):
     capability: str = ""
     tool: str = ""
     tool_version: str = ""
-    argv: List[str] = Field(default_factory=list)
-    normalized_params: Dict[str, Any] = Field(default_factory=dict)
+    argv: list[str] = Field(default_factory=list)
+    normalized_params: dict[str, Any] = Field(default_factory=dict)
     adapter_id: str = ""
     adapter_version: str = ""
     parser_id: str = ""
@@ -47,7 +47,7 @@ class ReplayRecord(BaseModel):
         return shlex.join(self.argv)
 
 
-def _stable_replay_id(fields: Dict[str, Any]) -> str:
+def _stable_replay_id(fields: dict[str, Any]) -> str:
     encoded = json.dumps(fields, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
@@ -100,5 +100,5 @@ def build_replay_record(
         environment_version=environment_version,
         evidence_id=evidence_id,
         evidence_sha256=evidence_sha256,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )

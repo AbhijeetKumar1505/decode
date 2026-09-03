@@ -19,7 +19,9 @@ from decode.logging_service import LoggingService
 
 class TestBuildCodingCommand(unittest.TestCase):
     def test_git_read_commands(self):
-        self.assertEqual(build_coding_command("git_status", {}), (["git", "status", "--short"], None))
+        self.assertEqual(
+            build_coding_command("git_status", {}), (["git", "status", "--short"], None)
+        )
         self.assertEqual(build_coding_command("git_diff", {}), (["git", "diff"], None))
         self.assertEqual(
             build_coding_command("git_diff", {"path": "a.py", "staged": True}),
@@ -40,8 +42,10 @@ class TestBuildCodingCommand(unittest.TestCase):
 
     def test_test_and_build_defaults_and_overrides(self):
         self.assertEqual(build_coding_command("test_run", {}), (["pytest", "-q"], None))
-        self.assertEqual(build_coding_command("test_run", {"command": "pytest tests/x.py"})[0],
-                         ["pytest", "tests/x.py"])
+        self.assertEqual(
+            build_coding_command("test_run", {"command": "pytest tests/x.py"})[0],
+            ["pytest", "tests/x.py"],
+        )
         self.assertEqual(build_coding_command("build_run", {}), (["make"], None))
 
     def test_patch_apply_uses_stdin(self):
@@ -66,14 +70,18 @@ class TestBuildCodingCommand(unittest.TestCase):
 
 class TestSummarizeCodingResult(unittest.TestCase):
     def test_test_run_parsing(self):
-        extra = summarize_coding_result("test_run", {"stdout": "3 passed, 1 failed", "exit_code": 1})
+        extra = summarize_coding_result(
+            "test_run", {"stdout": "3 passed, 1 failed", "exit_code": 1}
+        )
         self.assertEqual(extra["tests_passed"], 3)
         self.assertEqual(extra["tests_failed"], 1)
         self.assertFalse(extra["tests_ok"])
 
     def test_git_diff_files_changed(self):
         stdout = "diff --git a/x b/x\n...\ndiff --git a/y b/y\n"
-        self.assertEqual(summarize_coding_result("git_diff", {"stdout": stdout})["files_changed"], 2)
+        self.assertEqual(
+            summarize_coding_result("git_diff", {"stdout": stdout})["files_changed"], 2
+        )
 
     def test_git_status_entries(self):
         extra = summarize_coding_result("git_status", {"stdout": " M a\n?? b\n"})
@@ -97,9 +105,11 @@ class TestCodingCapabilityThroughLoop(unittest.TestCase):
     def _agent(self, tmp, replies):
         import decode.universal_agent as ua
 
-        with mock.patch.object(ua.Config, "validate", return_value=None), \
-             mock.patch.object(ua, "create_provider", return_value=mock.Mock()), \
-             mock.patch.object(ua, "SelfLearningMemory", return_value=mock.Mock()):
+        with (
+            mock.patch.object(ua.Config, "validate", return_value=None),
+            mock.patch.object(ua, "create_provider", return_value=mock.Mock()),
+            mock.patch.object(ua, "SelfLearningMemory", return_value=mock.Mock()),
+        ):
             agent = ua.UniversalAgent(provider="openrouter")
         agent.llm = _ScriptedProvider(replies)
         agent.audit = AuditLayer(base_path=tmp / "audit")
@@ -115,12 +125,14 @@ class TestCodingCapabilityThroughLoop(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as d:
             agent = self._agent(Path(d), replies)
-            result = asyncio.run(agent.run_tool_loop(
-                "check the repo status",
-                filesystem_scope=FilesystemScope(read_roots=[Path.cwd()]),
-                command_policy=CommandPolicy(),
-                permission_mode=PermissionMode.AUTO,
-            ))
+            result = asyncio.run(
+                agent.run_tool_loop(
+                    "check the repo status",
+                    filesystem_scope=FilesystemScope(read_roots=[Path.cwd()]),
+                    command_policy=CommandPolicy(),
+                    permission_mode=PermissionMode.AUTO,
+                )
+            )
         # the coding capability was in the surface (hybrid) and the loop invoked it
         self.assertEqual(result["steps"][0]["tool"], "git_status")
         self.assertIn("observation", result["steps"][0])

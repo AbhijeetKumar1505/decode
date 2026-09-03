@@ -7,7 +7,7 @@ recovery metadata. They do not grant approval or execute tools.
 import hashlib
 import json
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -37,7 +37,10 @@ class CompletionCriterion(BaseModel):
                     break
                 actual = actual[part]
         if self.kind == "equals" and actual != self.expected:
-            return False, f"completion criterion failed: {self.field} must equal expected value"
+            return (
+                False,
+                f"completion criterion failed: {self.field} must equal expected value",
+            )
         if self.kind == "present" and actual in (None, "", [], {}):
             return False, f"completion criterion failed: {self.field} is required"
         if self.kind not in {"equals", "present"}:
@@ -55,9 +58,9 @@ class PlanNode(BaseModel):
     id: str
     capability: str
     description: str = ""
-    params: Dict[str, Any] = Field(default_factory=dict)
-    depends_on: List[str] = Field(default_factory=list)
-    completion: List[CompletionCriterion] = Field(default_factory=list)
+    params: dict[str, Any] = Field(default_factory=dict)
+    depends_on: list[str] = Field(default_factory=list)
+    completion: list[CompletionCriterion] = Field(default_factory=list)
     retry_category: RetryCategory = RetryCategory.NEVER
     max_attempts: int = Field(default=1, ge=1, le=3)
     idempotency_key: str = Field(default="", max_length=128)
@@ -80,13 +83,15 @@ class PlanNode(BaseModel):
             "retry_category": self.retry_category.value,
             "idempotency_key": self.idempotency_key,
         }
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+        encoded = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), default=str
+        )
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 class PlanGraph(BaseModel):
     goal: str = ""
-    nodes: Dict[str, PlanNode] = Field(default_factory=dict)
+    nodes: dict[str, PlanNode] = Field(default_factory=dict)
     reasoning: str = ""
 
     def add_node(self, node: PlanNode) -> PlanNode:
@@ -97,18 +102,24 @@ class PlanGraph(BaseModel):
         for node in self.nodes.values():
             for dep in node.depends_on:
                 if dep not in self.nodes:
-                    raise ValueError(f"node '{node.id}' depends on unknown node '{dep}'")
+                    raise ValueError(
+                        f"node '{node.id}' depends on unknown node '{dep}'"
+                    )
         self.topological_order()
 
-    def ready_nodes(self) -> List[PlanNode]:
+    def ready_nodes(self) -> list[PlanNode]:
         return [
-            node for node in self.nodes.values()
+            node
+            for node in self.nodes.values()
             if node.status == "pending"
-            and all(self.nodes[dependency].status == "success" for dependency in node.depends_on)
+            and all(
+                self.nodes[dependency].status == "success"
+                for dependency in node.depends_on
+            )
         ]
 
-    def topological_order(self) -> List[PlanNode]:
-        order: List[PlanNode] = []
+    def topological_order(self) -> list[PlanNode]:
+        order: list[PlanNode] = []
         temporary, permanent = set(), set()
 
         def visit(node_id: str) -> None:
@@ -128,7 +139,10 @@ class PlanGraph(BaseModel):
         return order
 
     def is_complete(self) -> bool:
-        return all(node.status in ("success", "error", "skipped", "needs_review") for node in self.nodes.values())
+        return all(
+            node.status in ("success", "error", "skipped", "needs_review")
+            for node in self.nodes.values()
+        )
 
     def mark(self, node_id: str, status: str, summary: str = "") -> None:
         node = self.nodes[node_id]

@@ -8,6 +8,7 @@ decode/
   bootstrap/       Startup and host preparation
   capabilities/    Host + coding capability specs, per-turn resolver
   execution/       Local, Docker, WSL, SSH, and MCP providers
+  extensions/      Scoped config, MCP server manager, plugin packages (subsystems: extension layer)
   governance/      Scope and pre-execution policy
   hostcontrol/     Filesystem/command policy, operations, sessions, hooks
   kernel/          Context, safety, model provider
@@ -68,6 +69,16 @@ Reusable procedures are authored as markdown, not Python:
 4. Add coverage in `tests/test_markdown_skills.py` if the playbook needs guaranteed discovery.
 
 Registration is automatic through `SkillRegistry` (see `decode/skills/markdown_skill.py`).
+
+Discovery is `rglob("*.md")` keyed by the frontmatter `name`, so **every** `.md`
+under `playbooks/` becomes a skill. When importing a multi-file skill (e.g. one
+with companion reference docs), consolidate it into a single `.md` — inline the
+companions under headings — or each loose file registers as its own playbook.
+
+The [mattpocock/skills](https://github.com/mattpocock/skills) engineering and
+productivity set is vendored this way (one consolidated playbook per upstream
+skill, companions inlined, `category: agent_core`, `risk: READ`). Guaranteed-
+discovery coverage lives in `tests/test_markdown_skills.py`.
 
 ## Extensions
 

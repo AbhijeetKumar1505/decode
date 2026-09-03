@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from ..schema import TaskMode
 
@@ -48,7 +48,7 @@ discipline (inspect, change, verify) and security discipline (authorized scope,
 evidence-backed findings) as the goal requires. Active scans/attacks still need an
 authorized in-scope target; if missing, ask rather than guess."""
 
-_MODE_FRAGMENTS: Dict[TaskMode, str] = {
+_MODE_FRAGMENTS: dict[TaskMode, str] = {
     TaskMode.CODING: _MODE_CODING,
     TaskMode.SECURITY: _MODE_SECURITY,
     TaskMode.HYBRID: _MODE_HYBRID,
@@ -66,14 +66,14 @@ scope, recent actions, findings, and open questions. Treat it as your working
 world-model and keep your next step consistent with it."""
 
 
-def _capabilities_section(tool_lines: List[Dict[str, Any]]) -> str:
+def _capabilities_section(tool_lines: list[dict[str, Any]]) -> str:
     lines = [f"- {t['name']}: {t.get('description', '')}" for t in tool_lines]
     return "Available tools:\n" + "\n".join(lines)
 
 
 def compose_system_prompt(
     mode: TaskMode,
-    tools: List[Dict[str, Any]],
+    tools: list[dict[str, Any]],
     *,
     policy_context: str = "",
     project_rules: str = "",
@@ -95,11 +95,16 @@ def compose_system_prompt(
 class PromptComposer:
     """Thin object wrapper so callers can hold mode/rules and compose per turn."""
 
-    def __init__(self, mode: TaskMode = TaskMode.HYBRID, project_rules: str = "") -> None:
+    def __init__(
+        self, mode: TaskMode = TaskMode.HYBRID, project_rules: str = ""
+    ) -> None:
         self.mode = mode
         self.project_rules = project_rules
 
-    def compose(self, tools: List[Dict[str, Any]], policy_context: str = "") -> str:
+    def compose(self, tools: list[dict[str, Any]], policy_context: str = "") -> str:
         return compose_system_prompt(
-            self.mode, tools, policy_context=policy_context, project_rules=self.project_rules
+            self.mode,
+            tools,
+            policy_context=policy_context,
+            project_rules=self.project_rules,
         )

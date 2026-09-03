@@ -1,19 +1,19 @@
 from .renderers import (
-    render,
-    render_markdown,
-    render_json,
-    render_sarif,
-    render_html,
-    extension_for,
     FORMATS,
+    extension_for,
+    render,
+    render_html,
+    render_json,
+    render_markdown,
+    render_sarif,
 )
 
 __all__ = [
-    "render",
-    "render_markdown",
-    "render_json",
-    "render_sarif",
-    "render_html",
-    "extension_for",
     "FORMATS",
+    "extension_for",
+    "render",
+    "render_html",
+    "render_json",
+    "render_markdown",
+    "render_sarif",
 ]

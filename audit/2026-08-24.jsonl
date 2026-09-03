@@ -1,1 +1,0 @@
-{"id":"a7dba81a-3528-4652-9576-dbc666856c99","timestamp":"2026-08-24T19:37:16.198797","event":"rejection","tool":"network_mapper","target":"","risk":"WRITE","approved":false,"user":"","detail":"explicit target is required for this capability","metadata":{}}

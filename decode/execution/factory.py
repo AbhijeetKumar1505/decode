@@ -1,22 +1,20 @@
-from typing import Dict, Type
 from .base import ExecutionProvider
-from .local import LocalExecutor
 from .docker import DockerExecutor
-from .wsl import WSLExecutor
-from .ssh import SSHExecutor
+from .local import LocalExecutor
 from .mcp import MCPExecutor
-
+from .ssh import SSHExecutor
+from .wsl import WSLExecutor
 
 # Providers constructible with no required arguments — usable as defaults and
 # discoverable by the `providers` CLI. SSHExecutor is excluded (needs a host).
-_ZERO_ARG_PROVIDERS: Dict[str, Type[ExecutionProvider]] = {
+_ZERO_ARG_PROVIDERS: dict[str, type[ExecutionProvider]] = {
     "local": LocalExecutor,
     "docker": DockerExecutor,
     "wsl": WSLExecutor,
     "mcp": MCPExecutor,
 }
 
-_ALL_PROVIDERS: Dict[str, Type[ExecutionProvider]] = {
+_ALL_PROVIDERS: dict[str, type[ExecutionProvider]] = {
     **_ZERO_ARG_PROVIDERS,
     "ssh": SSHExecutor,
 }

@@ -75,12 +75,13 @@ iocs = IOCCollection(
     emails=["attacker@evil.com"],
 )
 gen = IOCGenerator(iocs)
-print(gen.to_json())      # JSON format
-print(gen.to_csv())       # CSV format
-print(gen.to_stix())      # STIX 2.1 bundle
+print(gen.to_json())  # JSON format
+print(gen.to_csv())  # CSV format
+print(gen.to_stix())  # STIX 2.1 bundle
 
 # Attribution
 from decode.modules.social_ir.attribution_engine import AttributionEngine
+
 engine = AttributionEngine()
 result = engine.build_attribution(
     breach_result=breach_data,

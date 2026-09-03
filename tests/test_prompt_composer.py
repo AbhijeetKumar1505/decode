@@ -38,10 +38,14 @@ class TestPromptComposer(unittest.TestCase):
         self.assertIn("Project rules:", prompt)
         self.assertIn("Never touch main directly.", prompt)
         # absent by default
-        self.assertNotIn("Project rules:", compose_system_prompt(TaskMode.HYBRID, TOOLS))
+        self.assertNotIn(
+            "Project rules:", compose_system_prompt(TaskMode.HYBRID, TOOLS)
+        )
 
     def test_custom_policy_context_overrides_default(self):
-        prompt = compose_system_prompt(TaskMode.HYBRID, TOOLS, policy_context="CUSTOM POLICY XYZ")
+        prompt = compose_system_prompt(
+            TaskMode.HYBRID, TOOLS, policy_context="CUSTOM POLICY XYZ"
+        )
         self.assertIn("CUSTOM POLICY XYZ", prompt)
 
     def test_composer_object_holds_mode(self):

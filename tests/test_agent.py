@@ -5,12 +5,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from decode.kernel.safety import SafetyController, Permission
-from decode.skills.base import RiskLevel, SkillCategory, SkillSpec
 from decode.audit import AuditLayer
 from decode.config import Config
 from decode.feedback import FeedbackStore
+from decode.kernel.safety import Permission, SafetyController
 from decode.logging_service import LoggingService
+from decode.skills.base import RiskLevel, SkillCategory, SkillSpec
 from decode.utils import parse_llm_response
 
 
@@ -38,14 +38,18 @@ class TestSafetyInvariants(unittest.TestCase):
             return True
 
         controller = SafetyController(approval_callback=approve)
-        self.assertEqual(self._check(RiskLevel.WRITE, controller=controller), Permission.ALLOW)
+        self.assertEqual(
+            self._check(RiskLevel.WRITE, controller=controller), Permission.ALLOW
+        )
 
     def test_write_denied_when_callback_rejects(self):
         async def reject(name, params):
             return False
 
         controller = SafetyController(approval_callback=reject)
-        self.assertEqual(self._check(RiskLevel.WRITE, controller=controller), Permission.DENY)
+        self.assertEqual(
+            self._check(RiskLevel.WRITE, controller=controller), Permission.DENY
+        )
 
     def test_prohibited_action_is_denied(self):
         self.safety.prohibit("some_skill")
@@ -62,8 +66,12 @@ class TestAuditTrail(unittest.TestCase):
     def test_execution_is_recorded_and_queryable(self):
         with tempfile.TemporaryDirectory() as d:
             audit = AuditLayer(base_path=Path(d))
-            audit.record_execution(tool="shell", target="echo hi", risk="WRITE", approved=True, detail="ok")
-            audit.record_execution(tool="nmap_pro", risk="WRITE", approved=True, detail="2 ports")
+            audit.record_execution(
+                tool="shell", target="echo hi", risk="WRITE", approved=True, detail="ok"
+            )
+            audit.record_execution(
+                tool="nmap_pro", risk="WRITE", approved=True, detail="2 ports"
+            )
             rows = audit.query()
             self.assertEqual(len(rows), 2)
             self.assertEqual({r.tool for r in rows}, {"shell", "nmap_pro"})
@@ -72,7 +80,9 @@ class TestAuditTrail(unittest.TestCase):
 
 class TestParseLLMResponse(unittest.TestCase):
     def test_extracts_embedded_json(self):
-        parsed = parse_llm_response('prose {"action": "nmap_pro", "params": {}} trailing')
+        parsed = parse_llm_response(
+            'prose {"action": "nmap_pro", "params": {}} trailing'
+        )
         self.assertEqual(parsed["action"], "nmap_pro")
 
     def test_falls_back_on_invalid_json(self):
@@ -110,6 +120,7 @@ def _heavy_deps_available():
     try:
         import faiss  # noqa: F401
         import openai  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -144,10 +155,12 @@ class TestUniversalAgentExecutionPath(unittest.TestCase):
             "destructive_skill": self._fake_destructive_skill,
         }.get(name)
 
-        with mock.patch.object(ua.Config, "validate", return_value=None), \
-             mock.patch.object(ua, "create_provider", return_value=mock.Mock()), \
-             mock.patch.object(ua, "SelfLearningMemory", return_value=mock.Mock()), \
-             mock.patch.object(ua, "SkillRegistry", return_value=fake_registry):
+        with (
+            mock.patch.object(ua.Config, "validate", return_value=None),
+            mock.patch.object(ua, "create_provider", return_value=mock.Mock()),
+            mock.patch.object(ua, "SelfLearningMemory", return_value=mock.Mock()),
+            mock.patch.object(ua, "SkillRegistry", return_value=fake_registry),
+        ):
             agent = ua.UniversalAgent(provider="openrouter")
         agent.audit = AuditLayer(base_path=tmp / "audit")
         agent.logging = LoggingService(base_path=tmp / "logs")
@@ -278,7 +291,9 @@ class TestOpenRouterRetry(unittest.TestCase):
         exc.response = mock.Mock(headers={"Retry-After": "5"})
         self.assertEqual(OpenRouterProvider._retry_delay(exc, attempt=0), 5.0)
         # No header → exponential backoff capped at 8s.
-        self.assertEqual(OpenRouterProvider._retry_delay(RuntimeError(), attempt=1), 2.0)
+        self.assertEqual(
+            OpenRouterProvider._retry_delay(RuntimeError(), attempt=1), 2.0
+        )
 
 
 class TestUsageAccounting(unittest.TestCase):

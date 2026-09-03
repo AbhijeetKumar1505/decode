@@ -1,6 +1,7 @@
-from typing import Dict, Any, List, Optional
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
+
 from pydantic import BaseModel, Field
 
 
@@ -9,21 +10,21 @@ class ContextEntry(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     role: str
     content: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class SessionState(BaseModel):
     goal: str = ""
-    workflow_id: Optional[str] = None
-    current_step: Optional[str] = None
-    executed_skills: List[Dict[str, Any]] = Field(default_factory=list)
-    skill_outputs: Dict[str, Any] = Field(default_factory=dict)
+    workflow_id: str | None = None
+    current_step: str | None = None
+    executed_skills: list[dict[str, Any]] = Field(default_factory=list)
+    skill_outputs: dict[str, Any] = Field(default_factory=dict)
 
 
 class ContextManager:
     def __init__(self):
         self._session = SessionState()
-        self._history: List[ContextEntry] = []
+        self._history: list[ContextEntry] = []
 
     def set_goal(self, goal: str):
         self._session.goal = goal
@@ -36,14 +37,14 @@ class ContextManager:
         return self._session.goal
 
     def add_entry(
-        self, role: str, content: str, metadata: Optional[Dict[str, Any]] = None
+        self, role: str, content: str, metadata: dict[str, Any] | None = None
     ):
         self._history.append(
             ContextEntry(role=role, content=content, metadata=metadata or {})
         )
 
     def record_skill_execution(
-        self, skill_name: str, params: Dict[str, Any], result: Dict[str, Any]
+        self, skill_name: str, params: dict[str, Any], result: dict[str, Any]
     ):
         self._session.executed_skills.append(
             {
@@ -54,10 +55,10 @@ class ContextManager:
         )
         self._session.skill_outputs[skill_name] = result
 
-    def get_recent_history(self, n: int = 10) -> List[ContextEntry]:
+    def get_recent_history(self, n: int = 10) -> list[ContextEntry]:
         return self._history[-n:]
 
-    def get_session_summary(self) -> Dict[str, Any]:
+    def get_session_summary(self) -> dict[str, Any]:
         return {
             "goal": self._session.goal,
             "executed_skills": len(self._session.executed_skills),

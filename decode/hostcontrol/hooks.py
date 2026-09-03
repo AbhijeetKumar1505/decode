@@ -7,8 +7,9 @@ Claude-Code-style hooks while preserving the fail-closed model.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any
 
 from ..skills.base import RiskLevel
 
@@ -19,18 +20,18 @@ class HookEvent:
     capability: str
     risk: RiskLevel = RiskLevel.READ
     target: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 # A pre-hook returns (allow, reason); a post-hook returns None.
-PreHook = Callable[[HookEvent], Tuple[bool, str]]
+PreHook = Callable[[HookEvent], tuple[bool, str]]
 PostHook = Callable[[HookEvent, Any], None]
 
 
 class HookRegistry:
     def __init__(self) -> None:
-        self._pre: List[PreHook] = []
-        self._post: List[PostHook] = []
+        self._pre: list[PreHook] = []
+        self._post: list[PostHook] = []
 
     def register_pre(self, hook: PreHook) -> None:
         self._pre.append(hook)
@@ -38,7 +39,7 @@ class HookRegistry:
     def register_post(self, hook: PostHook) -> None:
         self._post.append(hook)
 
-    def run_pre(self, event: HookEvent) -> Tuple[bool, str]:
+    def run_pre(self, event: HookEvent) -> tuple[bool, str]:
         """Run pre-hooks. The first veto denies; a raising hook fails closed."""
         for hook in self._pre:
             try:

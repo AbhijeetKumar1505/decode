@@ -15,8 +15,9 @@ import os
 import shutil
 import subprocess  # nosec B404 - governed, argument-vector only, policy-checked
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Sequence
+from typing import Any
 
 from .policy import CommandPolicy, FilesystemScope, ScopeViolation
 
@@ -29,17 +30,20 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _ok(**fields: Any) -> Dict[str, Any]:
+def _ok(**fields: Any) -> dict[str, Any]:
     return {"ok": True, "error": "", **fields}
 
 
-def _deny(error: str) -> Dict[str, Any]:
+def _deny(error: str) -> dict[str, Any]:
     return {"ok": False, "error": error}
 
 
 # ── files ────────────────────────────────────────────────────────────────
 
-def file_read(path: str, scope: FilesystemScope, *, max_bytes: int = MAX_READ_BYTES) -> Dict[str, Any]:
+
+def file_read(
+    path: str, scope: FilesystemScope, *, max_bytes: int = MAX_READ_BYTES
+) -> dict[str, Any]:
     try:
         scope.check(path, write=False)
     except ScopeViolation as exc:
@@ -59,7 +63,7 @@ def file_read(path: str, scope: FilesystemScope, *, max_bytes: int = MAX_READ_BY
     )
 
 
-def file_list(path: str, scope: FilesystemScope) -> Dict[str, Any]:
+def file_list(path: str, scope: FilesystemScope) -> dict[str, Any]:
     try:
         scope.check(path, write=False)
     except ScopeViolation as exc:
@@ -67,24 +71,30 @@ def file_list(path: str, scope: FilesystemScope) -> Dict[str, Any]:
     target = Path(path)
     if not target.is_dir():
         return _deny(f"not a directory: {path}")
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     for child in sorted(target.iterdir()):
         try:
             stat = child.stat()
-            entries.append({
-                "name": child.name,
-                "type": "dir" if child.is_dir() else "file",
-                "size_bytes": stat.st_size,
-            })
+            entries.append(
+                {
+                    "name": child.name,
+                    "type": "dir" if child.is_dir() else "file",
+                    "size_bytes": stat.st_size,
+                }
+            )
         except OSError:
             continue
     return _ok(path=str(target), entries=entries, total=len(entries))
 
 
 def file_search(
-    root: str, pattern: str, scope: FilesystemScope, *,
-    glob: str = "*", max_matches: int = MAX_SEARCH_MATCHES,
-) -> Dict[str, Any]:
+    root: str,
+    pattern: str,
+    scope: FilesystemScope,
+    *,
+    glob: str = "*",
+    max_matches: int = MAX_SEARCH_MATCHES,
+) -> dict[str, Any]:
     try:
         scope.check(root, write=False)
     except ScopeViolation as exc:
@@ -93,7 +103,7 @@ def file_search(
     if not base.exists():
         return _deny(f"path does not exist: {root}")
     files = [base] if base.is_file() else base.rglob("*")
-    matches: List[Dict[str, Any]] = []
+    matches: list[dict[str, Any]] = []
     needle = pattern.lower()
     for file in files:
         if len(matches) >= max_matches:
@@ -103,17 +113,26 @@ def file_search(
         if not scope.allows(file, write=False):
             continue
         try:
-            for lineno, line in enumerate(file.read_text(errors="replace").splitlines(), 1):
+            for lineno, line in enumerate(
+                file.read_text(errors="replace").splitlines(), 1
+            ):
                 if needle in line.lower():
-                    matches.append({"file": str(file), "line": lineno, "text": line.strip()[:200]})
+                    matches.append(
+                        {"file": str(file), "line": lineno, "text": line.strip()[:200]}
+                    )
                     if len(matches) >= max_matches:
                         break
         except OSError:
             continue
-    return _ok(pattern=pattern, matches=matches, total=len(matches), truncated=len(matches) >= max_matches)
+    return _ok(
+        pattern=pattern,
+        matches=matches,
+        total=len(matches),
+        truncated=len(matches) >= max_matches,
+    )
 
 
-def file_write(path: str, content: str, scope: FilesystemScope) -> Dict[str, Any]:
+def file_write(path: str, content: str, scope: FilesystemScope) -> dict[str, Any]:
     try:
         scope.check(path, write=True)
     except ScopeViolation as exc:
@@ -125,7 +144,7 @@ def file_write(path: str, content: str, scope: FilesystemScope) -> Dict[str, Any
     return _ok(path=str(target), size_bytes=len(data), sha256=_sha256(data))
 
 
-def file_edit(path: str, old: str, new: str, scope: FilesystemScope) -> Dict[str, Any]:
+def file_edit(path: str, old: str, new: str, scope: FilesystemScope) -> dict[str, Any]:
     try:
         scope.check(path, write=True)
     except ScopeViolation as exc:
@@ -143,7 +162,7 @@ def file_edit(path: str, old: str, new: str, scope: FilesystemScope) -> Dict[str
     return _ok(path=str(target), replacements=count, sha256=_sha256(data))
 
 
-def file_fetch(source: str, dest: str, scope: FilesystemScope) -> Dict[str, Any]:
+def file_fetch(source: str, dest: str, scope: FilesystemScope) -> dict[str, Any]:
     """Governed local copy (loot staging). Both ends must be in scope."""
     try:
         scope.check(source, write=False)
@@ -156,21 +175,30 @@ def file_fetch(source: str, dest: str, scope: FilesystemScope) -> Dict[str, Any]
     Path(dest).parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, dest)
     data = Path(dest).read_bytes()
-    return _ok(source=str(src), dest=str(dest), size_bytes=len(data), sha256=_sha256(data))
+    return _ok(
+        source=str(src), dest=str(dest), size_bytes=len(data), sha256=_sha256(data)
+    )
 
 
 # ── processes and services ─────────────────────────────────────────────────
 
-def process_list(*, limit: int = 200) -> Dict[str, Any]:
+
+def process_list(*, limit: int = 200) -> dict[str, Any]:
     try:
         import psutil
     except ImportError:
         return _deny("psutil is not available")
-    procs: List[Dict[str, Any]] = []
+    procs: list[dict[str, Any]] = []
     for proc in psutil.process_iter(["pid", "name", "username"]):
         try:
             info = proc.info
-            procs.append({"pid": info["pid"], "name": info.get("name", ""), "user": info.get("username", "")})
+            procs.append(
+                {
+                    "pid": info["pid"],
+                    "name": info.get("name", ""),
+                    "user": info.get("username", ""),
+                }
+            )
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
         if len(procs) >= limit:
@@ -178,7 +206,7 @@ def process_list(*, limit: int = 200) -> Dict[str, Any]:
     return _ok(processes=procs, total=len(procs))
 
 
-def process_kill(pid: int) -> Dict[str, Any]:
+def process_kill(pid: int) -> dict[str, Any]:
     try:
         import psutil
     except ImportError:
@@ -194,21 +222,25 @@ def process_kill(pid: int) -> Dict[str, Any]:
         return _deny(f"access denied terminating pid {pid}")
 
 
-def service_status(name: str) -> Dict[str, Any]:
+def service_status(name: str) -> dict[str, Any]:
     if not name.replace("-", "").replace("_", "").replace(".", "").isalnum():
         return _deny("invalid service name")
-    result = run_command(["systemctl", "is-active", name], CommandPolicy(allowed_binaries={"systemctl"}))
+    result = run_command(
+        ["systemctl", "is-active", name], CommandPolicy(allowed_binaries={"systemctl"})
+    )
     if not result["ok"]:
         return result
     return _ok(service=name, state=result["stdout"].strip() or "unknown")
 
 
-def service_control(name: str, action: str) -> Dict[str, Any]:
+def service_control(name: str, action: str) -> dict[str, Any]:
     if action not in {"start", "stop", "restart"}:
         return _deny("action must be start, stop, or restart")
     if not name.replace("-", "").replace("_", "").replace(".", "").isalnum():
         return _deny("invalid service name")
-    result = run_command(["systemctl", action, name], CommandPolicy(allowed_binaries={"systemctl"}))
+    result = run_command(
+        ["systemctl", action, name], CommandPolicy(allowed_binaries={"systemctl"})
+    )
     if not result["ok"]:
         return result
     return _ok(service=name, action=action, exit_code=result["exit_code"])
@@ -216,11 +248,16 @@ def service_control(name: str, action: str) -> Dict[str, Any]:
 
 # ── governed ad-hoc command ────────────────────────────────────────────────
 
+
 def run_command(
-    argv: Sequence[str], policy: CommandPolicy, *, timeout: int = _COMMAND_TIMEOUT,
-    cwd: str | None = None, env: Dict[str, str] | None = None,
+    argv: Sequence[str],
+    policy: CommandPolicy,
+    *,
+    timeout: int = _COMMAND_TIMEOUT,
+    cwd: str | None = None,
+    env: dict[str, str] | None = None,
     stdin: str | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run an argument-vector command after a policy + risk check.
 
     Never uses a shell; the command is a vector, the binary is allow/deny
@@ -237,8 +274,13 @@ def run_command(
     start = time.time()
     try:
         completed = subprocess.run(  # nosec B603 - vector, no shell, policy-checked
-            argv, capture_output=True, text=True, timeout=timeout, check=False,
-            cwd=cwd, env=env,
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            cwd=cwd,
+            env=env,
             input=stdin if stdin is not None else None,
             stdin=None if stdin is not None else subprocess.DEVNULL,
         )
@@ -258,7 +300,8 @@ def run_command(
 
 # ── tool discovery ─────────────────────────────────────────────────────────
 
-def list_tools(query: str = "", limit: int = 400) -> Dict[str, Any]:
+
+def list_tools(query: str = "", limit: int = 400) -> dict[str, Any]:
     """List command-line tools installed on this host by scanning ``$PATH``.
 
     READ-only and shell-free: enumerates executables on the PATH so the agent can
@@ -269,7 +312,7 @@ def list_tools(query: str = "", limit: int = 400) -> Dict[str, Any]:
     query = (query or "").strip().lower()
     limit = max(1, min(int(limit or 400), 5000))
     path_dirs = [d for d in os.environ.get("PATH", "").split(os.pathsep) if d]
-    seen: Dict[str, str] = {}
+    seen: dict[str, str] = {}
     truncated = False
     for directory in path_dirs:
         try:

@@ -1,14 +1,15 @@
 import json
 import re
 import uuid
+from collections.abc import Iterator
 from datetime import datetime
-from typing import Any, Dict, Iterator, Optional
+from typing import Any
 
 _FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
 _RESPONSE_KEYS = ("message", "action", "command", "decision_summary")
 
 
-def log_action(action: str, result: str, success: bool = False) -> Dict:
+def log_action(action: str, result: str, success: bool = False) -> dict:
     return {
         "id": str(uuid.uuid4()),
         "timestamp": datetime.now().isoformat(),
@@ -22,7 +23,7 @@ def _strip_code_fences(text: str) -> str:
     return _FENCE_RE.sub("", text.strip())
 
 
-def _try_load(candidate: str) -> Optional[Any]:
+def _try_load(candidate: str) -> Any | None:
     # strict=False tolerates literal control characters (newlines, tabs) that
     # models often emit unescaped inside string values.
     try:
@@ -59,7 +60,7 @@ def _iter_json_objects(text: str) -> Iterator[str]:
                 start = -1
 
 
-def parse_llm_response(response: str) -> Dict[str, Any]:
+def parse_llm_response(response: str) -> dict[str, Any]:
     """Extract a structured decision object from a model reply.
 
     Tolerates code fences, prose wrapped around the JSON, multiple objects, and
@@ -75,7 +76,7 @@ def parse_llm_response(response: str) -> Dict[str, Any]:
     if isinstance(whole, dict):
         return whole
 
-    fallback: Optional[Dict[str, Any]] = None
+    fallback: dict[str, Any] | None = None
     for candidate in _iter_json_objects(text):
         obj = _try_load(candidate)
         if not isinstance(obj, dict):
@@ -90,7 +91,9 @@ def parse_llm_response(response: str) -> Dict[str, Any]:
     stripped = response.strip()
     return {
         "decision_summary": "The model reply was not valid JSON; showing its raw text.",
-        "message": stripped[:2000] if stripped else "The model returned an empty response.",
+        "message": stripped[:2000]
+        if stripped
+        else "The model returned an empty response.",
         "action": None,
         "params": {},
     }

@@ -134,21 +134,32 @@ capability taxonomy.
 
 ## Extensibility
 
+Three tool sources sit behind one source-tagged capability registry
+(`decode/capabilities/registry.py`); the agent selects capabilities without
+caring where they came from, and every call still routes through the coordinator.
+
 - **Native capabilities** (`decode/hostcontrol/`, `decode/agents/host.py`): the
   first-class OS primitives listed above. New primitives are added here and wired
   through `HostAgent` — never as plugins.
-- **Markdown playbooks** (`decode/skills/markdown_skill.py`,
-  `decode/skills/playbooks/`, or `DECODE_PLAYBOOKS_DIR`): a `SKILL.md` file
-  is surfaced as a tool; invoking it returns its instructions, which the agent
-  carries out via governed `shell_command`. No Python wrapper required. This is
-  the sanctioned way to add repeatable procedures today.
-- **External-integration plugins** (planned): optional connectors to *external*
-  systems (issue trackers, cloud providers, scanners as a service, MCP servers).
-  Per the De-code plan these are always optional, never in-tree security tools.
-  The earlier in-process plugin loader and the manifest/sandbox/lifecycle code
-  (`decode/tools.py`, `decode/plugins/`) have been **removed**; see
-  [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md) for what a future plugin surface must
-  satisfy.
+- **System tools** (`list_tools` + `shell_command`): discovered on `$PATH` and
+  shell-driven. Deliberately **not** registered per-binary, so the architecture
+  never depends on cataloguing every tool.
+- **Markdown playbooks** (`decode/skills/markdown_skill.py`, `playbooks/`, or
+  `DECODE_PLAYBOOKS_DIR`): a `SKILL.md` surfaced as a tool; invoking it returns
+  instructions the agent carries out via governed `shell_command`. No Python.
+- **MCP servers** (`decode/extensions/mcp_manager.py`, `decode mcp …`): external
+  tool providers, discovered via `tools/list`, started lazily, namespaced per
+  server (`mongodb.find`), with a **declared** risk (MCP payloads are opaque, not
+  argv-classifiable). Executed through `MCPExecutor` under the coordinator.
+- **Plugin packages** (`decode/extensions/plugin_manager.py`, `decode plugin …`):
+  declarative bundles (manifest + markdown skills + MCP configs + docs) — never
+  in-process code, so no arbitrary-code-execution risk. Install verifies the
+  manifest and fails closed. See [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md).
+
+Configuration for the external providers is scoped (project > user > system;
+`~/.decode/`, `./.decode/`, `/etc/decode/`). The removed in-tree plugin loader
+(`decode/tools.py`, `decode/plugins/`) is gone; these declarative packages and
+external MCP providers replace it.
 
 ## Persistence and memory
 

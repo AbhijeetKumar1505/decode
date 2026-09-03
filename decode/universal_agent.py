@@ -21,9 +21,9 @@ from .models import (
 from .runtime import (
     ApprovalRequest,
     CoordinatedResult,
-    credential_refs_from_params,
     ExecutionCoordinator,
     ExecutionRequest,
+    credential_refs_from_params,
     redact_sensitive,
     target_from_params,
 )
@@ -93,7 +93,9 @@ class UniversalAgent:
             return self.llm
         return self.model_gateway.for_role(role)
 
-    def select_model(self, task_class: str = "analysis", **constraints: Any) -> RoutingDecision:
+    def select_model(
+        self, task_class: str = "analysis", **constraints: Any
+    ) -> RoutingDecision:
         """Policy-aware, reproducible model selection with a recorded public reason.
 
         Data and locality policy are hard filters; cost and latency optimize.
@@ -202,6 +204,7 @@ class UniversalAgent:
         approval_callback: Any = None,
         max_steps: int = 8,
         on_step: Any = None,
+        mcp_manager: Any = None,
     ) -> dict[str, Any]:
         """Drive a bounded tool-use loop over host + playbook capabilities.
 
@@ -248,7 +251,8 @@ class UniversalAgent:
             is_coding_capability,
             summarize_coding_result,
         )
-        from .capabilities.resolver import resolve_tools
+        from .capabilities.registry import build_registry
+        from .execution.mcp import MCPExecutor
 
         host_tools = list(host_capability_tools())
         skill_tools = [
@@ -259,9 +263,23 @@ class UniversalAgent:
             }
             for skill in self.skill_registry.get_all()
         ]
-        # Resolve the per-turn tool surface for this task's mode (coding vs
-        # security vs hybrid) instead of exposing everything.
-        tools = resolve_tools(task_state.mode, host_tools, skill_tools)
+        # External MCP tools (opt-in): discover from configured servers if a
+        # manager was supplied. Discovery failures never break the loop.
+        mcp_descriptors: list[Any] = []
+        if mcp_manager is not None:
+            try:
+                mcp_descriptors = await mcp_manager.available_tools()
+            except Exception:
+                mcp_descriptors = []
+        # One source-tagged registry over native/system/skill/MCP capabilities;
+        # the per-turn surface is resolved from it by task mode.
+        registry = build_registry(host_tools, skill_tools, mcp_descriptors)
+        tools = registry.resolve(task_state.mode)
+        _mcp_risk = {
+            "read": RiskLevel.READ,
+            "write": RiskLevel.WRITE,
+            "destructive": RiskLevel.DESTRUCTIVE,
+        }
 
         def _observe(result: Any) -> dict[str, Any]:
             ok = result.status == ExecutionStatus.SUCCESS
@@ -271,15 +289,56 @@ class UniversalAgent:
                 if getattr(result, "evidence", None) is not None
                 else {}
             )
+            if (
+                value is not None
+                and hasattr(value, "stdout")
+                and hasattr(value, "exit_code")
+            ):
+                # ExecutionResult (shell / MCP provider)
+                return {
+                    "success": ok,
+                    "summary": (getattr(value, "summary", "") or result.error or "")[
+                        :400
+                    ],
+                    "data": {
+                        "stdout": value.stdout,
+                        "stderr": value.stderr,
+                        "exit_code": value.exit_code,
+                    },
+                    "evidence": evidence,
+                }
             if hasattr(value, "normalized"):  # AgentResult (host capability)
-                return {"success": ok, "summary": (value.summary or result.error or "")[:400],
-                        "data": value.normalized, "evidence": evidence}
+                return {
+                    "success": ok,
+                    "summary": (value.summary or result.error or "")[:400],
+                    "data": value.normalized,
+                    "evidence": evidence,
+                }
             return {
                 "success": ok,
                 "summary": (result.error or "ok")[:400],
                 "data": redact_sensitive(value) if value is not None else {},
                 "evidence": evidence,
             }
+
+        async def _mcp_invoke(cap: Any, params: dict[str, Any]) -> dict[str, Any]:
+            from .runtime.coordinator import ExecutionRequest
+
+            command = MCPExecutor.encode(cap.tool, params)
+            request = ExecutionRequest(
+                action=cap.name,
+                risk=_mcp_risk.get(cap.risk, RiskLevel.WRITE),
+                executor=f"mcp/{cap.server}",
+                command=command,
+                params=params,
+                metadata={"source": "mcp", "server": cap.server, "tool": cap.tool},
+            )
+            executor = mcp_manager.executor_for(cap.server)
+
+            async def _op() -> Any:
+                return await executor.execute(command)
+
+            return _observe(await self._coordinator.execute(request, _op))
 
         async def invoke(name: str, params: dict[str, Any]) -> dict[str, Any]:
             if name in host_caps:
@@ -300,6 +359,9 @@ class UniversalAgent:
                     **summarize_coding_result(name, observation.get("data") or {}),
                 }
                 return observation
+            cap = registry.get(name)
+            if cap is not None and cap.source == "mcp":
+                return await _mcp_invoke(cap, params)
             return _observe(await self.execute_registered_skill(name, params))
 
         # Apply the loop's permission mode + approval prompt to the shared
@@ -314,14 +376,22 @@ class UniversalAgent:
         try:
             # Opt in to a reviewer-model verifier with DECODE_MODEL_REVIEW=1;
             # otherwise the deterministic rule-based verifier gates completion.
-            if os.getenv("DECODE_MODEL_REVIEW", "").strip().lower() in {"1", "true", "yes"}:
+            if os.getenv("DECODE_MODEL_REVIEW", "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+            }:
                 verifier: Any = ModelVerifier(self.provider_for_role("reviewer"))
             else:
                 verifier = Verifier()
             loop = ToolUseLoop(
-                self.provider_for_role("worker"), tools, invoke,
-                max_steps=max_steps, on_step=on_step,
-                task_state=task_state, verifier=verifier,
+                self.provider_for_role("worker"),
+                tools,
+                invoke,
+                max_steps=max_steps,
+                on_step=on_step,
+                task_state=task_state,
+                verifier=verifier,
             )
             return await loop.run(goal)
         finally:

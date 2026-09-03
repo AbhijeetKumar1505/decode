@@ -1,26 +1,26 @@
 import asyncio
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from pydantic import ValidationError
 
-from decode.governance import ScopePolicy, GovernanceGate, Decision
 from decode.audit import AuditLayer
 from decode.feedback import FeedbackStore
+from decode.governance import Decision, GovernanceGate, ScopePolicy
 from decode.logging_service import LoggingService
+from decode.persistence.evidence import ProtectedEvidenceStore
 from decode.runtime import (
     ApprovalGrant,
-    credential_refs_from_params,
     ExecutionCoordinator,
     ExecutionErrorCategory,
     ExecutionIdentity,
     ExecutionRequest,
     ExecutionStatus,
+    credential_refs_from_params,
     redact_sensitive,
 )
-from decode.persistence.evidence import ProtectedEvidenceStore
 from decode.skills.base import RiskLevel
 
 
@@ -68,7 +68,8 @@ class TestGovernanceGate(unittest.TestCase):
         audit = AuditLayer(base_path=Path(self.tmp))
         gate = GovernanceGate(
             ScopePolicy(allowed=allowed, allow_all=allow_all),
-            audit=audit, allow_destructive=allow_destructive,
+            audit=audit,
+            allow_destructive=allow_destructive,
         )
         return gate, audit
 
@@ -122,7 +123,6 @@ class TestGovernanceGate(unittest.TestCase):
         self.assertEqual(decision.decision, Decision.DENY)
         self.assertIn("target is required", decision.reason)
         self.assertTrue(any(event.event == "rejection" for event in audit.query()))
-
 
     def test_scope_beats_risk(self):
         # Even a READ capability is denied when the target is out of scope.
@@ -202,7 +202,7 @@ class TestExecutionCoordinator(unittest.TestCase):
                 approvals[0].execution_identity.adapter_version,
                 "1.0.0",
             )
-            self.assertGreater(approvals[0].expires_at, datetime.now(timezone.utc))
+            self.assertGreater(approvals[0].expires_at, datetime.now(UTC))
             self.assertIsNotNone(result.evidence)
             evidence_store = ProtectedEvidenceStore(root / "evidence" / "executions")
             self.assertTrue(evidence_store.verify(result.evidence))
@@ -264,7 +264,7 @@ class TestExecutionCoordinator(unittest.TestCase):
                 executed = []
 
                 async def approve(request):
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     return ApprovalGrant(
                         digest="0" * 64 if case == "mismatched" else request.digest,
                         approved_at=now - timedelta(seconds=2),
@@ -360,7 +360,9 @@ class TestExecutionCoordinator(unittest.TestCase):
             result = asyncio.run(coordinator.execute(request, operation))
 
             self.assertEqual(result.status, ExecutionStatus.DENIED)
-            self.assertEqual(result.error_category, ExecutionErrorCategory.POLICY_DENIAL)
+            self.assertEqual(
+                result.error_category, ExecutionErrorCategory.POLICY_DENIAL
+            )
             self.assertEqual(executed, [])
             self.assertTrue(logging.get_logs())
             self.assertTrue(feedback.get_execution_feedback("port_scan"))
@@ -399,7 +401,6 @@ class TestExecutionCoordinator(unittest.TestCase):
             self.assertEqual(executed, [])
             self.assertTrue(logging.get_logs())
             self.assertTrue(feedback.get_execution_feedback("port_scan"))
-
 
     def test_missing_dependency_blocks_before_governance_and_execution(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -575,7 +576,7 @@ class TestExecutionCoordinator(unittest.TestCase):
             audit, logging, feedback = self._services(root)
 
             async def operation():
-                raise asyncio.TimeoutError
+                raise TimeoutError
 
             coordinator = ExecutionCoordinator(
                 GovernanceGate(ScopePolicy(allow_all=True), audit=audit),
@@ -673,7 +674,7 @@ class TestExecutionCoordinator(unittest.TestCase):
         self.assertNotEqual(first.approval_digest(), second.approval_digest())
 
     def test_approval_digest_binds_privilege_credentials_and_expiry(self):
-        expiry = datetime.now(timezone.utc) + timedelta(minutes=5)
+        expiry = datetime.now(UTC) + timedelta(minutes=5)
         base = ExecutionRequest(
             action="port_scan",
             target="192.0.2.10",
@@ -722,5 +723,7 @@ class TestExecutionCoordinator(unittest.TestCase):
             credential_refs_from_params(params),
             ["request-param:api_key"],
         )
+
+
 if __name__ == "__main__":
     unittest.main()

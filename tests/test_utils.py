@@ -7,7 +7,9 @@ INVALID = "The model returned an invalid structured response."
 
 class TestParseLLMResponse(unittest.TestCase):
     def test_plain_object(self):
-        self.assertEqual(parse_llm_response('{"message": "hi", "action": null}')["message"], "hi")
+        self.assertEqual(
+            parse_llm_response('{"message": "hi", "action": null}')["message"], "hi"
+        )
 
     def test_prose_before_json(self):
         out = parse_llm_response('Analysis follows.\n{"message": "ok", "action": null}')
@@ -19,11 +21,15 @@ class TestParseLLMResponse(unittest.TestCase):
 
     def test_json_then_trailing_prose_with_brace(self):
         # The exact host_profiler failure: valid JSON, then commentary with a brace.
-        out = parse_llm_response('{"message": "profiled", "action": null}\nNote: services {truncated}')
+        out = parse_llm_response(
+            '{"message": "profiled", "action": null}\nNote: services {truncated}'
+        )
         self.assertEqual(out["message"], "profiled")
 
     def test_multiple_objects_prefers_decision_shaped(self):
-        out = parse_llm_response('{"a": 1}\nand then\n{"message": "second", "action": null}')
+        out = parse_llm_response(
+            '{"a": 1}\nand then\n{"message": "second", "action": null}'
+        )
         self.assertEqual(out["message"], "second")
 
     def test_unescaped_newlines_in_value(self):

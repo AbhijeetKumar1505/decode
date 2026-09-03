@@ -1,5 +1,7 @@
+from collections.abc import Callable
 from enum import Enum
-from typing import Dict, Any, Optional, Callable
+from typing import Any
+
 from ..skills.base import RiskLevel
 
 
@@ -10,10 +12,10 @@ class Permission(str, Enum):
 
 
 class SafetyController:
-    def __init__(self, approval_callback: Optional[Callable] = None):
+    def __init__(self, approval_callback: Callable | None = None):
         self._approval_callback = approval_callback
         self._prohibited_actions: list[str] = []
-        self._override_rules: Dict[str, Permission] = {}
+        self._override_rules: dict[str, Permission] = {}
 
     def prohibit(self, action: str):
         self._prohibited_actions.append(action.lower())
@@ -22,7 +24,7 @@ class SafetyController:
         self._override_rules[skill_name.lower()] = permission
 
     async def check(
-        self, skill_name: str, risk_level: RiskLevel, params: Dict[str, Any]
+        self, skill_name: str, risk_level: RiskLevel, params: dict[str, Any]
     ) -> Permission:
         skill_lower = skill_name.lower()
         if skill_lower in self._override_rules:

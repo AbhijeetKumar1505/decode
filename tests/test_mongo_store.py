@@ -47,7 +47,11 @@ class TestMongoStoreContract(unittest.TestCase):
 
         fid = self.store.add_finding(sid, title="Open port", severity="low")
         eid = self.store.add_evidence(
-            sid, type="command_output", label="scan", data={"ports": [80]}, finding_id=fid
+            sid,
+            type="command_output",
+            label="scan",
+            data={"ports": [80]},
+            finding_id=fid,
         )
         finding = self.store.get_findings(sid)[0]
         self.assertIn(eid, finding["evidence_ids"])
@@ -63,7 +67,8 @@ class TestMongoStoreContract(unittest.TestCase):
         memory = MemoryManager(self.store, project_id=pid)
         memory.project.remember("host", "192.0.2.10", "lab host")
         memory.knowledge.learn(
-            "Nginx", "Observed service",
+            "Nginx",
+            "Observed service",
             provenance={"source": "evidence:123", "verification": "observed"},
         )
 
@@ -87,7 +92,9 @@ class TestSqliteToMongoMigration(unittest.TestCase):
         sqlite = SessionStore(db_path=Path(tmp.name) / "decode.db")
         sid = sqlite.create_session(goal="legacy")
         fid = sqlite.add_finding(sid, title="legacy finding")
-        sqlite.add_evidence(sid, type="command_output", label="e", data={"a": 1}, finding_id=fid)
+        sqlite.add_evidence(
+            sid, type="command_output", label="e", data={"a": 1}, finding_id=fid
+        )
         sqlite.close()
 
         mongo = _mongo_store(tmp.name)

@@ -1,21 +1,19 @@
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 from .evidence import ProtectedEvidenceStore
 
 
 class SessionStore:
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or Path("data/decode.db")
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._evidence_store = ProtectedEvidenceStore(
-            self._db_path.parent / "evidence"
-        )
-        self._conn: Optional[sqlite3.Connection] = None
+        self._evidence_store = ProtectedEvidenceStore(self._db_path.parent / "evidence")
+        self._conn: sqlite3.Connection | None = None
         self._connect()
         self._init_schema()
 
@@ -168,7 +166,7 @@ class SessionStore:
         self._conn.commit()
 
     def _now(self) -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     def _new_id(self) -> str:
         return str(uuid.uuid4())
@@ -185,13 +183,13 @@ class SessionStore:
         self._conn.commit()
         return sid
 
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session(self, session_id: str) -> dict[str, Any] | None:
         row = self._conn.execute(
             "SELECT * FROM sessions WHERE id = ?", (session_id,)
         ).fetchone()
         return dict(row) if row else None
 
-    def list_sessions(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_sessions(self, limit: int = 20) -> list[dict[str, Any]]:
         rows = self._conn.execute(
             "SELECT * FROM sessions ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
@@ -221,7 +219,7 @@ class SessionStore:
         ip: str = "",
         domain: str = "",
         os: str = "",
-        metadata: Optional[Dict] = None,
+        metadata: dict | None = None,
     ) -> str:
         existing = self._conn.execute(
             "SELECT * FROM targets WHERE session_id = ? AND (hostname = ? OR ip_address = ?) AND hostname != ''",
@@ -254,7 +252,7 @@ class SessionStore:
         self._conn.commit()
         return tid
 
-    def get_target(self, target_id: str) -> Optional[Dict[str, Any]]:
+    def get_target(self, target_id: str) -> dict[str, Any] | None:
         row = self._conn.execute(
             "SELECT * FROM targets WHERE id = ?", (target_id,)
         ).fetchone()
@@ -264,7 +262,7 @@ class SessionStore:
             return d
         return None
 
-    def get_targets(self, session_id: str) -> List[Dict[str, Any]]:
+    def get_targets(self, session_id: str) -> list[dict[str, Any]]:
         rows = self._conn.execute(
             "SELECT * FROM targets WHERE session_id = ? ORDER BY last_seen DESC",
             (session_id,),
@@ -317,7 +315,7 @@ class SessionStore:
         self._conn.commit()
         return pid
 
-    def get_ports(self, target_id: str) -> List[Dict[str, Any]]:
+    def get_ports(self, target_id: str) -> list[dict[str, Any]]:
         rows = self._conn.execute(
             "SELECT * FROM ports WHERE target_id = ? ORDER BY port", (target_id,)
         ).fetchall()
@@ -336,7 +334,7 @@ class SessionStore:
         technique_id: str = "",
         mitre_tactic: str = "",
         confidence: str = "medium",
-        target_id: Optional[str] = None,
+        target_id: str | None = None,
     ) -> str:
         fid = self._new_id()
         now = self._now()
@@ -361,8 +359,8 @@ class SessionStore:
         return fid
 
     def get_findings(
-        self, session_id: str, severity: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self, session_id: str, severity: str | None = None
+    ) -> list[dict[str, Any]]:
         if severity:
             rows = self._conn.execute(
                 "SELECT * FROM findings WHERE session_id = ? AND severity = ? ORDER BY created_at DESC",
@@ -396,9 +394,9 @@ class SessionStore:
         session_id: str,
         type: str,
         label: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         source: str = "",
-        finding_id: Optional[str] = None,
+        finding_id: str | None = None,
     ) -> str:
         eid = self._new_id()
         now = self._now()
@@ -422,8 +420,8 @@ class SessionStore:
         return eid
 
     def get_evidence(
-        self, session_id: Optional[str] = None, finding_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self, session_id: str | None = None, finding_id: str | None = None
+    ) -> list[dict[str, Any]]:
         if finding_id:
             rows = self._conn.execute(
                 "SELECT * FROM evidence WHERE finding_id = ? ORDER BY created_at",
@@ -440,7 +438,7 @@ class SessionStore:
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_session_context(self, session_id: str) -> Dict[str, Any]:
+    def get_session_context(self, session_id: str) -> dict[str, Any]:
         session = self.get_session(session_id)
         if not session:
             return {}
@@ -469,13 +467,13 @@ class SessionStore:
         self._conn.commit()
         return pid
 
-    def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
+    def get_project(self, project_id: str) -> dict[str, Any] | None:
         row = self._conn.execute(
             "SELECT * FROM projects WHERE id = ?", (project_id,)
         ).fetchone()
         return dict(row) if row else None
 
-    def list_projects(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def list_projects(self, limit: int = 50) -> list[dict[str, Any]]:
         rows = self._conn.execute(
             "SELECT * FROM projects ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()
@@ -488,24 +486,33 @@ class SessionStore:
         type: str,
         key: str,
         value: str = "",
-        session_id: Optional[str] = None,
-        project_id: Optional[str] = None,
+        session_id: str | None = None,
+        project_id: str | None = None,
         sensitive: bool = False,
     ) -> str:
         aid = self._new_id()
         self._conn.execute(
             "INSERT INTO artifacts (id, project_id, session_id, type, key, value, sensitive, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (aid, project_id, session_id, type, key, value, 1 if sensitive else 0, self._now()),
+            (
+                aid,
+                project_id,
+                session_id,
+                type,
+                key,
+                value,
+                1 if sensitive else 0,
+                self._now(),
+            ),
         )
         self._conn.commit()
         return aid
 
     def get_artifacts(
         self,
-        session_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        type: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        session_id: str | None = None,
+        project_id: str | None = None,
+        type: str | None = None,
+    ) -> list[dict[str, Any]]:
         clauses, params = [], []
         if session_id:
             clauses.append("session_id = ?")
@@ -526,7 +533,7 @@ class SessionStore:
 
     # ── Durable plans and safe recovery ─────────────────────────────────
 
-    def save_plan(self, session_id: str, plan: Dict[str, Any]) -> List[str]:
+    def save_plan(self, session_id: str, plan: dict[str, Any]) -> list[str]:
         """Persist a plan and return node IDs whose material action changed."""
         existing = {
             row["node_id"]: row["material_fingerprint"]
@@ -535,7 +542,7 @@ class SessionStore:
                 (session_id,),
             ).fetchall()
         }
-        changed: List[str] = []
+        changed: list[str] = []
         now = self._now()
         self._conn.execute(
             "INSERT INTO missions (session_id, plan_json, updated_at) VALUES (?, ?, ?) "
@@ -547,7 +554,9 @@ class SessionStore:
             if not fingerprint:
                 raise ValueError("persisted plan nodes require material_fingerprint")
             prior = existing.get(node_id)
-            status = node.get("status", "pending") if prior == fingerprint else "pending"
+            status = (
+                node.get("status", "pending") if prior == fingerprint else "pending"
+            )
             if prior is not None and prior != fingerprint:
                 changed.append(node_id)
             self._conn.execute(
@@ -556,12 +565,19 @@ class SessionStore:
                 "ON CONFLICT(session_id, node_id) DO UPDATE SET material_fingerprint = excluded.material_fingerprint, "
                 "idempotency_key = excluded.idempotency_key, status = CASE WHEN mission_nodes.material_fingerprint = excluded.material_fingerprint THEN mission_nodes.status ELSE excluded.status END, "
                 "updated_at = excluded.updated_at",
-                (session_id, node_id, fingerprint, node.get("idempotency_key", ""), status, now),
+                (
+                    session_id,
+                    node_id,
+                    fingerprint,
+                    node.get("idempotency_key", ""),
+                    status,
+                    now,
+                ),
             )
         self._conn.commit()
         return changed
 
-    def load_plan(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def load_plan(self, session_id: str) -> dict[str, Any] | None:
         row = self._conn.execute(
             "SELECT plan_json FROM missions WHERE session_id = ?", (session_id,)
         ).fetchone()
@@ -595,7 +611,7 @@ class SessionStore:
         )
         self._conn.commit()
 
-    def recover_interrupted_plan(self, session_id: str) -> List[str]:
+    def recover_interrupted_plan(self, session_id: str) -> list[str]:
         """Fence interrupted work: never replay an ambiguous operation automatically."""
         rows = self._conn.execute(
             "SELECT node_id FROM mission_nodes WHERE session_id = ? AND status = 'running'",
@@ -611,12 +627,18 @@ class SessionStore:
             self._conn.commit()
         return node_ids
 
-    def reset_retryable_node(self, session_id: str, node_id: str, max_attempts: int) -> bool:
+    def reset_retryable_node(
+        self, session_id: str, node_id: str, max_attempts: int
+    ) -> bool:
         row = self._conn.execute(
             "SELECT status, attempts FROM mission_nodes WHERE session_id = ? AND node_id = ?",
             (session_id, node_id),
         ).fetchone()
-        if not row or row["status"] not in {"error", "timeout"} or row["attempts"] >= max_attempts:
+        if (
+            not row
+            or row["status"] not in {"error", "timeout"}
+            or row["attempts"] >= max_attempts
+        ):
             return False
         self.checkpoint_plan_node(session_id, node_id, "pending", "retry requested")
         return True
@@ -633,7 +655,7 @@ class SessionStore:
         )
         self._conn.commit()
 
-    def load_task_state(self, session_id: str) -> Optional[str]:
+    def load_task_state(self, session_id: str) -> str | None:
         row = self._conn.execute(
             "SELECT state_json FROM task_state WHERE session_id = ?", (session_id,)
         ).fetchone()
@@ -642,28 +664,56 @@ class SessionStore:
     # ── Project-isolated knowledge and memory lifecycle ─────────────────
 
     def add_project_knowledge_node(
-        self, project_id: str, type: str, name: str, description: str = "", provenance: Optional[Dict[str, Any]] = None
+        self,
+        project_id: str,
+        type: str,
+        name: str,
+        description: str = "",
+        provenance: dict[str, Any] | None = None,
     ) -> str:
         node_id = self._new_id()
         self._conn.execute(
             "INSERT INTO project_knowledge_nodes (id, project_id, type, name, description, provenance, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (node_id, project_id, type, name, description, json.dumps(provenance or {}), self._now()),
+            (
+                node_id,
+                project_id,
+                type,
+                name,
+                description,
+                json.dumps(provenance or {}),
+                self._now(),
+            ),
         )
         self._conn.commit()
         return node_id
 
     def add_project_knowledge_edge(
-        self, project_id: str, source_id: str, target_id: str, relationship: str, provenance: Optional[Dict[str, Any]] = None
+        self,
+        project_id: str,
+        source_id: str,
+        target_id: str,
+        relationship: str,
+        provenance: dict[str, Any] | None = None,
     ) -> str:
         edge_id = self._new_id()
         self._conn.execute(
             "INSERT INTO project_knowledge_edges (id, project_id, source_id, target_id, relationship, provenance, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (edge_id, project_id, source_id, target_id, relationship, json.dumps(provenance or {}), self._now()),
+            (
+                edge_id,
+                project_id,
+                source_id,
+                target_id,
+                relationship,
+                json.dumps(provenance or {}),
+                self._now(),
+            ),
         )
         self._conn.commit()
         return edge_id
 
-    def search_project_knowledge(self, project_id: str, query: str) -> List[Dict[str, Any]]:
+    def search_project_knowledge(
+        self, project_id: str, query: str
+    ) -> list[dict[str, Any]]:
         words = [word for word in query.lower().split() if word]
         if not words:
             return []
@@ -683,38 +733,62 @@ class SessionStore:
         self._conn.commit()
         return event_id
 
-    def export_project(self, project_id: str, include_sensitive: bool = False) -> Dict[str, Any]:
+    def export_project(
+        self, project_id: str, include_sensitive: bool = False
+    ) -> dict[str, Any]:
         project = self.get_project(project_id)
         if project is None:
             raise ValueError("unknown project")
         artifacts = self.get_artifacts(project_id=project_id)
         if not include_sensitive:
-            artifacts = [{**item, "value": "[REDACTED]"} if item["sensitive"] else item for item in artifacts]
+            artifacts = [
+                {**item, "value": "[REDACTED]"} if item["sensitive"] else item
+                for item in artifacts
+            ]
         nodes = self._conn.execute(
-            "SELECT * FROM project_knowledge_nodes WHERE project_id = ? ORDER BY created_at", (project_id,)
+            "SELECT * FROM project_knowledge_nodes WHERE project_id = ? ORDER BY created_at",
+            (project_id,),
         ).fetchall()
         edges = self._conn.execute(
-            "SELECT * FROM project_knowledge_edges WHERE project_id = ? ORDER BY created_at", (project_id,)
+            "SELECT * FROM project_knowledge_edges WHERE project_id = ? ORDER BY created_at",
+            (project_id,),
         ).fetchall()
-        self.record_memory_event(project_id, "export", "sensitive=" + str(include_sensitive).lower())
-        return {"project": project, "artifacts": artifacts, "knowledge_nodes": [dict(row) for row in nodes], "knowledge_edges": [dict(row) for row in edges]}
+        self.record_memory_event(
+            project_id, "export", "sensitive=" + str(include_sensitive).lower()
+        )
+        return {
+            "project": project,
+            "artifacts": artifacts,
+            "knowledge_nodes": [dict(row) for row in nodes],
+            "knowledge_edges": [dict(row) for row in edges],
+        }
 
-    def compress_project_artifacts(self, project_id: str) -> Optional[str]:
+    def compress_project_artifacts(self, project_id: str) -> str | None:
         artifacts = self.get_artifacts(project_id=project_id)
         if not artifacts:
             return None
         types = sorted({item["type"] for item in artifacts})
         summary = f"{len(artifacts)} retained artifacts across: {', '.join(types)}"
-        artifact_id = self.add_artifact("memory_summary", "project_summary", summary, project_id=project_id)
-        self.record_memory_event(project_id, "compression", "source_artifacts=" + str(len(artifacts)))
+        artifact_id = self.add_artifact(
+            "memory_summary", "project_summary", summary, project_id=project_id
+        )
+        self.record_memory_event(
+            project_id, "compression", "source_artifacts=" + str(len(artifacts))
+        )
         return artifact_id
 
     def delete_project_memory(self, project_id: str) -> int:
-        artifacts = self._conn.execute("SELECT COUNT(*) AS count FROM artifacts WHERE project_id = ?", (project_id,)).fetchone()["count"]
-        self.record_memory_event(project_id, "deletion_requested", "artifact_count=" + str(artifacts))
+        artifacts = self._conn.execute(
+            "SELECT COUNT(*) AS count FROM artifacts WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()["count"]
+        self.record_memory_event(
+            project_id, "deletion_requested", "artifact_count=" + str(artifacts)
+        )
         self._conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         self._conn.commit()
         return artifacts
+
     def close(self):
         if self._conn:
             self._conn.close()

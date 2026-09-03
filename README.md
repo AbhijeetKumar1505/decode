@@ -32,7 +32,7 @@ It is designed for security researchers, penetration testers, students, and defe
 
 ### Roadmap
 
-The verified implementation baseline and prioritized release gates are maintained in [ROADMAP.md](ROADMAP.md). Execution governance, universal capability/tool convergence, planning/recovery/memory, model orchestration, and Kali coverage are in place; the in-tree plugin SDK was built and then **removed** in favor of markdown playbooks and native capabilities. The current direction is the De-code subsystem plan — the task-state spine (Neural Schema, prompt composition, a verification pass, and role→model routing) — described in [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md).
+The verified implementation baseline and prioritized release gates are maintained in [ROADMAP.md](ROADMAP.md). Execution governance, universal capability/tool convergence, planning/recovery/memory, model orchestration, and Kali coverage are in place; the in-tree plugin SDK was built and then **removed** in favor of markdown playbooks and native capabilities. The De-code task-state spine (Neural Schema, prompt composition, verification/replan, role→model routing) is now implemented, along with the extension layer — MCP servers and declarative plugin packages behind a unified capability registry (`decode mcp …` / `decode plugin …`), with scoped config. See [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) and [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md).
 
 ## Architecture
 
@@ -207,6 +207,19 @@ Drop `.md` files in `decode/skills/playbooks/`, or point
 `DECODE_PLAYBOOKS_DIR` at your own directory. See
 [decode/skills/playbooks/web_recon.md](decode/skills/playbooks/web_recon.md)
 for a complete example.
+
+### Bundled engineering playbooks
+
+Beyond the security playbooks, Decode ships a vendored copy of the
+[mattpocock/skills](https://github.com/mattpocock/skills) engineering and
+productivity set — TDD, code review, domain modeling, bug diagnosis, spec/ticket
+writing, grilling, and more. Each upstream skill is imported as a single
+consolidated playbook (companion reference files inlined) with frontmatter
+conformed to Decode's schema (`category: agent_core`, `risk: READ`), so the agent
+surfaces them as guidance tools like any other playbook. They are discovered
+automatically from `decode/skills/playbooks/`. Because a playbook only returns
+guidance — the agent still executes every step through governed `shell_command` —
+these general-purpose procedures inherit the same scope, risk, and audit controls.
 
 ## Contributing
 

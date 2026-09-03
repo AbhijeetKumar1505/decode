@@ -45,7 +45,9 @@ class TestDelegation(unittest.TestCase):
         )
 
     def test_subset_delegation_succeeds(self):
-        child = self._parent().delegate("child", ["port_scan"], maximum_risk=RiskLevel.READ, token_budget=400)
+        child = self._parent().delegate(
+            "child", ["port_scan"], maximum_risk=RiskLevel.READ, token_budget=400
+        )
         self.assertEqual(child.capabilities, ["port_scan"])
         self.assertEqual(child.permissions.maximum_risk, RiskLevel.READ)
         self.assertEqual(child.limits.token_budget, 400)
@@ -57,7 +59,9 @@ class TestDelegation(unittest.TestCase):
 
     def test_cannot_raise_risk(self):
         with self.assertRaises(ValueError):
-            self._parent().delegate("child", ["port_scan"], maximum_risk=RiskLevel.DESTRUCTIVE)
+            self._parent().delegate(
+                "child", ["port_scan"], maximum_risk=RiskLevel.DESTRUCTIVE
+            )
 
     def test_cannot_raise_budget(self):
         with self.assertRaises(ValueError):
@@ -65,7 +69,9 @@ class TestDelegation(unittest.TestCase):
 
     def test_cannot_add_memory_scope(self):
         with self.assertRaises(ValueError):
-            self._parent().delegate("child", ["port_scan"], memory_write=["credentials"])
+            self._parent().delegate(
+                "child", ["port_scan"], memory_write=["credentials"]
+            )
 
     def test_depth_is_exhausted(self):
         child = self._parent().delegate("child", ["port_scan"])
@@ -116,23 +122,34 @@ class TestModelRegistryAndRouting(unittest.TestCase):
         self.assertEqual(self.router.route(r).model_id, self.router.route(r).model_id)
 
     def test_local_only_fails_closed(self):
-        decision = self.router.route(RoutingRequest(task_class="analysis", local_only=True))
+        decision = self.router.route(
+            RoutingRequest(task_class="analysis", local_only=True)
+        )
         self.assertFalse(decision.selected)
         self.assertIn("local", decision.reason)
 
     def test_confidential_data_forces_local_and_fails(self):
-        decision = self.router.route(RoutingRequest(task_class="analysis", data_classification="confidential"))
+        decision = self.router.route(
+            RoutingRequest(task_class="analysis", data_classification="confidential")
+        )
         self.assertFalse(decision.selected)
         self.assertIn("confidential-local", decision.matched_rules)
 
     def test_allowlist_filters(self):
-        decision = self.router.route(RoutingRequest(task_class="analysis", allowlist=["openai"]))
+        decision = self.router.route(
+            RoutingRequest(task_class="analysis", allowlist=["openai"])
+        )
         self.assertEqual(decision.model_id, "openai/gpt-4o")
 
     def test_pinned_model(self):
-        decision = self.router.route(RoutingRequest(pinned_model="openrouter/z-ai/glm-5.2:free"))
+        decision = self.router.route(
+            RoutingRequest(pinned_model="openrouter/z-ai/glm-5.2:free")
+        )
         self.assertEqual(decision.model_id, "openrouter/z-ai/glm-5.2:free")
-        self.assertEqual(self.router.route(RoutingRequest(pinned_model="ghost/model")).selected, False)
+        self.assertEqual(
+            self.router.route(RoutingRequest(pinned_model="ghost/model")).selected,
+            False,
+        )
 
     def test_fallback_stays_in_locality_and_exhausts(self):
         first = self.router.route(RoutingRequest(task_class="planning"))
@@ -140,14 +157,22 @@ class TestModelRegistryAndRouting(unittest.TestCase):
         self.assertTrue(second.selected)
         self.assertNotEqual(second.model_id, first.model_id)
         # every fallback stays hosted (no locality crossing)
-        self.assertEqual(self.registry.get(second.model_id).data_policy.locality, "hosted")
+        self.assertEqual(
+            self.registry.get(second.model_id).data_policy.locality, "hosted"
+        )
         third = self.router.fallback(second, RoutingRequest(task_class="planning"))
         exhausted = self.router.fallback(third, RoutingRequest(task_class="planning"))
         self.assertFalse(exhausted.selected)
 
     def test_fallback_disabled(self):
-        first = self.router.route(RoutingRequest(task_class="planning", allow_fallback=False))
-        self.assertFalse(self.router.fallback(first, RoutingRequest(task_class="planning", allow_fallback=False)).selected)
+        first = self.router.route(
+            RoutingRequest(task_class="planning", allow_fallback=False)
+        )
+        self.assertFalse(
+            self.router.fallback(
+                first, RoutingRequest(task_class="planning", allow_fallback=False)
+            ).selected
+        )
 
     def test_data_policy_accepts(self):
         policy = DataPolicy(max_classification="internal")
@@ -186,13 +211,20 @@ class TestEvaluationDatasets(unittest.TestCase):
 
     def test_all_four_datasets_load(self):
         names = available_datasets(self.DIR)
-        for expected in ("planning", "structured_output", "evidence_use", "prompt_injection"):
+        for expected in (
+            "planning",
+            "structured_output",
+            "evidence_use",
+            "prompt_injection",
+        ):
             self.assertIn(expected, names)
             load_dataset(expected, self.DIR)  # validates ids and structure
 
     def test_structured_output_scorer(self):
         case = load_dataset("structured_output", self.DIR)["cases"][0]
-        ok, _ = score_structured_output(case, {"title": "t", "severity": "high", "description": "d"})
+        ok, _ = score_structured_output(
+            case, {"title": "t", "severity": "high", "description": "d"}
+        )
         self.assertTrue(ok)
         bad, _ = score_structured_output(case, {"title": "t"})
         self.assertFalse(bad)
@@ -203,7 +235,9 @@ class TestEvaluationDatasets(unittest.TestCase):
         self.assertTrue(ok)
         wrong, _ = score_planning(case, ["port_scan", "host_discovery", "report"])
         self.assertFalse(wrong)
-        forbidden, _ = score_planning(case, ["host_discovery", "port_scan", "report", "password_attack"])
+        forbidden, _ = score_planning(
+            case, ["host_discovery", "port_scan", "report", "password_attack"]
+        )
         self.assertFalse(forbidden)
 
     def test_evidence_scorer_rejects_fabrication(self):

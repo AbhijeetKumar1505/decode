@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from decode.memory import SENSITIVE_TYPES, MemoryManager, ProjectMemory, SessionMemory
 from decode.persistence.store import SessionStore
-from decode.memory import SessionMemory, ProjectMemory, MemoryManager, SENSITIVE_TYPES
 
 
 class TestStoreProjectsArtifacts(unittest.TestCase):
@@ -23,7 +23,9 @@ class TestStoreProjectsArtifacts(unittest.TestCase):
     def test_artifact_filtering(self):
         pid = self.store.create_project(name="p")
         self.store.add_artifact("host", "10.0.0.5", project_id=pid)
-        self.store.add_artifact("credential", "admin", "hunter2", project_id=pid, sensitive=True)
+        self.store.add_artifact(
+            "credential", "admin", "hunter2", project_id=pid, sensitive=True
+        )
         hosts = self.store.get_artifacts(project_id=pid, type="host")
         self.assertEqual(len(hosts), 1)
         self.assertEqual(hosts[0]["key"], "10.0.0.5")

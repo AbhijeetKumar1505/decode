@@ -1,12 +1,13 @@
 import importlib
 import pkgutil
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from .base import Skill, SkillCategory
 
 
 class SkillRegistry:
     def __init__(self):
-        self._skills: Dict[str, Skill] = {}
+        self._skills: dict[str, Skill] = {}
         self._load_skills()
 
     def _load_skills(self):
@@ -62,19 +63,19 @@ class SkillRegistry:
                         continue
                     self._skills[instance.spec.name] = instance
 
-    def get_all(self) -> List[Skill]:
+    def get_all(self) -> list[Skill]:
         return list(self._skills.values())
 
-    def get(self, name: str) -> Optional[Skill]:
+    def get(self, name: str) -> Skill | None:
         return self._skills.get(name)
 
-    def find_by_category(self, category: SkillCategory) -> List[Skill]:
+    def find_by_category(self, category: SkillCategory) -> list[Skill]:
         return [s for s in self._skills.values() if s.spec.category == category]
 
-    def find_by_tags(self, tags: List[str]) -> List[Skill]:
+    def find_by_tags(self, tags: list[str]) -> list[Skill]:
         return [s for s in self._skills.values() if any(t in s.spec.tags for t in tags)]
 
-    def search(self, query: str) -> List[Skill]:
+    def search(self, query: str) -> list[Skill]:
         query = query.lower()
         return [
             s
@@ -84,14 +85,14 @@ class SkillRegistry:
             or any(query in t.lower() for t in s.spec.tags)
         ]
 
-    def execute(self, name: str, **params) -> Dict[str, Any]:
+    def execute(self, name: str, **params) -> dict[str, Any]:
         if not self.get(name):
             raise ValueError(f"Skill '{name}' not found")
         raise RuntimeError(
             "Direct SkillRegistry execution is disabled; use ExecutionCoordinator"
         )
 
-    def list_summary(self) -> List[Dict[str, Any]]:
+    def list_summary(self) -> list[dict[str, Any]]:
         return [
             {
                 "name": s.spec.name,

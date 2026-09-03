@@ -1,5 +1,5 @@
-import asyncio
 import ast
+import asyncio
 import sys
 import tempfile
 import unittest
@@ -9,14 +9,14 @@ from unittest import mock
 from decode.audit import AuditLayer
 from decode.bootstrap.engine import BootstrapEngine
 from decode.execution import (
+    DockerExecutor,
     ExecutionResult,
     LocalExecutor,
-    DockerExecutor,
-    WSLExecutor,
-    SSHExecutor,
     MCPExecutor,
-    create_executor,
+    SSHExecutor,
+    WSLExecutor,
     available_provider_names,
+    create_executor,
 )
 from decode.execution.base import require_governed_external_io
 from decode.governance import GovernanceGate, ScopePolicy
@@ -89,7 +89,9 @@ class TestExecutionResult(unittest.TestCase):
         self.assertIn("Error:", r.summary)
 
     def test_summary_timeout(self):
-        r = ExecutionResult(command="sleep 99", success=False, timed_out=True, duration=5.0)
+        r = ExecutionResult(
+            command="sleep 99", success=False, timed_out=True, duration=5.0
+        )
         self.assertIn("Timed out", r.summary)
 
     def test_argument_vector_has_a_stable_display_and_versioned_result(self):
@@ -214,9 +216,7 @@ class TestFactory(unittest.TestCase):
         self.assertIn("example.com", ex.name)
 
     def test_wsl_argument_vector_does_not_use_shell_wrapper(self):
-        argv = WSLExecutor(distro="Lab")._wsl_argv(
-            ["scanner", "target; harmless"]
-        )
+        argv = WSLExecutor(distro="Lab")._wsl_argv(["scanner", "target; harmless"])
 
         self.assertEqual(
             argv,
@@ -224,9 +224,7 @@ class TestFactory(unittest.TestCase):
         )
 
     def test_ssh_argument_vector_is_quoted_as_one_remote_command(self):
-        argv = SSHExecutor(host="192.0.2.10")._ssh_argv(
-            ["scanner", "target; harmless"]
-        )
+        argv = SSHExecutor(host="192.0.2.10")._ssh_argv(["scanner", "target; harmless"])
 
         self.assertEqual(argv[-1], "scanner 'target; harmless'")
 
@@ -246,9 +244,10 @@ class TestGracefulUnavailable(unittest.TestCase):
 
 class TestConsequentialMaintenanceBoundaries(unittest.TestCase):
     def test_system_update_is_quarantined_without_external_process(self):
-        with tempfile.TemporaryDirectory() as directory, mock.patch(
-            "decode.bootstrap.engine.subprocess.run"
-        ) as run:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch("decode.bootstrap.engine.subprocess.run") as run,
+        ):
             engine = BootstrapEngine(Path(directory))
             with self.assertRaisesRegex(RuntimeError, "ExecutionCoordinator"):
                 engine.system_update()
@@ -309,9 +308,7 @@ class TestPublicExecutionBoundaryInventory(unittest.TestCase):
                             relative.startswith("execution/")
                             and method.name == "execute"
                         )
-                        or (
-                            relative.startswith("agents/") and method.name == "run"
-                        )
+                        or (relative.startswith("agents/") and method.name == "run")
                     )
                     if not wrapped_family and entry not in self.EXPLICIT_BOUNDARIES:
                         unclassified.append(entry)

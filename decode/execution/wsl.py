@@ -1,7 +1,7 @@
 import asyncio
 import shutil
 import time
-from typing import Optional, Dict, List
+
 from .base import Command, ExecutionProvider, ExecutionResult, command_display
 
 
@@ -12,14 +12,14 @@ class WSLExecutor(ExecutionProvider):
     without Docker. Selects a specific distro when given, else the default.
     """
 
-    def __init__(self, distro: Optional[str] = None):
+    def __init__(self, distro: str | None = None):
         self._distro = distro
 
     @property
     def name(self) -> str:
         return f"wsl/{self._distro}" if self._distro else "wsl"
 
-    def _wsl_argv(self, command: Command) -> List[str]:
+    def _wsl_argv(self, command: Command) -> list[str]:
         argv = ["wsl.exe"]
         if self._distro:
             argv += ["-d", self._distro]
@@ -30,13 +30,16 @@ class WSLExecutor(ExecutionProvider):
         return argv
 
     async def execute(
-        self, command: Command, timeout: int = 120, env: Optional[Dict[str, str]] = None
+        self, command: Command, timeout: int = 120, env: dict[str, str] | None = None
     ) -> ExecutionResult:
         display = command_display(command)
         if not shutil.which("wsl.exe"):
             return ExecutionResult(
-                command=display, provider=self.name, success=False,
-                stderr="wsl.exe not found on PATH", exit_code=-1,
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr="wsl.exe not found on PATH",
+                exit_code=-1,
                 error="WSL not available",
             )
         start = time.time()
@@ -58,7 +61,7 @@ class WSLExecutor(ExecutionProvider):
                 exit_code=proc.returncode if proc.returncode is not None else 0,
                 duration=time.time() - start,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if proc is not None:
                 try:
                     proc.kill()
@@ -66,15 +69,23 @@ class WSLExecutor(ExecutionProvider):
                 except ProcessLookupError:
                     pass
             return ExecutionResult(
-                command=display, provider=self.name, success=False,
-                stderr=f"Command timed out after {timeout}s", exit_code=-1,
-                duration=time.time() - start, timed_out=True,
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr=f"Command timed out after {timeout}s",
+                exit_code=-1,
+                duration=time.time() - start,
+                timed_out=True,
             )
         except Exception as e:
             return ExecutionResult(
-                command=display, provider=self.name, success=False,
-                stderr=str(e), exit_code=-1,
-                duration=time.time() - start, error=str(e),
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr=str(e),
+                exit_code=-1,
+                duration=time.time() - start,
+                error=str(e),
             )
 
     async def check_health(self) -> bool:

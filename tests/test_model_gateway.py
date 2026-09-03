@@ -6,32 +6,48 @@ from decode.models.registry import DataPolicy, ModelSpec
 
 
 def _registry():
-    return ModelRegistry([
-        ModelSpec(
-            id="openrouter/z-ai/glm-5.2:free", provider="openrouter",
-            capabilities=["chat", "structured_output", "tools"],
-            data_policy=DataPolicy(max_classification="internal", locality="hosted"),
-            quality_scores={"planning": 0.88, "analysis": 0.88, "code": 0.6},
-            available=True, fallback_group="g",
-        ),
-        ModelSpec(
-            id="openrouter/poolside/laguna-s-2.1:free", provider="openrouter",
-            capabilities=["chat", "structured_output", "tools", "code"],
-            data_policy=DataPolicy(max_classification="internal", locality="hosted"),
-            quality_scores={"planning": 0.79, "analysis": 0.78, "code": 0.9},
-            available=True, fallback_group="g",
-        ),
-    ])
+    return ModelRegistry(
+        [
+            ModelSpec(
+                id="openrouter/z-ai/glm-5.2:free",
+                provider="openrouter",
+                capabilities=["chat", "structured_output", "tools"],
+                data_policy=DataPolicy(
+                    max_classification="internal", locality="hosted"
+                ),
+                quality_scores={"planning": 0.88, "analysis": 0.88, "code": 0.6},
+                available=True,
+                fallback_group="g",
+            ),
+            ModelSpec(
+                id="openrouter/poolside/laguna-s-2.1:free",
+                provider="openrouter",
+                capabilities=["chat", "structured_output", "tools", "code"],
+                data_policy=DataPolicy(
+                    max_classification="internal", locality="hosted"
+                ),
+                quality_scores={"planning": 0.79, "analysis": 0.78, "code": 0.9},
+                available=True,
+                fallback_group="g",
+            ),
+        ]
+    )
 
 
 class TestModelGateway(unittest.TestCase):
     def setUp(self):
         # Clear any per-role / routing env for a clean default.
-        self._env = mock.patch.dict("os.environ", {
-            "DECODE_PLANNER_MODEL": "", "DECODE_WORKER_MODEL": "",
-            "DECODE_REVIEWER_MODEL": "", "DECODE_CODER_MODEL": "",
-            "DECODE_MODEL_ROUTING": "",
-        }, clear=False)
+        self._env = mock.patch.dict(
+            "os.environ",
+            {
+                "DECODE_PLANNER_MODEL": "",
+                "DECODE_WORKER_MODEL": "",
+                "DECODE_REVIEWER_MODEL": "",
+                "DECODE_CODER_MODEL": "",
+                "DECODE_MODEL_ROUTING": "",
+            },
+            clear=False,
+        )
         self._env.start()
 
     def tearDown(self):
@@ -53,20 +69,31 @@ class TestModelGateway(unittest.TestCase):
 
     def test_per_role_override_from_registry(self):
         gw = ModelGateway(_registry(), routing_enabled=False)
-        with mock.patch.dict("os.environ", {"DECODE_CODER_MODEL": "openrouter/poolside/laguna-s-2.1:free"}):
-            self.assertEqual(gw.resolve_spec("coder"), ("openrouter", "poolside/laguna-s-2.1:free"))
+        with mock.patch.dict(
+            "os.environ",
+            {"DECODE_CODER_MODEL": "openrouter/poolside/laguna-s-2.1:free"},
+        ):
+            self.assertEqual(
+                gw.resolve_spec("coder"), ("openrouter", "poolside/laguna-s-2.1:free")
+            )
 
     def test_override_provider_slash_model(self):
         gw = ModelGateway(_registry(), routing_enabled=False)
-        with mock.patch.dict("os.environ", {"DECODE_WORKER_MODEL": "openai/gpt-4o-mini"}):
+        with mock.patch.dict(
+            "os.environ", {"DECODE_WORKER_MODEL": "openai/gpt-4o-mini"}
+        ):
             self.assertEqual(gw.resolve_spec("worker"), ("openai", "gpt-4o-mini"))
 
     def test_routing_opt_in_picks_by_task_class(self):
         gw = ModelGateway(_registry(), routing_enabled=True)
         # coder -> "code" task class; the code-capable model wins by quality
-        self.assertEqual(gw.resolve_spec("coder"), ("openrouter", "poolside/laguna-s-2.1:free"))
+        self.assertEqual(
+            gw.resolve_spec("coder"), ("openrouter", "poolside/laguna-s-2.1:free")
+        )
         # planner -> "planning"; the higher planning score wins
-        self.assertEqual(gw.resolve_spec("planner"), ("openrouter", "z-ai/glm-5.2:free"))
+        self.assertEqual(
+            gw.resolve_spec("planner"), ("openrouter", "z-ai/glm-5.2:free")
+        )
 
     def test_route_for_role_is_reproducible(self):
         gw = ModelGateway(_registry(), routing_enabled=True)

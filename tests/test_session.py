@@ -23,9 +23,11 @@ class TestPersistentSession(unittest.TestCase):
     def _agent(self, tmp, replies):
         import decode.universal_agent as ua
 
-        with mock.patch.object(ua.Config, "validate", return_value=None), \
-             mock.patch.object(ua, "create_provider", return_value=mock.Mock()), \
-             mock.patch.object(ua, "SelfLearningMemory", return_value=mock.Mock()):
+        with (
+            mock.patch.object(ua.Config, "validate", return_value=None),
+            mock.patch.object(ua, "create_provider", return_value=mock.Mock()),
+            mock.patch.object(ua, "SelfLearningMemory", return_value=mock.Mock()),
+        ):
             agent = ua.UniversalAgent(provider="openrouter")
         agent.llm = _ScriptedProvider(replies)
         agent.audit = AuditLayer(base_path=tmp / "audit")
@@ -45,12 +47,16 @@ class TestPersistentSession(unittest.TestCase):
                 json.dumps({"message": "done"}),
             ]
             agent = self._agent(root, replies)
-            result = asyncio.run(agent.run_tool_loop(
-                "use a persistent session",
-                filesystem_scope=FilesystemScope(read_roots=[root], write_roots=[root]),
-                command_policy=CommandPolicy(),
-                permission_mode=PermissionMode.AUTO,
-            ))
+            result = asyncio.run(
+                agent.run_tool_loop(
+                    "use a persistent session",
+                    filesystem_scope=FilesystemScope(
+                        read_roots=[root], write_roots=[root]
+                    ),
+                    command_policy=CommandPolicy(),
+                    permission_mode=PermissionMode.AUTO,
+                )
+            )
 
         tools = [s["tool"] for s in result["steps"]]
         self.assertEqual(tools, ["session_open", "session_exec", "session_close"])
@@ -58,23 +64,32 @@ class TestPersistentSession(unittest.TestCase):
         self.assertTrue(all(s["observation"]["success"] for s in result["steps"]))
         # the cd persisted: close reports the working directory ending in /sub
         close_obs = result["steps"][2]["observation"]
-        self.assertTrue(str(close_obs["data"].get("cwd", "")).replace("\\", "/").endswith("/sub"))
+        self.assertTrue(
+            str(close_obs["data"].get("cwd", "")).replace("\\", "/").endswith("/sub")
+        )
         self.assertEqual(close_obs["data"].get("commands_run"), 1)
 
     def test_session_exec_runs_a_real_command(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d).resolve()
             replies = [
-                json.dumps({"tool": "session_exec", "params": {"command": "echo session-works"}}),
+                json.dumps(
+                    {
+                        "tool": "session_exec",
+                        "params": {"command": "echo session-works"},
+                    }
+                ),
                 json.dumps({"message": "done"}),
             ]
             agent = self._agent(root, replies)
-            result = asyncio.run(agent.run_tool_loop(
-                "echo in a session",
-                filesystem_scope=FilesystemScope(read_roots=[root]),
-                command_policy=CommandPolicy(),
-                permission_mode=PermissionMode.AUTO,
-            ))
+            result = asyncio.run(
+                agent.run_tool_loop(
+                    "echo in a session",
+                    filesystem_scope=FilesystemScope(read_roots=[root]),
+                    command_policy=CommandPolicy(),
+                    permission_mode=PermissionMode.AUTO,
+                )
+            )
         obs = result["steps"][0]["observation"]
         self.assertTrue(obs["success"])
         self.assertIn("session-works", obs["data"]["stdout"])

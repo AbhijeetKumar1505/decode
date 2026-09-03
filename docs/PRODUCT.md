@@ -75,6 +75,8 @@ Decode provides a common capability layer between human objectives and security 
 - READ, WRITE, and DESTRUCTIVE per-command risk classification with `plan`/`ask`/`auto` permission modes.
 - Local, Docker, WSL, SSH, and MCP execution-provider implementations.
 - Markdown playbooks (`SKILL.md`) and native host capabilities as the extension paths.
+- A live task-state (Neural Schema), composed prompts, verification/replan, and role→model routing.
+- Extension layer: MCP servers and declarative plugin packages behind a unified capability registry (`decode mcp` / `decode plugin`), with scoped config (project > user > system).
 - OpenRouter (default), OpenAI, and Anthropic provider adapters with data-locality-aware routing.
 - SQLite (optional MongoDB) session, target, finding, evidence, project, and artifact storage.
 - Audit, structured execution logging, execution feedback, and hashed immutable evidence.
@@ -84,14 +86,14 @@ Decode provides a common capability layer between human objectives and security 
 
 - Cross-session memory and hybrid knowledge retrieval.
 - Reproducible replay metadata across every execution path.
-- Policy-aware model routing (built; not yet wired to planner/worker/reviewer roles).
+- Multi-model routing across roles (single-model by default; per-role overrides / opt-in routing).
+- Real MCP transport (a stdio adapter over the optional `mcp` SDK; validated with fakes in CI).
 
 ### Planned
 
-- Task-state spine: a live task-state schema (Neural Schema), composed prompts, and a verification/replan pass.
-- Broader markdown-playbook library for common security procedures.
+- Broader markdown-playbook library and a plugin registry (`decode mcp/plugin search`).
 - Optional semantic memory retrieval.
-- An isolated external-integration plugin surface (the in-tree plugin system was removed).
+- Per-server target-scope declarations for MCP calls.
 
 ## Future vision
 

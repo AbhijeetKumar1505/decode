@@ -1,3 +1,4 @@
+from .gateway import ModelGateway
 from .registry import (
     DataPolicy,
     ModelCost,
@@ -7,7 +8,6 @@ from .registry import (
     classification_rank,
     default_model_registry,
 )
-from .gateway import ModelGateway
 from .routing import (
     DEFAULT_RULES,
     ModelRouter,
@@ -17,17 +17,17 @@ from .routing import (
 )
 
 __all__ = [
-    "ModelGateway",
+    "DEFAULT_RULES",
     "DataPolicy",
     "ModelCost",
+    "ModelGateway",
     "ModelRegistry",
+    "ModelRouter",
     "ModelSpec",
     "RateLimit",
-    "classification_rank",
-    "default_model_registry",
-    "DEFAULT_RULES",
-    "ModelRouter",
     "RoutingDecision",
     "RoutingRequest",
     "RoutingRule",
+    "classification_rank",
+    "default_model_registry",
 ]

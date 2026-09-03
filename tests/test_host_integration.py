@@ -10,9 +10,18 @@ from decode.runtime import ExecutionCoordinator, HostController
 from decode.runtime.coordinator import ExecutionStatus
 
 
-def _coordinator(tmp: Path, mode: PermissionMode = PermissionMode.ASK, allow_destructive: bool = False):
+def _coordinator(
+    tmp: Path,
+    mode: PermissionMode = PermissionMode.ASK,
+    allow_destructive: bool = False,
+):
     audit = AuditLayer(tmp / "audit")
-    gate = GovernanceGate(ScopePolicy(allow_all=True), audit=audit, allow_destructive=allow_destructive, mode=mode)
+    gate = GovernanceGate(
+        ScopePolicy(allow_all=True),
+        audit=audit,
+        allow_destructive=allow_destructive,
+        mode=mode,
+    )
     # auto-approve so WRITE proceeds without an interactive prompt
     return ExecutionCoordinator(gate, approval_callback=lambda request: True)
 
@@ -26,8 +35,12 @@ class TestHostControlIntegration(unittest.TestCase):
         self.scope = FilesystemScope(read_roots=[self.root], write_roots=[self.root])
 
     def _host(self, mode=PermissionMode.ASK, allow_destructive=False, policy=None):
-        coord = _coordinator(Path(self.tmp.name), mode=mode, allow_destructive=allow_destructive)
-        return HostController(coord, self.scope, policy if policy is not None else CommandPolicy())
+        coord = _coordinator(
+            Path(self.tmp.name), mode=mode, allow_destructive=allow_destructive
+        )
+        return HostController(
+            coord, self.scope, policy if policy is not None else CommandPolicy()
+        )
 
     def _run(self, host, cap, params):
         return asyncio.run(host.run(cap, params))
@@ -43,7 +56,9 @@ class TestHostControlIntegration(unittest.TestCase):
         self.assertEqual(read.status, ExecutionStatus.SUCCESS)
         self.assertIn("hello world", read.value.normalized["content"])
 
-        edit = self._run(host, "file_edit", {"path": path, "old": "world", "new": "there"})
+        edit = self._run(
+            host, "file_edit", {"path": path, "old": "world", "new": "there"}
+        )
         self.assertEqual(edit.status, ExecutionStatus.SUCCESS)
         self.assertEqual(Path(path).read_text(), "hello there")
 
@@ -71,7 +86,9 @@ class TestHostControlIntegration(unittest.TestCase):
         coord = _coordinator(Path(self.tmp.name), mode=PermissionMode.AUTO)
         coord._approval_callback = None
         host = HostController(coord, self.scope, CommandPolicy())
-        result = self._run(host, "file_write", {"path": str(self.root / "a.txt"), "content": "x"})
+        result = self._run(
+            host, "file_write", {"path": str(self.root / "a.txt"), "content": "x"}
+        )
         self.assertEqual(result.status, ExecutionStatus.SUCCESS)
 
     def test_mode_setters_change_gate_behavior_at_runtime(self):
@@ -91,7 +108,9 @@ class TestHostControlIntegration(unittest.TestCase):
     def test_destructive_shell_command_is_gated(self):
         # rm -rf classifies DESTRUCTIVE -> gate denies without an engagement override
         host = self._host(allow_destructive=False)
-        result = self._run(host, "shell_command", {"command": "rm -rf " + str(self.root / "x")})
+        result = self._run(
+            host, "shell_command", {"command": "rm -rf " + str(self.root / "x")}
+        )
         self.assertNotEqual(result.status, ExecutionStatus.SUCCESS)
 
     def test_shell_command_accepts_command_string(self):
@@ -125,7 +144,9 @@ class TestHostControlIntegration(unittest.TestCase):
 
     def test_missing_tool_reports_not_found_without_crashing(self):
         host = self._host(mode=PermissionMode.AUTO)
-        result = self._run(host, "shell_command", {"argv": ["decode-nonexistent-tool-xyz"]})
+        result = self._run(
+            host, "shell_command", {"argv": ["decode-nonexistent-tool-xyz"]}
+        )
         # a missing tool is reported, never a crash or a governance bypass
         self.assertFalse(result.value.success)
         self.assertIn("not found", result.value.error.lower())

@@ -84,8 +84,14 @@ class TestMCPExecutor(unittest.TestCase):
         self.assertIn("exploded", r.stderr)
 
     def test_health_reflects_client(self):
-        self.assertTrue(asyncio.run(MCPExecutor(client=_FakeMCPClient(healthy=True)).check_health()))
-        self.assertFalse(asyncio.run(MCPExecutor(client=_FakeMCPClient(healthy=False)).check_health()))
+        self.assertTrue(
+            asyncio.run(MCPExecutor(client=_FakeMCPClient(healthy=True)).check_health())
+        )
+        self.assertFalse(
+            asyncio.run(
+                MCPExecutor(client=_FakeMCPClient(healthy=False)).check_health()
+            )
+        )
 
     def test_factory_builds_mcp_with_client(self):
         client = _FakeMCPClient()

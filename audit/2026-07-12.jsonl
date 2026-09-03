@@ -1,1 +1,0 @@
-{"id":"0de732e9-7774-4d55-bfa3-b8a4d5a5e5fc","timestamp":"2026-07-12T19:10:51.199199","event":"rejection","tool":"host_discovery","target":"8.8.8.8","risk":"WRITE","approved":false,"user":"","detail":"target '8.8.8.8' is out of engagement scope","metadata":{}}

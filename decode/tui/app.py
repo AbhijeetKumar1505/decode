@@ -10,35 +10,35 @@ import shlex
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 
-from rich.console import Console
-from rich.markdown import Markdown
-from rich.table import Table
-from rich.panel import Panel
-from rich.json import JSON
-from rich.live import Live
-from rich.text import Text
-from rich import box
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import NestedCompleter
+from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.styles import Style as PTStyle
-from prompt_toolkit.formatted_text import HTML
-
+from rich import box
+from rich.console import Console
+from rich.json import JSON
+from rich.live import Live
+from rich.markdown import Markdown
+from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
+from rich.table import Table
+from rich.text import Text
 
+from decode.hostcontrol import CommandPolicy, FilesystemScope, PermissionMode
 from decode.logging_service import LoggingService
 from decode.models import default_model_registry
-from decode.skills.registry import SkillRegistry
 from decode.persistence import create_store
-from decode.persistence.target_tracker import TargetContextTracker, TargetFinding
 from decode.persistence.evidence import EvidenceCollector
+from decode.persistence.target_tracker import TargetContextTracker, TargetFinding
 from decode.runtime import redact_sensitive
-from decode.hostcontrol import CommandPolicy, FilesystemScope, PermissionMode
-from .theme import DECODE_THEME, _SPINNER_FRAMES, code_panel, diamond, fmt_path
+from decode.skills.registry import SkillRegistry
+
+from .theme import _SPINNER_FRAMES, DECODE_THEME, code_panel, diamond, fmt_path
 
 console = Console(theme=DECODE_THEME)
 
@@ -76,59 +76,156 @@ class _Thinking:
         grid.add_row(left, right)
         return grid
 
+
 # Single source of truth for help, autocompletion, and the /help <command> detail
 # view. group -> list of (command, args, short description, long detail).
-COMMAND_GROUPS: Dict[str, List[tuple]] = {
+COMMAND_GROUPS: dict[str, list[tuple]] = {
     "Universal agent (governed)": [
-        ("(just type)", "<goal or question>", "Talk to the universal agent",
-         "Natural-language goals and questions run through the governed tool-use loop: it discovers installed tools (list_tools), drives them via shell_command, and answers directly. Same path as /agent."),
-        ("/agent", "<goal>", "Run the governed tool-use loop explicitly",
-         "The model drives a bounded plan→call→observe loop over host operations and installed tools, each governed. READ runs freely; WRITE/DESTRUCTIVE are gated."),
-        ("/scope", "[targets]", "Show or set authorized scope",
-         "Set the allowlist of authorized CIDRs, hosts, or domains. Empty scope denies target execution."),
-        ("/providers", "", "Execution providers + health",
-         "Show local/Docker/WSL/SSH/MCP providers and their health."),
-        ("/knowledge", "<query>", "Search the knowledge base",
-         "Search the local knowledge graph for entities relevant to a query."),
+        (
+            "(just type)",
+            "<goal or question>",
+            "Talk to the universal agent",
+            "Natural-language goals and questions run through the governed tool-use loop: it discovers installed tools (list_tools), drives them via shell_command, and answers directly. Same path as /agent.",
+        ),
+        (
+            "/agent",
+            "<goal>",
+            "Run the governed tool-use loop explicitly",
+            "The model drives a bounded plan→call→observe loop over host operations and installed tools, each governed. READ runs freely; WRITE/DESTRUCTIVE are gated.",
+        ),
+        (
+            "/scope",
+            "[targets]",
+            "Show or set authorized scope",
+            "Set the allowlist of authorized CIDRs, hosts, or domains. Empty scope denies target execution.",
+        ),
+        (
+            "/providers",
+            "",
+            "Execution providers + health",
+            "Show local/Docker/WSL/SSH/MCP providers and their health.",
+        ),
+        (
+            "/knowledge",
+            "<query>",
+            "Search the knowledge base",
+            "Search the local knowledge graph for entities relevant to a query.",
+        ),
     ],
     "Host control (governed OS operations)": [
-        ("/mode", "[plan|ask|auto]", "Show or set the permission mode",
-         "plan = never execute (preview only); ask = READ auto, WRITE/DESTRUCTIVE need approval; auto = READ+WRITE auto in scope, DESTRUCTIVE still gated."),
-        ("/fsscope", "<read> [write]", "Set the filesystem scope",
-         "Authorize a read root (and optional write root) for file operations. Defaults to the working directory, read-only."),
-        ("/read", "<path>", "Read a file (governed)", "Read a file within the authorized filesystem scope."),
-        ("/ls", "[path]", "List a directory (governed)", "List a directory within the authorized scope."),
+        (
+            "/mode",
+            "[plan|ask|auto]",
+            "Show or set the permission mode",
+            "plan = never execute (preview only); ask = READ auto, WRITE/DESTRUCTIVE need approval; auto = READ+WRITE auto in scope, DESTRUCTIVE still gated.",
+        ),
+        (
+            "/fsscope",
+            "<read> [write]",
+            "Set the filesystem scope",
+            "Authorize a read root (and optional write root) for file operations. Defaults to the working directory, read-only.",
+        ),
+        (
+            "/read",
+            "<path>",
+            "Read a file (governed)",
+            "Read a file within the authorized filesystem scope.",
+        ),
+        (
+            "/ls",
+            "[path]",
+            "List a directory (governed)",
+            "List a directory within the authorized scope.",
+        ),
         ("/ps", "", "List processes (governed)", "List running processes."),
-        ("/run", "<command>", "Run a policy-checked command", "Run an argument-vector command; risk is classified and gated (no raw shell)."),
-        ("!", "<command>", "Shell mode: run a command directly",
-         "Prefix any line with ! to run it as a governed command, e.g. `! nmap -sV 10.0.0.5`. For `! sudo ...` you are prompted for your sudo password in the CLI (sent only to sudo, never logged or shown to the model)."),
+        (
+            "/run",
+            "<command>",
+            "Run a policy-checked command",
+            "Run an argument-vector command; risk is classified and gated (no raw shell).",
+        ),
+        (
+            "!",
+            "<command>",
+            "Shell mode: run a command directly",
+            "Prefix any line with ! to run it as a governed command, e.g. `! nmap -sV 10.0.0.5`. For `! sudo ...` you are prompted for your sudo password in the CLI (sent only to sudo, never logged or shown to the model).",
+        ),
     ],
     "Model": [
-        ("/model", "[id]", "Show or switch the active model",
-         "With no argument, list available models with their TPM/RPS limits. With an id (bare name or provider/name, e.g. devstral-2512), switch the active model."),
+        (
+            "/model",
+            "[id]",
+            "Show or switch the active model",
+            "With no argument, list available models with their TPM/RPS limits. With an id (bare name or provider/name, e.g. devstral-2512), switch the active model.",
+        ),
     ],
     "Session": [
-        ("/start", "[target]", "Start a new assessment session", "Begin a session, optionally pinning a target."),
-        ("/target", "[ip]", "Show or set the session target", "Show the current target, or set it."),
-        ("/session", "", "Show active session context", "Show session goal, target, findings, and evidence counts."),
-        ("/findings", "", "List findings in the current session", "List recorded findings with severity."),
-        ("/evidence", "", "Show collected evidence", "List evidence captured this session."),
-        ("/resume", "<id>", "Resume a previous session", "Reload a saved session by id."),
+        (
+            "/start",
+            "[target]",
+            "Start a new assessment session",
+            "Begin a session, optionally pinning a target.",
+        ),
+        (
+            "/target",
+            "[ip]",
+            "Show or set the session target",
+            "Show the current target, or set it.",
+        ),
+        (
+            "/session",
+            "",
+            "Show active session context",
+            "Show session goal, target, findings, and evidence counts.",
+        ),
+        (
+            "/findings",
+            "",
+            "List findings in the current session",
+            "List recorded findings with severity.",
+        ),
+        (
+            "/evidence",
+            "",
+            "Show collected evidence",
+            "List evidence captured this session.",
+        ),
+        (
+            "/resume",
+            "<id>",
+            "Resume a previous session",
+            "Reload a saved session by id.",
+        ),
     ],
     "General": [
-        ("/plugins", "", "List available skills", "List all auto-discovered skills with risk and category."),
+        (
+            "/plugins",
+            "",
+            "List available skills",
+            "List all auto-discovered skills with risk and category.",
+        ),
         ("/skills", "", "Alias for /plugins", "List all auto-discovered skills."),
         ("/tools", "", "List available tools", "List skills as callable tools."),
-        ("/logs", "[filter]", "Show recent logs", "Show recent structured execution logs, optionally filtered."),
-        ("/help", "[command]", "Show help, or details for one command", "With no argument, list all commands. With a command, show its detail."),
+        (
+            "/logs",
+            "[filter]",
+            "Show recent logs",
+            "Show recent structured execution logs, optionally filtered.",
+        ),
+        (
+            "/help",
+            "[command]",
+            "Show help, or details for one command",
+            "With no argument, list all commands. With a command, show its detail.",
+        ),
         ("/clear", "", "Clear conversation history", "Reset the conversation context."),
         ("/exit", "", "Exit Decode", "Quit the REPL (or press Ctrl+D)."),
     ],
 }
 
 
-def _command_index() -> Dict[str, tuple]:
-    index: Dict[str, tuple] = {}
+def _command_index() -> dict[str, tuple]:
+    index: dict[str, tuple] = {}
     for rows in COMMAND_GROUPS.values():
         for cmd, args, short, detail in rows:
             index[cmd] = (args, short, detail)
@@ -138,8 +235,13 @@ def _command_index() -> Dict[str, tuple]:
 class AgentREPL:
     """Simple REPL with Rich output and prompt_toolkit input."""
 
-    def __init__(self, agent, domain: str = "redteam", resume: Optional[str] = None,
-                 continue_last: bool = False):
+    def __init__(
+        self,
+        agent,
+        domain: str = "redteam",
+        resume: str | None = None,
+        continue_last: bool = False,
+    ):
         self._agent = agent
         self._resume_request = resume
         self._continue_last = continue_last
@@ -151,22 +253,23 @@ class AgentREPL:
         self._cmd_policy = CommandPolicy()
         self._host_ctl = None
         self._host_gate = None
+        self._mcp_manager = None
         self._domain = domain
-        self._model = getattr(agent, 'provider_name', 'openrouter')
+        self._model = getattr(agent, "provider_name", "openrouter")
         self._store = create_store()
         self._log_svc = LoggingService()
-        self._tracker: Optional[TargetContextTracker] = None
+        self._tracker: TargetContextTracker | None = None
         self._evidence = EvidenceCollector()
         self._registry = SkillRegistry()
         self._model_registry = default_model_registry()
         self._session_active = False
         self._current_target: str = ""
-        self._scope_entries: List[str] = []
+        self._scope_entries: list[str] = []
         if hasattr(self._agent, "set_scope"):
             self._agent.set_scope([])
-        self._pending_action: Optional[Dict[str, Any]] = None
-        self._last_response: Optional[Dict[str, Any]] = None
-        self._conversation_history: List[Dict[str, str]] = (
+        self._pending_action: dict[str, Any] | None = None
+        self._last_response: dict[str, Any] | None = None
+        self._conversation_history: list[dict[str, str]] = (
             getattr(agent, "conversation_history", []) if agent else []
         )
 
@@ -197,14 +300,16 @@ class AgentREPL:
         self._history_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._commands = _command_index()
-        completer = NestedCompleter.from_nested_dict({
-            cmd: (
-                {name.lstrip("/"): None for name in self._commands}
-                if cmd == "/help"
-                else None
-            )
-            for cmd in self._commands
-        })
+        completer = NestedCompleter.from_nested_dict(
+            {
+                cmd: (
+                    {name.lstrip("/"): None for name in self._commands}
+                    if cmd == "/help"
+                    else None
+                )
+                for cmd in self._commands
+            }
+        )
 
         # Ctrl+C cancels the current line/op (handled in run()); Ctrl+D exits.
         # Shift+Tab cycles the permission mode; Ctrl+X submits /help (shortcuts).
@@ -226,11 +331,13 @@ class AgentREPL:
             completer=completer,
             complete_while_typing=True,
             key_bindings=kb,
-            style=PTStyle([
-                ("prompt", "bold cyan"),
-                ("bottom-toolbar", "fg:#8a8a8a bg:#111111"),
-                ("bottom-toolbar.text", "fg:#8a8a8a bg:#111111"),
-            ]),
+            style=PTStyle(
+                [
+                    ("prompt", "bold cyan"),
+                    ("bottom-toolbar", "fg:#8a8a8a bg:#111111"),
+                    ("bottom-toolbar.text", "fg:#8a8a8a bg:#111111"),
+                ]
+            ),
             bottom_toolbar=self._get_bottom_toolbar,
         )
 
@@ -260,13 +367,13 @@ class AgentREPL:
                 self._run(self._handle_shell(text[1:].strip()))
                 continue
             if text.startswith("/model"):
-                self._handle_model(text[len("/model"):].strip())
+                self._handle_model(text[len("/model") :].strip())
                 continue
             if text in ("/exit", "/quit", "exit", "quit"):
                 self._exit()
                 break
             if text == "/help" or text.startswith("/help "):
-                self._print_help(text[len("/help "):].strip() if " " in text else "")
+                self._print_help(text[len("/help ") :].strip() if " " in text else "")
                 continue
             if text == "/clear":
                 self._conversation_history.clear()
@@ -300,28 +407,40 @@ class AgentREPL:
                 self._handle_providers()
                 continue
             if text.startswith("/knowledge "):
-                self._handle_knowledge(text[len("/knowledge "):].strip())
+                self._handle_knowledge(text[len("/knowledge ") :].strip())
                 continue
             if text.startswith("/mode"):
-                self._handle_mode(text[len("/mode"):].strip())
+                self._handle_mode(text[len("/mode") :].strip())
                 continue
             if text.startswith("/fsscope"):
-                self._handle_fsscope(text[len("/fsscope"):].strip())
+                self._handle_fsscope(text[len("/fsscope") :].strip())
                 continue
             if text.startswith("/read "):
-                self._run(self._handle_host("file_read", {"path": text[len("/read "):].strip()}))
+                self._run(
+                    self._handle_host(
+                        "file_read", {"path": text[len("/read ") :].strip()}
+                    )
+                )
                 continue
             if text.startswith("/ls"):
-                self._run(self._handle_host("file_list", {"path": text[len("/ls"):].strip() or "."}))
+                self._run(
+                    self._handle_host(
+                        "file_list", {"path": text[len("/ls") :].strip() or "."}
+                    )
+                )
                 continue
             if text == "/ps":
                 self._run(self._handle_host("process_list", {}))
                 continue
             if text.startswith("/run "):
-                self._run(self._handle_host("shell_command", {"command": text[len("/run "):].strip()}))
+                self._run(
+                    self._handle_host(
+                        "shell_command", {"command": text[len("/run ") :].strip()}
+                    )
+                )
                 continue
             if text.startswith("/agent "):
-                self._run(self._handle_agent(text[len("/agent "):].strip()))
+                self._run(self._handle_agent(text[len("/agent ") :].strip()))
                 continue
             if text in ("/findings", "/evidence"):
                 if text == "/findings":
@@ -336,13 +455,19 @@ class AgentREPL:
                     if pending.get("type") == "command":
                         self._run(self._execute_command(pending["command"]))
                     else:
-                        self._run(self._execute_tool(pending["action"], pending.get("params", {})))
+                        self._run(
+                            self._execute_tool(
+                                pending["action"], pending.get("params", {})
+                            )
+                        )
                 elif text.lower() in ("n", "no"):
                     console.print("[dim yellow]Action rejected.[/dim yellow]")
-                    self._conversation_history.append({
-                        "role": "user",
-                        "content": "Action rejected. Propose an alternative.",
-                    })
+                    self._conversation_history.append(
+                        {
+                            "role": "user",
+                            "content": "Action rejected. Propose an alternative.",
+                        }
+                    )
                     self._pending_action = None
                 else:
                     console.print("[dim yellow]Please answer y or n.[/dim yellow]")
@@ -360,13 +485,17 @@ class AgentREPL:
         if not self._tracker:
             return
         sid = self._tracker.session_id
-        console.print(Panel(
-            "Session saved. Resume it exactly as it was with:\n\n"
-            f"  [cyan]decode --resume {sid}[/cyan]   [dim](from your shell)[/dim]\n"
-            f"  [cyan]decode --continue[/cyan]{' ' * max(0, len(sid) - 8)}          [dim](most recent session)[/dim]\n"
-            f"  [cyan]/resume {sid}[/cyan]   [dim](inside a running Decode)[/dim]",
-            title="Resume", border_style="cyan", box=box.ROUNDED,
-        ))
+        console.print(
+            Panel(
+                "Session saved. Resume it exactly as it was with:\n\n"
+                f"  [cyan]decode --resume {sid}[/cyan]   [dim](from your shell)[/dim]\n"
+                f"  [cyan]decode --continue[/cyan]{' ' * max(0, len(sid) - 8)}          [dim](most recent session)[/dim]\n"
+                f"  [cyan]/resume {sid}[/cyan]   [dim](inside a running Decode)[/dim]",
+                title="Resume",
+                border_style="cyan",
+                box=box.ROUNDED,
+            )
+        )
 
     def _apply_resume_request(self):
         if self._resume_request:
@@ -388,7 +517,7 @@ class AgentREPL:
             return
         if self._session_active:
             self._save_session()
-        loaded: List[Dict[str, str]] = []
+        loaded: list[dict[str, str]] = []
         hp = Path(f"./data/sessions/{sid}.json")
         if hp.exists():
             loaded = json.loads(hp.read_text(encoding="utf-8"))
@@ -399,12 +528,18 @@ class AgentREPL:
         self._tracker = TargetContextTracker(self._store, session_id=sid)
         self._store.update_session(sid, status="active")
         self._current_target = session.get("target_focus", "")
-        if not self._scope_entries and self._current_target and hasattr(self._agent, "set_scope"):
+        if (
+            not self._scope_entries
+            and self._current_target
+            and hasattr(self._agent, "set_scope")
+        ):
             self._agent.set_scope([self._current_target])
         self._session_active = True
         console.print(f"[bold green]✓ Resumed session [bold]{sid}[/bold][/bold green]")
         if session.get("goal"):
-            console.print(f"[dim]Goal: {session['goal']}  ·  Target: {self._current_target or '—'}[/dim]")
+            console.print(
+                f"[dim]Goal: {session['goal']}  ·  Target: {self._current_target or '—'}[/dim]"
+            )
 
     def _run(self, coro):
         """Run an async op, letting Ctrl+C cancel just that op (not the REPL)."""
@@ -418,22 +553,34 @@ class AgentREPL:
             return None
 
     def _prompt(self):
-        target = f" <ansiyellow>{self._current_target}</ansiyellow>" if self._current_target else ""
-        return HTML(f"<b><ansicyan>decode</ansicyan></b>{target} <ansigreen>&gt;</ansigreen> ")
+        target = (
+            f" <ansiyellow>{self._current_target}</ansiyellow>"
+            if self._current_target
+            else ""
+        )
+        return HTML(
+            f"<b><ansicyan>decode</ansicyan></b>{target} <ansigreen>&gt;</ansigreen> "
+        )
 
     def _print_welcome(self):
-        status = "[green]session active[/green]" if self._session_active else "[dim]no session[/dim]"
-        console.print(Panel(
-            "[bold]Decode[/bold] — governed security assistant\n\n"
-            "Type a request in natural language, a [cyan]/command[/cyan], or "
-            "[cyan]![/cyan] to run a shell command directly ([cyan]Tab[/cyan] to autocomplete).\n"
-            "Examples:  [dim]scan 10.0.0.5 for open ports[/dim]   [dim]! nmap -sV 10.0.0.5[/dim]   "
-            "[dim]! sudo apt update[/dim]   [dim]/mode auto[/dim]   [dim]/model glm-5.2:free[/dim]\n"
-            f"[cyan]/help[/cyan] lists everything · [cyan]Ctrl+C[/cyan] cancels "
-            f"(twice to quit) · [cyan]Ctrl+D[/cyan] quits    {status}",
-            border_style="cyan",
-            box=box.ROUNDED,
-        ))
+        status = (
+            "[green]session active[/green]"
+            if self._session_active
+            else "[dim]no session[/dim]"
+        )
+        console.print(
+            Panel(
+                "[bold]Decode[/bold] — governed security assistant\n\n"
+                "Type a request in natural language, a [cyan]/command[/cyan], or "
+                "[cyan]![/cyan] to run a shell command directly ([cyan]Tab[/cyan] to autocomplete).\n"
+                "Examples:  [dim]scan 10.0.0.5 for open ports[/dim]   [dim]! nmap -sV 10.0.0.5[/dim]   "
+                "[dim]! sudo apt update[/dim]   [dim]/mode auto[/dim]   [dim]/model glm-5.2:free[/dim]\n"
+                f"[cyan]/help[/cyan] lists everything · [cyan]Ctrl+C[/cyan] cancels "
+                f"(twice to quit) · [cyan]Ctrl+D[/cyan] quits    {status}",
+                border_style="cyan",
+                box=box.ROUNDED,
+            )
+        )
         self._render_header_bar()
 
     # ── design-system render helpers ─────────────────────────────────────
@@ -490,10 +637,14 @@ class AgentREPL:
         with Live(renderable, console=console, refresh_per_second=10, transient=True):
             yield
 
-    def _render_step_call(self, tool: str, params: Dict[str, Any]) -> None:
+    def _render_step_call(self, tool: str, params: dict[str, Any]) -> None:
         """A ♦ step line for a tool call, with special forms for file/shell ops."""
         params = params or {}
-        if tool == "file_write" and params.get("path") and params.get("content") is not None:
+        if (
+            tool == "file_write"
+            and params.get("path")
+            and params.get("content") is not None
+        ):
             console.print(diamond(fmt_path(params["path"]), verb="Creating"))
             console.print(code_panel(params["path"], str(params["content"])))
             return
@@ -502,14 +653,20 @@ class AgentREPL:
             console.print(diamond(f"[bold]{cmd}[/bold]", verb="Run"))
             return
         if tool in ("file_list", "file_read", "file_search"):
-            verb = {"file_list": "Listing", "file_read": "Reading", "file_search": "Searching"}[tool]
+            verb = {
+                "file_list": "Listing",
+                "file_read": "Reading",
+                "file_search": "Searching",
+            }[tool]
             target = params.get("path") or params.get("root") or "."
             console.print(diamond(fmt_path(target), verb=verb))
             return
         detail = json.dumps(redact_sensitive(params))[:80] if params else ""
-        console.print(diamond(f"[accent]{tool}[/accent] [dim]{detail}[/dim]", verb="Run"))
+        console.print(
+            diamond(f"[accent]{tool}[/accent] [dim]{detail}[/dim]", verb="Run")
+        )
 
-    def _render_step_result(self, tool: str, obs: Dict[str, Any]) -> None:
+    def _render_step_result(self, tool: str, obs: dict[str, Any]) -> None:
         """A dim result line under a step: ✓/✗ and a short summary."""
         obs = obs or {}
         ok = obs.get("success")
@@ -525,7 +682,9 @@ class AgentREPL:
         approve = {"plan": "plan", "ask": "ask", "auto": "always-approve"}.get(
             self._perm_mode.value, self._perm_mode.value
         )
-        target_str = f"  ·  <b>{self._current_target}</b>" if self._current_target else ""
+        target_str = (
+            f"  ·  <b>{self._current_target}</b>" if self._current_target else ""
+        )
         return HTML(
             f" <b>Shift+Tab</b>:mode   <b>Esc</b>:cancel   <b>Ctrl+X</b>:shortcuts   "
             f"<b>Ctrl+C</b>:cancel (2× quit)"
@@ -538,14 +697,21 @@ class AgentREPL:
             return
         console.print()
         for group, rows in COMMAND_GROUPS.items():
-            table = Table(box=box.SIMPLE, title=f"[bold]{group}[/bold]", title_justify="left", pad_edge=False)
+            table = Table(
+                box=box.SIMPLE,
+                title=f"[bold]{group}[/bold]",
+                title_justify="left",
+                pad_edge=False,
+            )
             table.add_column("Command", style="cyan", no_wrap=True)
             table.add_column("Args", style="dim")
             table.add_column("Description")
             for cmd, args, short, _detail in rows:
                 table.add_row(cmd, args, short)
             console.print(table)
-        console.print("[dim]Tip: press [cyan]Tab[/cyan] to autocomplete, or [cyan]/help <command>[/cyan] for details.[/dim]\n")
+        console.print(
+            "[dim]Tip: press [cyan]Tab[/cyan] to autocomplete, or [cyan]/help <command>[/cyan] for details.[/dim]\n"
+        )
 
     def _print_command_detail(self, command: str):
         key = command if command.startswith("/") else f"/{command}"
@@ -554,10 +720,14 @@ class AgentREPL:
             console.print(f"[yellow]Unknown command '{command}'. Try /help.[/yellow]")
             return
         args, short, detail = entry
-        console.print(Panel(
-            f"[bold cyan]{key}[/bold cyan] [dim]{args}[/dim]\n\n{detail}",
-            title=short, border_style="cyan", box=box.ROUNDED,
-        ))
+        console.print(
+            Panel(
+                f"[bold cyan]{key}[/bold cyan] [dim]{args}[/dim]\n\n{detail}",
+                title=short,
+                border_style="cyan",
+                box=box.ROUNDED,
+            )
+        )
 
     def _render_result(self, action, result):
         """Render a skill result as structured output rather than a raw dict dump."""
@@ -584,21 +754,44 @@ class AgentREPL:
         else:
             console.print(f"[dim]{text[:4000]}\n… (truncated)[/dim]")
 
-    def _render_host_profile(self, info: Dict[str, Any]):
+    def _render_host_profile(self, info: dict[str, Any]):
         os_info = info.get("os", {})
         rows = [
             ("Host", info.get("host", "")),
-            ("OS", f"{os_info.get('os_family', '')} {os_info.get('os_version', '')}".strip()),
-            ("Kernel", os_info.get("kernel_release") or os_info.get("kernel_version", "")),
+            (
+                "OS",
+                f"{os_info.get('os_family', '')} {os_info.get('os_version', '')}".strip(),
+            ),
+            (
+                "Kernel",
+                os_info.get("kernel_release") or os_info.get("kernel_version", ""),
+            ),
             ("Arch", os_info.get("architecture", "")),
             ("Virtualization", os_info.get("virtualization", "")),
-            ("Uptime (h)", f"{os_info.get('uptime_hours', 0):.1f}" if os_info.get("uptime_hours") else ""),
+            (
+                "Uptime (h)",
+                f"{os_info.get('uptime_hours', 0):.1f}"
+                if os_info.get("uptime_hours")
+                else "",
+            ),
         ]
         body = "\n".join(f"[cyan]{k:<16}[/cyan] {v}" for k, v in rows if v)
-        console.print(Panel(body, title="Host profile", border_style="green", box=box.ROUNDED))
-        services = [s for s in info.get("services", []) if isinstance(s, dict) and s.get("state") == "active" and s.get("name") not in ("", "●")]
+        console.print(
+            Panel(body, title="Host profile", border_style="green", box=box.ROUNDED)
+        )
+        services = [
+            s
+            for s in info.get("services", [])
+            if isinstance(s, dict)
+            and s.get("state") == "active"
+            and s.get("name") not in ("", "●")
+        ]
         if services:
-            table = Table(title=f"Active services ({len(services)})", box=box.SIMPLE, title_justify="left")
+            table = Table(
+                title=f"Active services ({len(services)})",
+                box=box.SIMPLE,
+                title_justify="left",
+            )
             table.add_column("Service", style="cyan")
             table.add_column("State", style="green")
             for svc in services[:15]:
@@ -618,8 +811,10 @@ class AgentREPL:
         for p in plugins:
             rc = risk_colors.get(p["risk_level"], "white")
             table.add_row(
-                f"[bold]{p['name']}[/bold]", p["category"],
-                f"[{rc}]{p['risk_level']}[/{rc}]", p["description"][:60],
+                f"[bold]{p['name']}[/bold]",
+                p["category"],
+                f"[{rc}]{p['risk_level']}[/{rc}]",
+                p["description"][:60],
             )
         console.print()
         console.print(table)
@@ -630,16 +825,20 @@ class AgentREPL:
         console.print()
         console.print("[bold]Available Tools[/bold]")
         for s in skills:
-            spec = getattr(s, 'spec', None)
+            spec = getattr(s, "spec", None)
             if spec:
-                desc = getattr(spec, 'description', '')
-                console.print(f"  [green]✓[/green] [bold]{spec.name}[/bold] [dim]— {desc[:70]}[/dim]")
+                desc = getattr(spec, "description", "")
+                console.print(
+                    f"  [green]✓[/green] [bold]{spec.name}[/bold] [dim]— {desc[:70]}[/dim]"
+                )
         console.print()
 
     def _handle_target(self, text):
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
-            console.print(f"[dim]Target: [bold]{self._current_target or 'not set'}[/bold][/dim]")
+            console.print(
+                f"[dim]Target: [bold]{self._current_target or 'not set'}[/bold][/dim]"
+            )
             return
         target = parts[1].strip()
         self._current_target = target
@@ -664,16 +863,20 @@ class AgentREPL:
             return
         console.print(f"[bold]Recent Logs{(' [' + filt + ']') if filt else ''}[/bold]")
         for log in logs[:20]:
-            ts = log.get('timestamp', '')[:19] if log.get('timestamp') else ''
-            tool = log.get('tool', log.get('action', '?'))
-            status = log.get('status', log.get('success', ''))
-            icon = "[green]OK[/green]" if status in ('success', True) else "[red]ERR[/red]"
+            ts = log.get("timestamp", "")[:19] if log.get("timestamp") else ""
+            tool = log.get("tool", log.get("action", "?"))
+            status = log.get("status", log.get("success", ""))
+            icon = (
+                "[green]OK[/green]" if status in ("success", True) else "[red]ERR[/red]"
+            )
             console.print(f"  {icon} [cyan]{ts}[/cyan] [bold]{tool}[/bold]")
         console.print()
 
     def _show_session(self):
         if not self._session_active or not self._tracker:
-            console.print("[dim yellow]No active session. Use /start to begin one.[/dim yellow]")
+            console.print(
+                "[dim yellow]No active session. Use /start to begin one.[/dim yellow]"
+            )
             return
         ctx = self._store.get_session_context(self._tracker.session_id)
         if ctx and ctx.get("targets"):
@@ -685,7 +888,12 @@ class AgentREPL:
                 table.add_column("Product", style="yellow")
                 table.add_column("Version")
                 for p in t.get("ports", []):
-                    table.add_row(str(p["port"]), p.get("service", ""), p.get("product", ""), p.get("version", ""))
+                    table.add_row(
+                        str(p["port"]),
+                        p.get("service", ""),
+                        p.get("product", ""),
+                        p.get("version", ""),
+                    )
                 if t.get("ports"):
                     console.print(table)
         findings = ctx.get("findings", []) if ctx else []
@@ -694,13 +902,24 @@ class AgentREPL:
             ftable.add_column("Severity")
             ftable.add_column("Title")
             ftable.add_column("Category")
-            sc = {"critical": "red", "high": "bold red", "medium": "yellow", "low": "blue"}
+            sc = {
+                "critical": "red",
+                "high": "bold red",
+                "medium": "yellow",
+                "low": "blue",
+            }
             for f in findings:
                 c = sc.get(f["severity"], "white")
-                ftable.add_row(f"[{c}]{f['severity'].upper()}[/{c}]", f["title"], f.get("category", ""))
+                ftable.add_row(
+                    f"[{c}]{f['severity'].upper()}[/{c}]",
+                    f["title"],
+                    f.get("category", ""),
+                )
             console.print(ftable)
         if self._tracker:
-            console.print(f"[dim]Active session: [cyan]{self._tracker.session_id}[/cyan][/dim]")
+            console.print(
+                f"[dim]Active session: [cyan]{self._tracker.session_id}[/cyan][/dim]"
+            )
         sessions = self._store.list_sessions(5)
         if sessions:
             console.print("[bold]Recent sessions:[/bold]")
@@ -725,7 +944,12 @@ class AgentREPL:
         sc = {"critical": "red", "high": "bold red", "medium": "yellow", "low": "blue"}
         for f in findings:
             c = sc.get(f["severity"], "white")
-            ftable.add_row(f"[{c}]{f['severity'].upper()}[/{c}]", f["title"][:50], f.get("category", ""), f.get("confidence", ""))
+            ftable.add_row(
+                f"[{c}]{f['severity'].upper()}[/{c}]",
+                f["title"][:50],
+                f.get("category", ""),
+                f.get("confidence", ""),
+            )
         console.print(ftable)
 
     def _show_evidence(self):
@@ -742,7 +966,12 @@ class AgentREPL:
         etable.add_column("Source")
         etable.add_column("Created")
         for e in ev[:20]:
-            etable.add_row(e.get("type", ""), e.get("label", "")[:40], e.get("source", ""), e.get("created_at", "")[:19])
+            etable.add_row(
+                e.get("type", ""),
+                e.get("label", "")[:40],
+                e.get("source", ""),
+                e.get("created_at", "")[:19],
+            )
         console.print(etable)
 
     def _handle_resume(self, text):
@@ -759,7 +988,9 @@ class AgentREPL:
             return
         console.print("[dim]Recent sessions:[/dim]")
         for s in sessions:
-            console.print(f"  [cyan]{s['id']}[/cyan]  [dim]{s.get('goal', '') or '—'}[/dim]")
+            console.print(
+                f"  [cyan]{s['id']}[/cyan]  [dim]{s.get('goal', '') or '—'}[/dim]"
+            )
 
     def _handle_start(self, text=""):
         target = ""
@@ -773,19 +1004,24 @@ class AgentREPL:
         if not self._scope_entries and hasattr(self._agent, "set_scope"):
             self._agent.set_scope([target_focus])
         self._tracker = TargetContextTracker(self._store)
-        sid = self._tracker.start_session(goal="Penetration test", target_focus=target_focus)
+        sid = self._tracker.start_session(
+            goal="Penetration test", target_focus=target_focus
+        )
         self._session_active = True
         self._conversation_history.clear()
         console.print(f"[bold green]Session started: [bold]{sid}[/bold][/bold green]")
         console.print(f"[dim]Target: {target_focus}[/dim]")
-
 
     # ── scope + providers ──
 
     def _handle_scope(self, text):
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
-            current = ", ".join(self._scope_entries) or self._current_target or "empty (no target authorized)"
+            current = (
+                ", ".join(self._scope_entries)
+                or self._current_target
+                or "empty (no target authorized)"
+            )
             console.print(f"[dim]Scope: [bold]{current}[/bold][/dim]")
             return
         entries = [e for e in parts[1].replace(",", " ").split() if e]
@@ -798,7 +1034,9 @@ class AgentREPL:
 
     def _handle_providers(self):
         import asyncio as _asyncio
-        from decode.execution import create_executor, available_provider_names
+
+        from decode.execution import available_provider_names, create_executor
+
         table = Table(title="Execution Providers", box=box.ROUNDED)
         table.add_column("Provider", style="cyan")
         table.add_column("Health", style="bold")
@@ -807,7 +1045,10 @@ class AgentREPL:
                 ok = _asyncio.run(create_executor(key).check_health())
             except Exception:
                 ok = False
-            table.add_row(key, "[green]available[/green]" if ok else "[yellow]unavailable[/yellow]")
+            table.add_row(
+                key,
+                "[green]available[/green]" if ok else "[yellow]unavailable[/yellow]",
+            )
         console.print(table)
 
     async def _handle_shell(self, command_str):
@@ -848,7 +1089,9 @@ class AgentREPL:
             "(never echoed, logged, stored, or sent to the model).[/dim]"
         )
         try:
-            return Prompt.ask("  [yellow][sudo] password[/yellow]", password=True, console=console)
+            return Prompt.ask(
+                "  [yellow][sudo] password[/yellow]", password=True, console=console
+            )
         except (KeyboardInterrupt, EOFError):
             return None
 
@@ -901,8 +1144,12 @@ class AgentREPL:
         from decode.runtime import ExecutionCoordinator, HostController
 
         if self._host_ctl is None:
-            self._host_gate = GovernanceGate(ScopePolicy(allow_all=True), mode=self._perm_mode)
-            coord = ExecutionCoordinator(self._host_gate, approval_callback=self._host_approval)
+            self._host_gate = GovernanceGate(
+                ScopePolicy(allow_all=True), mode=self._perm_mode
+            )
+            coord = ExecutionCoordinator(
+                self._host_gate, approval_callback=self._host_approval
+            )
             self._host_ctl = HostController(coord, self._fs_scope, self._cmd_policy)
         else:
             self._host_gate.set_mode(self._perm_mode)
@@ -910,26 +1157,36 @@ class AgentREPL:
         return self._host_ctl
 
     def _host_approval(self, request):
-        return Confirm.ask(f"  Approve {request.action} ({request.risk.value})?", default=False)
+        return Confirm.ask(
+            f"  Approve {request.action} ({request.risk.value})?", default=False
+        )
 
     def _handle_mode(self, arg):
         if not arg:
-            console.print(f"Permission mode: [bold]{self._perm_mode.value}[/bold]  [dim](plan | ask | auto)[/dim]")
+            console.print(
+                f"Permission mode: [bold]{self._perm_mode.value}[/bold]  [dim](plan | ask | auto)[/dim]"
+            )
             return
         try:
             self._perm_mode = PermissionMode(arg.lower())
         except ValueError:
             console.print("[yellow]Usage: /mode plan|ask|auto[/yellow]")
             return
-        console.print(f"[green]Permission mode → [bold]{self._perm_mode.value}[/bold][/green]")
+        console.print(
+            f"[green]Permission mode → [bold]{self._perm_mode.value}[/bold][/green]"
+        )
 
     def _handle_fsscope(self, arg):
         parts = arg.split()
         if not parts:
-            console.print("[dim]Read scope defaults to the working directory. Usage: /fsscope <read_root> [write_root][/dim]")
+            console.print(
+                "[dim]Read scope defaults to the working directory. Usage: /fsscope <read_root> [write_root][/dim]"
+            )
             return
         write_roots = [parts[1]] if len(parts) > 1 else []
-        self._fs_scope = FilesystemScope(read_roots=[parts[0]] + write_roots, write_roots=write_roots)
+        self._fs_scope = FilesystemScope(
+            read_roots=[parts[0]] + write_roots, write_roots=write_roots
+        )
         extra = f", write: {parts[1]}" if write_roots else ""
         console.print(f"[green]Filesystem scope set (read: {parts[0]}{extra})[/green]")
 
@@ -945,7 +1202,9 @@ class AgentREPL:
         # conflicts with a live region. The loop respects the current /mode.
         # Steps, timing, and the model's first-person reasoning stream via on_step.
         self._render_header_bar()
-        console.print(f"[thought]Working on: {goal}  (mode: {self._perm_mode.value})[/thought]")
+        console.print(
+            f"[thought]Working on: {goal}  (mode: {self._perm_mode.value})[/thought]"
+        )
 
         def on_step(event):
             phase = event.get("phase")
@@ -958,7 +1217,9 @@ class AgentREPL:
             if phase == "call":
                 self._render_step_call(event.get("tool"), event.get("params", {}))
             elif phase == "result":
-                self._render_step_result(event.get("tool"), event.get("observation", {}))
+                self._render_step_result(
+                    event.get("tool"), event.get("observation", {})
+                )
 
         result = await self._agent.run_tool_loop(
             goal,
@@ -967,28 +1228,48 @@ class AgentREPL:
             permission_mode=self._perm_mode,
             approval_callback=self._host_approval,
             on_step=on_step,
+            mcp_manager=self._mcp(),
         )
         console.print(f"\n[bold]{result.get('final', '')}[/bold]\n")
+
+    def _mcp(self):
+        """Lazily build the MCP manager so configured servers are usable in the REPL."""
+        if self._mcp_manager is None:
+            from decode.extensions import ExtensionManager
+
+            self._mcp_manager = ExtensionManager().mcp
+        return self._mcp_manager
 
     def _render_host(self, capability, result):
         from decode.runtime.coordinator import ExecutionStatus
 
         if result.status != ExecutionStatus.SUCCESS:
-            reason = result.error or (result.value.error if result.value else "") or result.status.value
-            console.print(f"[bold red]{capability} {result.status.value}:[/bold red] {reason}")
+            reason = (
+                result.error
+                or (result.value.error if result.value else "")
+                or result.status.value
+            )
+            console.print(
+                f"[bold red]{capability} {result.status.value}:[/bold red] {reason}"
+            )
             return
         data = result.value.normalized if result.value else {}
         path = data.get("path") if isinstance(data, dict) else None
         label = f"[bold]{capability}[/bold]" + (f" {fmt_path(path)}" if path else "")
         console.print(f"  [ok]✓[/ok] {label}")
         # A read file renders as a syntax-highlighted block, not a JSON dump.
-        if capability == "file_read" and isinstance(data, dict) and data.get("content") is not None:
+        if (
+            capability == "file_read"
+            and isinstance(data, dict)
+            and data.get("content") is not None
+        ):
             console.print(code_panel(path or "file", str(data["content"])))
             return
         self._render_json(data)
 
     def _handle_knowledge(self, query):
         from decode.knowledge import KnowledgeRetriever
+
         hits = KnowledgeRetriever().relevant_for_goal(query)
         if not hits:
             console.print(f"[yellow]No knowledge matched '{query}'.[/yellow]")
@@ -1011,7 +1292,9 @@ class AgentREPL:
         except Exception:
             requires = getattr(spec, "target_required", False)
         params = params or {}
-        has_target = bool(params.get("target") or params.get("url") or params.get("domain"))
+        has_target = bool(
+            params.get("target") or params.get("url") or params.get("domain")
+        )
         return bool(requires) and not has_target
 
     async def _chat_loop(self, text):
@@ -1019,7 +1302,7 @@ class AgentREPL:
         # questions both go through the governed tool-use loop, which discovers
         # installed tools (list_tools) and drives them via shell_command. There is
         # no single-skill proposer anymore.
-        ip_match = re.search(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', text)
+        ip_match = re.search(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", text)
         if ip_match and not self._current_target:
             detected = ip_match.group(1)
             self._current_target = detected
@@ -1053,15 +1336,25 @@ class AgentREPL:
         result = execution.value
         safe_result = redact_sensitive(result)
         duration = time.time() - start
-        console.print(f"  [ok]✓[/ok] [bold]{action}[/bold] completed [dim]({duration:.1f}s)[/dim]")
+        console.print(
+            f"  [ok]✓[/ok] [bold]{action}[/bold] completed [dim]({duration:.1f}s)[/dim]"
+        )
         self._render_result(action, safe_result)
         if self._session_active and self._tracker and action in self._finding_type_map:
             cat, sev = self._finding_type_map[action]
-            finding = TargetFinding(title=f"{action} results", description=str(result)[:300], severity=sev, category=cat)
+            finding = TargetFinding(
+                title=f"{action} results",
+                description=str(result)[:300],
+                severity=sev,
+                category=cat,
+            )
             self._tracker.record_finding(finding)
             self._store.add_evidence(
-                self._tracker.session_id, type="command_output", label=action,
-                data={"result": str(safe_result)[:1000]}, source=action,
+                self._tracker.session_id,
+                type="command_output",
+                label=action,
+                data={"result": str(safe_result)[:1000]},
+                source=action,
             )
         with self._thinking("Analyzing results…"):
             follow_up = await self._agent.chat(
@@ -1089,7 +1382,9 @@ class AgentREPL:
         duration = time.time() - start
 
         if result.success:
-            console.print(f"  [ok]✓[/ok] Command succeeded [dim]({duration:.1f}s)[/dim]")
+            console.print(
+                f"  [ok]✓[/ok] Command succeeded [dim]({duration:.1f}s)[/dim]"
+            )
             if result.stdout:
                 console.print(Markdown(f"```\n{result.stdout[:2000]}\n```"))
             console.print("\n[bold white]Analyzing results...[/bold white]")
@@ -1098,7 +1393,9 @@ class AgentREPL:
                 self._domain,
             )
         else:
-            console.print(f"  [fail]✗[/fail] Command failed [dim]({duration:.1f}s)[/dim]")
+            console.print(
+                f"  [fail]✗[/fail] Command failed [dim]({duration:.1f}s)[/dim]"
+            )
             if result.timed_out:
                 console.print(f"[bold red]Timed out after {duration:.1f}s[/bold red]")
             elif result.error:
@@ -1145,7 +1442,12 @@ class AgentREPL:
                             f"[dim]  Params: {json.dumps(redact_sensitive(params))}[/dim]"
                         )
                     console.print()
-                    self._pending_action = {"type": "skill", "action": action, "params": params, "risk": risk}
+                    self._pending_action = {
+                        "type": "skill",
+                        "action": action,
+                        "params": params,
+                        "risk": risk,
+                    }
                     console.print("[b]Approve?[/b] (y/n)")
         console.print("")
 
@@ -1154,5 +1456,7 @@ class AgentREPL:
             return
         hp = Path(f"./data/sessions/{self._tracker.session_id}.json")
         hp.parent.mkdir(parents=True, exist_ok=True)
-        hp.write_text(json.dumps(self._conversation_history, indent=2), encoding="utf-8")
+        hp.write_text(
+            json.dumps(self._conversation_history, indent=2), encoding="utf-8"
+        )
         self._store.close_session(self._tracker.session_id)

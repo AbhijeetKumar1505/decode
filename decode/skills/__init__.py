@@ -1,3 +1,3 @@
-from .base import Skill, SkillCategory, RiskLevel
+from .base import RiskLevel, Skill, SkillCategory
 
-__all__ = ["Skill", "SkillCategory", "RiskLevel"]
+__all__ = ["RiskLevel", "Skill", "SkillCategory"]

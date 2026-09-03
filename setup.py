@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 setup(
     name="decode",
@@ -28,4 +28,9 @@ setup(
         "anthropic>=0.30.0",
         "defusedxml>=0.7.1",
     ],
+    extras_require={
+        # Real MCP transport (stdio only); the executor works with a fake client
+        # otherwise. Install with `pip install .[mcp]`.
+        "mcp": ["mcp>=1.0.0"],
+    },
 )

@@ -15,7 +15,6 @@ from decode.skills.markdown_skill import (
 )
 from decode.skills.registry import SkillRegistry
 
-
 _SAMPLE = """---
 name: sample_playbook
 description: A synthetic playbook for tests.
@@ -78,6 +77,29 @@ class TestMarkdownSkillDiscovery(unittest.TestCase):
     def test_registry_includes_markdown_skills(self):
         names = [s.spec.name for s in SkillRegistry().get_all()]
         self.assertIn("web_recon_playbook", names)
+
+    def test_imported_mattpocock_playbooks_are_discovered(self):
+        # The mattpocock/skills set is vendored as consolidated playbooks (one
+        # .md per skill, companion files inlined). Guard a representative slice
+        # so a parse break or an accidental deletion is caught.
+        skills = {s.spec.name: s for s in discover_markdown_skills()}
+        expected = {
+            "tdd",
+            "code-review",
+            "diagnosing-bugs",
+            "domain-modeling",
+            "grilling",
+            "research",
+            "wizard",
+            "writing-for-agents",
+        }
+        missing = expected - set(skills)
+        self.assertEqual(missing, set(), f"missing imported playbooks: {missing}")
+        for name in expected:
+            spec = skills[name].spec
+            self.assertEqual(spec.category, SkillCategory.AGENT_CORE)
+            self.assertEqual(spec.risk_level, RiskLevel.READ)
+            self.assertIn("mattpocock", spec.tags)
 
     def test_env_directory_is_scanned_and_overrides(self):
         with tempfile.TemporaryDirectory() as directory:

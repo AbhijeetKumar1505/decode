@@ -10,23 +10,25 @@ import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from ..audit import AuditEvent, AuditLayer
+from ..execution.base import _activate_execution, _reset_execution, command_display
 from ..feedback import ExecutionFeedback, FeedbackStore
 from ..governance import Decision, GovernanceGate
 from ..logging_service import LoggingService
-from ..execution.base import _activate_execution, _reset_execution, command_display
 from ..persistence.evidence import (
     EvidenceReference,
     ProtectedEvidenceStore,
 )
 from ..skills.base import RiskLevel
 
+if TYPE_CHECKING:
+    from ..hostcontrol.hooks import HookRegistry
 
 _SECRET_PATTERN = re.compile(
     r"(?i)(api[_-]?key|authorization|password|secret|token)\s*[:=]\s*([^\s,;]+)"
@@ -151,7 +153,9 @@ class ExecutionRequest(BaseModel):
             if self.approval_expires_at
             else "",
         }
-        encoded = json.dumps(material, sort_keys=True, separators=(",", ":"), default=str)
+        encoded = json.dumps(
+            material, sort_keys=True, separators=(",", ":"), default=str
+        )
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
@@ -247,7 +251,7 @@ class ExecutionCoordinator:
         audit: AuditLayer | None = None,
         feedback: FeedbackStore | None = None,
         evidence_store: ProtectedEvidenceStore | None = None,
-        hooks: "HookRegistry | None" = None,
+        hooks: HookRegistry | None = None,
     ) -> None:
         self._gate = gate
         self._approval_callback = approval_callback
@@ -278,7 +282,7 @@ class ExecutionCoordinator:
         request_id = str(uuid.uuid4())
         started = time.perf_counter()
         if request.risk != RiskLevel.READ and request.approval_expires_at is None:
-            request.approval_expires_at = datetime.now(timezone.utc) + timedelta(
+            request.approval_expires_at = datetime.now(UTC) + timedelta(
                 seconds=request.approval_ttl_seconds
             )
         digest = request.approval_digest()
@@ -311,10 +315,15 @@ class ExecutionCoordinator:
         if self._hooks is not None:
             from ..hostcontrol.hooks import HookEvent
 
-            allow, hook_reason = self._hooks.run_pre(HookEvent(
-                phase="pre", capability=request.action, risk=request.risk,
-                target=request.target, metadata=dict(request.metadata),
-            ))
+            allow, hook_reason = self._hooks.run_pre(
+                HookEvent(
+                    phase="pre",
+                    capability=request.action,
+                    risk=request.risk,
+                    target=request.target,
+                    metadata=dict(request.metadata),
+                )
+            )
             if not allow:
                 return self._finish_without_execution(
                     request,
@@ -361,7 +370,7 @@ class ExecutionCoordinator:
                     started,
                 )
             expires_at = request.approval_expires_at
-            if expires_at is None or expires_at <= datetime.now(timezone.utc):
+            if expires_at is None or expires_at <= datetime.now(UTC):
                 return self._finish_without_execution(
                     request,
                     request_id,
@@ -392,7 +401,7 @@ class ExecutionCoordinator:
             except Exception:
                 grant = False
             if grant is True:
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 grant = ApprovalGrant(
                     digest=digest,
                     approved_at=now,
@@ -418,7 +427,7 @@ class ExecutionCoordinator:
                     "approval does not match the material execution request",
                     started,
                 )
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if grant.approved_at > now or min(grant.expires_at, expires_at) <= now:
                 return self._finish_without_execution(
                     request,
@@ -463,7 +472,7 @@ class ExecutionCoordinator:
             )
             self._record_terminal(request, result)
             raise
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             result = self._terminal_result(
                 request,
                 request_id,
@@ -725,9 +734,7 @@ class ExecutionCoordinator:
                         result.error_category
                         == ExecutionErrorCategory.MISSING_DEPENDENCY
                     ),
-                    error=result.error_category.value
-                    if result.error_category
-                    else "",
+                    error=result.error_category.value if result.error_category else "",
                     metadata=metadata,
                 )
             )

@@ -17,9 +17,9 @@ def _names(tools):
 class TestCapabilityResolver(unittest.TestCase):
     def test_coding_mode_has_coding_not_skills(self):
         names = _names(resolve_tools(TaskMode.CODING, HOST, SKILLS))
-        self.assertIn("file_read", names)      # host always present
-        self.assertIn("git_diff", names)       # coding present
-        self.assertNotIn("web_recon", names)   # security playbooks excluded
+        self.assertIn("file_read", names)  # host always present
+        self.assertIn("git_diff", names)  # coding present
+        self.assertNotIn("web_recon", names)  # security playbooks excluded
 
     def test_security_mode_has_skills_not_coding(self):
         names = _names(resolve_tools(TaskMode.SECURITY, HOST, SKILLS))
@@ -34,7 +34,9 @@ class TestCapabilityResolver(unittest.TestCase):
         self.assertIn("file_read", names)
 
     def test_overrides_win(self):
-        names = _names(resolve_tools(TaskMode.SECURITY, HOST, SKILLS, include_coding=True))
+        names = _names(
+            resolve_tools(TaskMode.SECURITY, HOST, SKILLS, include_coding=True)
+        )
         self.assertIn("git_diff", names)
 
     def test_deduplicates_by_name(self):

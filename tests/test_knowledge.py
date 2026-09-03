@@ -3,10 +3,10 @@ import unittest
 from pathlib import Path
 
 from decode.knowledge import (
+    CAPABILITY_ATTACK,
     KnowledgeGraph,
     KnowledgeRetriever,
     attack_for_capability,
-    CAPABILITY_ATTACK,
 )
 
 
@@ -45,7 +45,9 @@ class TestRetriever(unittest.TestCase):
     def test_attack_for_capability(self):
         retriever = KnowledgeRetriever(self._graph())
         self.assertEqual(retriever.attack_for_capability("brute_missing"), None)
-        self.assertEqual(retriever.attack_for_capability("password_attack").technique_id, "T1110")
+        self.assertEqual(
+            retriever.attack_for_capability("password_attack").technique_id, "T1110"
+        )
 
     def test_knowledge_for_capabilities(self):
         retriever = KnowledgeRetriever(self._graph())

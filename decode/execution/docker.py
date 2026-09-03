@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import Optional, Dict
+
 from .base import Command, ExecutionProvider, ExecutionResult, command_display
 
 
@@ -39,7 +39,7 @@ class DockerExecutor(ExecutionProvider):
         self,
         command: Command,
         timeout: int,
-        env: Optional[Dict[str, str]],
+        env: dict[str, str] | None,
     ) -> ExecutionResult:
         start = time.time()
         display = command_display(command)
@@ -87,21 +87,28 @@ class DockerExecutor(ExecutionProvider):
                 pass
 
     async def execute(
-        self, command: Command, timeout: int = 60, env: Optional[Dict[str, str]] = None
+        self, command: Command, timeout: int = 60, env: dict[str, str] | None = None
     ) -> ExecutionResult:
         display = command_display(command)
         try:
             return await asyncio.to_thread(self._run_sync, command, timeout, env)
         except ImportError:
             return ExecutionResult(
-                command=display, provider=self.name, success=False,
-                stderr="Docker SDK not installed", exit_code=-1,
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr="Docker SDK not installed",
+                exit_code=-1,
                 error="Docker SDK not installed",
             )
         except Exception as e:
             return ExecutionResult(
-                command=display, provider=self.name, success=False,
-                stderr=str(e), exit_code=-1, error=str(e),
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr=str(e),
+                exit_code=-1,
+                error=str(e),
             )
 
     async def check_health(self) -> bool:

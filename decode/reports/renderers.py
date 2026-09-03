@@ -8,24 +8,25 @@ the SARIF renderer surfaces as rule ids / properties.
 
 import html
 import json
-from datetime import datetime, timezone
-from typing import Dict
-
+from datetime import UTC, datetime
 
 FORMATS = ("markdown", "json", "sarif", "html")
 
 # finding severity -> SARIF level
 _SARIF_LEVEL = {
-    "critical": "error", "high": "error",
-    "medium": "warning", "low": "note", "info": "note",
+    "critical": "error",
+    "high": "error",
+    "medium": "warning",
+    "low": "note",
+    "info": "note",
 }
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-def render_markdown(ctx: Dict) -> str:
+def render_markdown(ctx: dict) -> str:
     session = ctx.get("session", {})
     targets = ctx.get("targets", [])
     findings = ctx.get("findings", [])
@@ -43,12 +44,16 @@ def render_markdown(ctx: Dict) -> str:
         lines.append(f"- **{host}**")
         for p in t.get("ports", []):
             prod = f" ({p.get('product', '')} {p.get('version', '')})".rstrip()
-            lines.append(f"  - Port {p['port']}/{p.get('protocol', 'tcp')}: {p.get('service', '')}{prod}")
+            lines.append(
+                f"  - Port {p['port']}/{p.get('protocol', 'tcp')}: {p.get('service', '')}{prod}"
+            )
     lines += ["", f"## Findings ({len(findings)})"]
     if not findings:
         lines.append("_No findings recorded._")
     for f in findings:
-        lines.append(f"### [{f.get('severity', 'info').upper()}] {f.get('title', 'Finding')}")
+        lines.append(
+            f"### [{f.get('severity', 'info').upper()}] {f.get('title', 'Finding')}"
+        )
         meta = []
         if f.get("category"):
             meta.append(f"Category: {f['category']}")
@@ -62,50 +67,65 @@ def render_markdown(ctx: Dict) -> str:
     return "\n".join(lines)
 
 
-def render_json(ctx: Dict) -> str:
-    return json.dumps({
-        "generated": _now(),
-        "session": ctx.get("session", {}),
-        "targets": ctx.get("targets", []),
-        "findings": ctx.get("findings", []),
-    }, indent=2)
+def render_json(ctx: dict) -> str:
+    return json.dumps(
+        {
+            "generated": _now(),
+            "session": ctx.get("session", {}),
+            "targets": ctx.get("targets", []),
+            "findings": ctx.get("findings", []),
+        },
+        indent=2,
+    )
 
 
-def render_sarif(ctx: Dict) -> str:
+def render_sarif(ctx: dict) -> str:
     findings = ctx.get("findings", [])
     rules, results = {}, []
     for f in findings:
         rule_id = f.get("technique_id") or f.get("category") or "finding"
-        rules.setdefault(rule_id, {
-            "id": rule_id,
-            "name": f.get("mitre_tactic") or f.get("category") or "Finding",
-        })
-        results.append({
-            "ruleId": rule_id,
-            "level": _SARIF_LEVEL.get(f.get("severity", "info"), "note"),
-            "message": {"text": f.get("title", "") + (f" — {f['description']}" if f.get("description") else "")},
-            "properties": {
-                "severity": f.get("severity", "info"),
-                "tactic": f.get("mitre_tactic", ""),
-                "category": f.get("category", ""),
+        rules.setdefault(
+            rule_id,
+            {
+                "id": rule_id,
+                "name": f.get("mitre_tactic") or f.get("category") or "Finding",
             },
-        })
+        )
+        results.append(
+            {
+                "ruleId": rule_id,
+                "level": _SARIF_LEVEL.get(f.get("severity", "info"), "note"),
+                "message": {
+                    "text": f.get("title", "")
+                    + (f" — {f['description']}" if f.get("description") else "")
+                },
+                "properties": {
+                    "severity": f.get("severity", "info"),
+                    "tactic": f.get("mitre_tactic", ""),
+                    "category": f.get("category", ""),
+                },
+            }
+        )
     doc = {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
         "version": "2.1.0",
-        "runs": [{
-            "tool": {"driver": {
-                "name": "Decode",
-                "informationUri": "https://github.com/decode",
-                "rules": list(rules.values()),
-            }},
-            "results": results,
-        }],
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "Decode",
+                        "informationUri": "https://github.com/decode",
+                        "rules": list(rules.values()),
+                    }
+                },
+                "results": results,
+            }
+        ],
     }
     return json.dumps(doc, indent=2)
 
 
-def render_html(ctx: Dict) -> str:
+def render_html(ctx: dict) -> str:
     session = ctx.get("session", {})
     findings = ctx.get("findings", [])
     rows = ""
@@ -140,7 +160,7 @@ _RENDERERS = {
 _EXTENSIONS = {"markdown": "md", "json": "json", "sarif": "sarif.json", "html": "html"}
 
 
-def render(ctx: Dict, fmt: str) -> str:
+def render(ctx: dict, fmt: str) -> str:
     if fmt not in _RENDERERS:
         raise ValueError(f"unknown report format: {fmt}. Available: {list(_RENDERERS)}")
     return _RENDERERS[fmt](ctx)

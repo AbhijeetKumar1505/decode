@@ -1,8 +1,8 @@
-from .dag import CompletionCriterion, PlanNode, PlanGraph, RetryCategory
+from .dag import CompletionCriterion, PlanGraph, PlanNode, RetryCategory
 
 __all__ = [
     "CompletionCriterion",
-    "PlanNode",
     "PlanGraph",
+    "PlanNode",
     "RetryCategory",
 ]

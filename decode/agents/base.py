@@ -9,7 +9,7 @@ capabilities; there is no longer a tool-resolving capability registry.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -29,7 +29,7 @@ class AgentResult(BaseModel):
     error: str = ""
     normalized: dict[str, Any] = Field(default_factory=dict)
     partial: bool = False
-    warnings: List[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class Agent(ABC):
@@ -38,13 +38,13 @@ class Agent(ABC):
 
     @property
     @abstractmethod
-    def capabilities(self) -> List[str]:
+    def capabilities(self) -> list[str]:
         """Capabilities this agent can handle."""
 
     def handles(self, capability: str) -> bool:
         return capability in self.capabilities
 
-    def descriptor(self) -> "AgentDescriptor":
+    def descriptor(self) -> AgentDescriptor:
         """The versioned envelope that bounds this agent. Override to customize."""
         from .descriptor import descriptor_for_agent
 
@@ -54,7 +54,7 @@ class Agent(ABC):
         self,
         node: PlanNode,
         registry: Any,
-        context: Optional[dict] = None,
+        context: dict | None = None,
     ) -> AgentResult:
         """Execute a plan node inside its matching coordinator context.
 

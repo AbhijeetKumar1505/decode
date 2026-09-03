@@ -27,6 +27,11 @@ openai = "^1.0.0"
 anthropic = "^0.30.0"
 defusedxml = "^0.7.1"
 pymongo = "^4.6.0"
+# Optional: real MCP transport (stdio only). Install with `poetry install -E mcp`.
+mcp = { version = "^1.0.0", optional = true }
+
+[tool.poetry.extras]
+mcp = ["mcp"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
@@ -34,6 +39,26 @@ mongomock = "^4.3.0"
 
 [tool.poetry.scripts]
 decode = "decode.__main__:main"
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# The codebase is modernized to pass ruff's pyupgrade / pyflakes / import rules
+# (e.g. typing.List -> list). The rules ignored below are intentional patterns
+# or behavioral opinions we do not enforce repo-wide -- not defects:
+#   BLE001          deliberate broad `except Exception` at defensive boundaries
+#                   (subprocess, docker, mcp, agent loop) that must not crash the host
+#   DTZ005          naive local datetimes used throughout audit/feedback/logging
+#   S110 / S112     intentional best-effort try/except/pass|continue
+#   B008            required by Typer (typer.Argument/Option calls in defaults)
+#   LOG015          deliberate use of the root logger
+#   PLW1508/PLW1510 accepted subprocess/env-var default handling
+#   TRY004, B017, B023, SIM102, SIM117, RUF012  style opinions, not bugs
+ignore = [
+  "BLE001", "DTZ005", "S110", "S112", "B008", "B017", "B023",
+  "SIM102", "SIM117", "RUF012", "LOG015", "PLW1508", "PLW1510", "TRY004",
+]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -20,18 +20,18 @@ from rich.theme import Theme
 # re-tinted from here without touching call sites.
 DECODE_THEME = Theme(
     {
-        "header": "bold grey70",       # top path bar
-        "meta": "bold cyan",           # token / model counters
-        "user": "bold white",          # user-message band
-        "time": "grey50",              # right-aligned timestamps
-        "thought": "italic grey58",    # "› Thought for Xs" + running commentary
-        "step": "bold cyan",           # ♦ bullet glyph
-        "run": "bold green",           # step verb ("Run", "Creating", "Listing")
-        "path": "orange1 underline",   # file paths
+        "header": "bold grey70",  # top path bar
+        "meta": "bold cyan",  # token / model counters
+        "user": "bold white",  # user-message band
+        "time": "grey50",  # right-aligned timestamps
+        "thought": "italic grey58",  # "› Thought for Xs" + running commentary
+        "step": "bold cyan",  # ♦ bullet glyph
+        "run": "bold green",  # step verb ("Run", "Creating", "Listing")
+        "path": "orange1 underline",  # file paths
         "ok": "bold green",
         "fail": "bold red",
         "accent": "cyan",
-        "add": "on #07240a",           # green "added" band background
+        "add": "on #07240a",  # green "added" band background
     }
 )
 
@@ -41,17 +41,45 @@ CODE_BG = "#07240a"
 _SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 _EXT_LANG = {
-    ".py": "python", ".pyw": "python",
-    ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript",
-    ".ts": "typescript", ".tsx": "tsx", ".jsx": "jsx",
-    ".sh": "bash", ".bash": "bash", ".zsh": "bash",
-    ".json": "json", ".md": "markdown", ".rst": "rst",
-    ".html": "html", ".htm": "html", ".css": "css", ".scss": "scss",
-    ".yml": "yaml", ".yaml": "yaml", ".toml": "toml", ".ini": "ini", ".cfg": "ini",
-    ".go": "go", ".rs": "rust", ".rb": "ruby", ".php": "php",
-    ".c": "c", ".h": "c", ".cpp": "cpp", ".cc": "cpp", ".hpp": "cpp",
-    ".java": "java", ".kt": "kotlin", ".swift": "swift",
-    ".sql": "sql", ".xml": "xml", ".dockerfile": "docker", ".env": "bash",
+    ".py": "python",
+    ".pyw": "python",
+    ".js": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".jsx": "jsx",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "bash",
+    ".json": "json",
+    ".md": "markdown",
+    ".rst": "rst",
+    ".html": "html",
+    ".htm": "html",
+    ".css": "css",
+    ".scss": "scss",
+    ".yml": "yaml",
+    ".yaml": "yaml",
+    ".toml": "toml",
+    ".ini": "ini",
+    ".cfg": "ini",
+    ".go": "go",
+    ".rs": "rust",
+    ".rb": "ruby",
+    ".php": "php",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".hpp": "cpp",
+    ".java": "java",
+    ".kt": "kotlin",
+    ".swift": "swift",
+    ".sql": "sql",
+    ".xml": "xml",
+    ".dockerfile": "docker",
+    ".env": "bash",
 }
 
 
