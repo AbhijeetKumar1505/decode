@@ -221,6 +221,13 @@ automatically from `decode/skills/playbooks/`. Because a playbook only returns
 guidance — the agent still executes every step through governed `shell_command` —
 these general-purpose procedures inherit the same scope, risk, and audit controls.
 
+Because they are general-purpose (`category: agent_core`) rather than
+security-domain, these engineering playbooks are offered in **every task mode,
+including `CODING`** — unlike security-domain playbooks (e.g. `web_scanning`),
+which stay gated to `SECURITY`/`HYBRID`. See
+[decode/capabilities/registry.py](decode/capabilities/registry.py)
+(`GENERAL_SKILL_CATEGORIES`).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on:

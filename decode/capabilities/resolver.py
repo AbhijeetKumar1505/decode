@@ -12,6 +12,7 @@ from typing import Any
 
 from ..schema import TaskMode
 from .coding import coding_tool_list
+from .registry import GENERAL_SKILL_CATEGORIES
 
 
 def resolve_tools(
@@ -24,11 +25,13 @@ def resolve_tools(
 ) -> list[dict[str, Any]]:
     """Return the tool subset to expose for ``mode``.
 
-    - CODING: host + coding capabilities (no security playbooks).
+    - CODING: host + coding capabilities + general-purpose (engineering)
+      playbooks; no security-domain playbooks.
     - SECURITY: host + skill playbooks (no coding capabilities).
     - HYBRID: everything.
 
-    ``include_coding`` / ``include_skills`` override the mode defaults when set.
+    ``include_coding`` / ``include_skills`` override the mode defaults when set;
+    general-purpose playbooks are exposed regardless of ``include_skills``.
     """
     if include_coding is None:
         include_coding = mode in (TaskMode.CODING, TaskMode.HYBRID)
@@ -40,6 +43,14 @@ def resolve_tools(
         tools += coding_tool_list()
     if include_skills:
         tools += list(skill_tools)
+    else:
+        # General-purpose (engineering) playbooks remain available even when
+        # security-domain playbooks are gated out.
+        tools += [
+            tool
+            for tool in skill_tools
+            if tool.get("category", "") in GENERAL_SKILL_CATEGORIES
+        ]
 
     # De-duplicate by name, preserving first occurrence (host wins).
     seen: set[str] = set()

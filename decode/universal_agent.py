@@ -260,6 +260,7 @@ class UniversalAgent:
                 "name": skill.spec.name,
                 "description": skill.spec.description,
                 "risk": skill.spec.risk_level.value,
+                "category": skill.spec.category.value,
             }
             for skill in self.skill_registry.get_all()
         ]

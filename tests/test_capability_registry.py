@@ -9,7 +9,20 @@ HOST = [
     {"name": "shell_command", "description": "run", "risk": "write"},
     {"name": "session_exec", "description": "session", "risk": "write"},
 ]
-SKILLS = [{"name": "web_recon", "description": "recon", "risk": "read"}]
+SKILLS = [
+    {
+        "name": "web_recon",
+        "description": "recon",
+        "risk": "read",
+        "category": "web_scanning",
+    },
+    {
+        "name": "tdd",
+        "description": "test-driven development",
+        "risk": "read",
+        "category": "agent_core",
+    },
+]
 MCP = [
     MCPToolDescriptor(
         server="db", name="db.find", tool="find", description="find", risk="read"
@@ -38,11 +51,17 @@ class TestCapabilityRegistry(unittest.TestCase):
         names = _names(build_registry(HOST, SKILLS, MCP).resolve(TaskMode.HYBRID))
         self.assertTrue({"file_read", "git_diff", "web_recon", "db.find"} <= names)
 
-    def test_resolve_coding_excludes_playbooks_keeps_mcp(self):
+    def test_resolve_coding_excludes_security_keeps_engineering_and_mcp(self):
         names = _names(build_registry(HOST, SKILLS, MCP).resolve(TaskMode.CODING))
         self.assertIn("git_diff", names)
         self.assertIn("db.find", names)  # mcp always available
+        self.assertIn("tdd", names)  # engineering (agent_core) playbooks available
         self.assertNotIn("web_recon", names)  # security playbooks excluded
+
+    def test_engineering_playbook_carries_category(self):
+        reg = build_registry(HOST, SKILLS, MCP)
+        self.assertEqual(reg.get("tdd").category, "agent_core")
+        self.assertEqual(reg.get("web_recon").category, "web_scanning")
 
     def test_resolve_security_excludes_coding_keeps_mcp(self):
         names = _names(build_registry(HOST, SKILLS, MCP).resolve(TaskMode.SECURITY))
