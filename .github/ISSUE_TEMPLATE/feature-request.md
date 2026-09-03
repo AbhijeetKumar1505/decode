@@ -3,7 +3,9 @@ name: Feature Request
 about: Suggest an idea for Decode
 title: ''
 labels: enhancement
-assignees: ''
+assignees: AbhijeetKumar1505
+type: Feature
+
 ---
 
 ## Problem Statement

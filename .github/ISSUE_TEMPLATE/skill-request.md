@@ -2,8 +2,10 @@
 name: Skill Request
 about: Propose a new security skill for Decode
 title: 'Skill: [name]'
-labels: enhancement, skill
-assignees: ''
+labels: enhancement
+assignees: AbhijeetKumar1505
+type: Feature
+
 ---
 
 ## Skill Name

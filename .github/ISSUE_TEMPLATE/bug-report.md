@@ -2,8 +2,9 @@
 name: Bug Report
 about: Report a bug to help improve Decode
 title: ''
-labels: bug
-assignees: ''
+labels: bug, enhancement
+assignees: AbhijeetKumar1505
+
 ---
 
 ## Describe the Bug
