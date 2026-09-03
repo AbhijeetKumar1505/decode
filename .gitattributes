@@ -1,0 +1,33 @@
+# Normalize line endings across platforms.
+#
+# Store text files with LF in the repository and check them out with LF
+# everywhere (Windows, WSL, Linux, macOS). This prevents the CRLF/LF churn that
+# otherwise appears when the repo is touched by tools with differing
+# `core.autocrlf` settings (e.g. Windows git vs WSL git on the same worktree).
+* text=auto eol=lf
+
+# Windows-only script types keep CRLF (harmless if none exist).
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Treat known binary types as binary so git never touches their bytes.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.tar  binary
+*.whl  binary
+*.so   binary
+*.dylib binary
+*.dll  binary
+*.db   binary
+*.sqlite binary
+*.sqlite3 binary
+*.faiss binary
+*.npy  binary
+*.npz  binary
