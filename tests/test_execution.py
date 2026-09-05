@@ -268,7 +268,7 @@ class TestPublicExecutionBoundaryInventory(unittest.TestCase):
         ("bootstrap/engine.py", "BootstrapEngine", "system_update"),
         ("runtime/coordinator.py", "ExecutionCoordinator", "execute"),
         ("skills/registry.py", "SkillRegistry", "execute"),
-        ("tui/app.py", "AgentREPL", "run"),
+        ("app/tui/app.py", "AgentREPL", "run"),
         # Host-control surfaces: HostController routes through the coordinator;
         # ToolUseLoop delegates execution to a coordinator-backed invoke; HostSession
         # runs only inside HostAgent's coordinator-governed execute_internal.
@@ -284,7 +284,7 @@ class TestPublicExecutionBoundaryInventory(unittest.TestCase):
     }
 
     def test_every_public_execution_entry_point_has_a_known_boundary(self):
-        package_root = Path(__file__).parents[1] / "decode"
+        package_root = Path(__file__).parents[1] / "src" / "decode"
         discovered = set()
         unclassified = []
 

@@ -2,14 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from .audit import AuditLayer
-from .config import Config
+from .app.config import Config
 from .execution import ExecutionResult
-from .feedback import FeedbackStore
 from .governance import GovernanceGate, ScopePolicy
 from .kernel.context import ContextManager
 from .kernel.provider import create_provider
-from .logging_service import LoggingService
 from .memory import SelfLearningMemory
 from .models import (
     ModelGateway,
@@ -18,6 +15,9 @@ from .models import (
     RoutingRequest,
     default_model_registry,
 )
+from .observability.audit import AuditLayer
+from .observability.feedback import FeedbackStore
+from .observability.logging_service import LoggingService
 from .runtime import (
     ApprovalRequest,
     CoordinatedResult,

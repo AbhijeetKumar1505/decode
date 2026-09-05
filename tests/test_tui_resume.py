@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from decode.app.config import Config
 from decode.persistence import SessionStore
 from decode.persistence.evidence import EvidenceCollector
 from decode.skills.registry import SkillRegistry
@@ -43,14 +44,25 @@ class TestResumeFlow(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self._cwd = os.getcwd()
         os.chdir(self.tmp.name)
+        self._decode_home = os.environ.get("DECODE_HOME")
+        os.environ["DECODE_HOME"] = self.tmp.name
+        Config.reload()
+        self.addCleanup(self._restore_decode_home)
         self.addCleanup(os.chdir, self._cwd)
         self.store = SessionStore(db_path=Path(self.tmp.name) / "data" / "decode.db")
         self.addCleanup(self.store.close)
 
     def _save_conversation(self, sid, history):
-        path = Path("./data/sessions") / f"{sid}.json"
+        path = Config.MEMORY_PATH.parent / "sessions" / f"{sid}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(history), encoding="utf-8")
+
+    def _restore_decode_home(self):
+        if self._decode_home is None:
+            os.environ.pop("DECODE_HOME", None)
+        else:
+            os.environ["DECODE_HOME"] = self._decode_home
+        Config.reload()
 
     def test_resume_restores_conversation_target_and_agent_context(self):
         sid = self.store.create_session(goal="lab audit", target_focus="192.0.2.5")

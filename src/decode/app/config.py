@@ -20,6 +20,14 @@ def load_config() -> None:
 load_config()
 
 
+def _runtime_root() -> Path:
+    configured = os.getenv("DECODE_HOME")
+    return Path(configured).expanduser() if configured else Path.home() / ".decode"
+
+
+RUNTIME_ROOT = _runtime_root()
+
+
 class Config:
     PROVIDER = os.getenv("DECODE_PROVIDER", "openrouter")
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -28,16 +36,16 @@ class Config:
     MODEL = os.getenv("DECODE_MODEL", "z-ai/glm-5.2:free")
     EXECUTOR = os.getenv("DECODE_EXECUTOR", "local")
     MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", 20))
-    MEMORY_PATH = Path(os.getenv("MEMORY_PATH", "./data/models/"))
+    MEMORY_PATH = Path(os.getenv("MEMORY_PATH", str(RUNTIME_ROOT / "data/models")))
     SANDBOX_IMAGE = "kalilinux/kali-rolling:latest"
-    LOGS_PATH = Path(os.getenv("LOGS_PATH", "./logs/"))
-    AUDIT_PATH = Path(os.getenv("AUDIT_PATH", "./audit/"))
-    FEEDBACK_PATH = Path(os.getenv("FEEDBACK_PATH", "./feedback/"))
-    EVIDENCE_PATH = Path(os.getenv("EVIDENCE_PATH", "./evidence/"))
+    LOGS_PATH = Path(os.getenv("LOGS_PATH", str(RUNTIME_ROOT / "logs")))
+    AUDIT_PATH = Path(os.getenv("AUDIT_PATH", str(RUNTIME_ROOT / "audit")))
+    FEEDBACK_PATH = Path(os.getenv("FEEDBACK_PATH", str(RUNTIME_ROOT / "feedback")))
+    EVIDENCE_PATH = Path(os.getenv("EVIDENCE_PATH", str(RUNTIME_ROOT / "evidence")))
     TOOL_REGISTRY_PATH = Path(
-        os.getenv("TOOL_REGISTRY_PATH", "./data/tool_registry.json")
+        os.getenv("TOOL_REGISTRY_PATH", str(RUNTIME_ROOT / "data/tool_registry.json"))
     )
-    PROFILES_PATH = Path(os.getenv("PROFILES_PATH", "./profiles/"))
+    PROFILES_PATH = Path(os.getenv("PROFILES_PATH", str(RUNTIME_ROOT / "profiles")))
     MONGODB_URI = os.getenv("MONGODB_URI")
     MONGODB_DB = os.getenv("MONGODB_DB", "decode")
     SEARCH_ENGINE = os.getenv("DECODE_SEARCH_ENGINE", "duckduckgo")
@@ -53,15 +61,24 @@ class Config:
         cls.MODEL = os.getenv("DECODE_MODEL", "z-ai/glm-5.2:free")
         cls.EXECUTOR = os.getenv("DECODE_EXECUTOR", "local")
         cls.MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", 20))
-        cls.MEMORY_PATH = Path(os.getenv("MEMORY_PATH", "./data/models/"))
-        cls.LOGS_PATH = Path(os.getenv("LOGS_PATH", "./logs/"))
-        cls.AUDIT_PATH = Path(os.getenv("AUDIT_PATH", "./audit/"))
-        cls.FEEDBACK_PATH = Path(os.getenv("FEEDBACK_PATH", "./feedback/"))
-        cls.EVIDENCE_PATH = Path(os.getenv("EVIDENCE_PATH", "./evidence/"))
-        cls.TOOL_REGISTRY_PATH = Path(
-            os.getenv("TOOL_REGISTRY_PATH", "./data/tool_registry.json")
+        runtime_root = _runtime_root()
+        cls.MEMORY_PATH = Path(os.getenv("MEMORY_PATH", str(runtime_root / "data/models")))
+        cls.LOGS_PATH = Path(os.getenv("LOGS_PATH", str(runtime_root / "logs")))
+        cls.AUDIT_PATH = Path(os.getenv("AUDIT_PATH", str(runtime_root / "audit")))
+        cls.FEEDBACK_PATH = Path(
+            os.getenv("FEEDBACK_PATH", str(runtime_root / "feedback"))
         )
-        cls.PROFILES_PATH = Path(os.getenv("PROFILES_PATH", "./profiles/"))
+        cls.EVIDENCE_PATH = Path(
+            os.getenv("EVIDENCE_PATH", str(runtime_root / "evidence"))
+        )
+        cls.TOOL_REGISTRY_PATH = Path(
+            os.getenv(
+                "TOOL_REGISTRY_PATH", str(runtime_root / "data/tool_registry.json")
+            )
+        )
+        cls.PROFILES_PATH = Path(
+            os.getenv("PROFILES_PATH", str(runtime_root / "profiles"))
+        )
         cls.MONGODB_URI = os.getenv("MONGODB_URI")
         cls.MONGODB_DB = os.getenv("MONGODB_DB", "decode")
         cls.SEARCH_ENGINE = os.getenv("DECODE_SEARCH_ENGINE", "duckduckgo")

@@ -4,6 +4,7 @@ version = "1.0.0"
 description = "Decode — local-first, extensible cybersecurity operating system"
 authors = ["YourName <you@example.com>"]
 license = "MIT"
+packages = [{ include = "decode", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
@@ -36,6 +37,7 @@ mcp = ["mcp"]
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
 mongomock = "^4.3.0"
+ruff = "^0.16.0"
 
 [tool.poetry.scripts]
 decode = "decode.__main__:main"

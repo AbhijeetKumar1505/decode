@@ -9,13 +9,13 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt
 from rich.table import Table
 
-from .audit import AuditLayer
-from .bootstrap.engine import BootstrapEngine
+from ..bootstrap.engine import BootstrapEngine
+from ..observability.audit import AuditLayer
+from ..observability.feedback import FeedbackStore
+from ..observability.logging_service import LoggingService
+from ..persistence import create_store
+from ..tui import AgentREPL
 from .config import Config
-from .feedback import FeedbackStore
-from .logging_service import LoggingService
-from .persistence import create_store
-from .tui import AgentREPL
 
 app = typer.Typer()
 console = Console()
@@ -49,9 +49,9 @@ def display_banner():
 
 
 _bootstrap = BootstrapEngine()
-_logger = LoggingService()
-_audit = AuditLayer()
-_feedback = FeedbackStore()
+_logger = LoggingService(Config.LOGS_PATH)
+_audit = AuditLayer(Config.AUDIT_PATH)
+_feedback = FeedbackStore(Config.FEEDBACK_PATH)
 
 
 def _apply_plugin_playbook_dirs() -> None:

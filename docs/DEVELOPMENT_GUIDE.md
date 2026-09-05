@@ -3,7 +3,8 @@
 ## Repository layout
 
 ```text
-decode/
+src/decode/
+  app/             CLI, configuration, and Rich + prompt_toolkit TUI
   agents/          Agent base + HostAgent (governed host capabilities)
   bootstrap/       Startup and host preparation
   capabilities/    Host + coding capability specs, per-turn resolver
@@ -15,6 +16,7 @@ decode/
   knowledge/       Knowledge graph, retrieval, capability -> ATT&CK map
   memory/          Session, project, and semantic memory
   models/          Model registry, policy-aware router, role gateway (subsystem 01)
+  observability/   Audit, logging, feedback, and replay records
   persistence/     SQLite/Mongo sessions, evidence, and artifacts
   planner/         DAG data types (PlanNode, PlanGraph) — task-state primitives
   prompting/       System-prompt composition from fragments (subsystem 02)
@@ -39,6 +41,8 @@ Add new top-level folders only when an implemented subsystem needs them.
 - Create and activate a virtual environment.
 - Install project and development dependencies.
 - Copy `.env.example` to `.env` and add only required local secrets.
+- Runtime state defaults to `~/.decode/`; set `DECODE_HOME` or individual path
+  variables when a different location is required.
 - Run `python -m decode --doctor` or the relevant health command before tool-backed work.
 
 ## Coding standards

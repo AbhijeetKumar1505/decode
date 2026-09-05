@@ -1,6 +1,6 @@
 # Configuration Templates
 
-Runtime configuration is loaded from `.env` and environment variables by `decode/config.py`. Copy the root `.env.example` to `.env`; do not commit the populated file.
+Runtime configuration is loaded from `.env` and environment variables by `src/decode/app/config.py`. Copy the root `.env.example` to `.env`; do not commit the populated file.
 
 ## Model provider
 
