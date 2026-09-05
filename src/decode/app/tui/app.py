@@ -29,9 +29,10 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.text import Text
 
+from decode.app.config import Config
 from decode.hostcontrol import CommandPolicy, FilesystemScope, PermissionMode
-from decode.logging_service import LoggingService
 from decode.models import default_model_registry
+from decode.observability.logging_service import LoggingService
 from decode.persistence import create_store
 from decode.persistence.evidence import EvidenceCollector
 from decode.persistence.target_tracker import TargetContextTracker, TargetFinding
@@ -257,9 +258,9 @@ class AgentREPL:
         self._domain = domain
         self._model = getattr(agent, "provider_name", "openrouter")
         self._store = create_store()
-        self._log_svc = LoggingService()
+        self._log_svc = LoggingService(Config.LOGS_PATH)
         self._tracker: TargetContextTracker | None = None
-        self._evidence = EvidenceCollector()
+        self._evidence = EvidenceCollector(Config.EVIDENCE_PATH)
         self._registry = SkillRegistry()
         self._model_registry = default_model_registry()
         self._session_active = False
@@ -296,7 +297,7 @@ class AgentREPL:
             "attack_graph": ("attack_path", "high"),
         }
 
-        self._history_path = Path("./data/repl_history.txt")
+        self._history_path = Config.MEMORY_PATH.parent / "repl_history.txt"
         self._history_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._commands = _command_index()
@@ -518,7 +519,7 @@ class AgentREPL:
         if self._session_active:
             self._save_session()
         loaded: list[dict[str, str]] = []
-        hp = Path(f"./data/sessions/{sid}.json")
+        hp = Config.MEMORY_PATH.parent / "sessions" / f"{sid}.json"
         if hp.exists():
             loaded = json.loads(hp.read_text(encoding="utf-8"))
         # Restore conversation for both the REPL and the agent so chat() has context.
@@ -1096,7 +1097,6 @@ class AgentREPL:
             return None
 
     def _handle_model(self, arg):
-        from decode.config import Config
         from decode.models import default_model_registry
 
         registry = default_model_registry()
@@ -1454,7 +1454,11 @@ class AgentREPL:
     def _save_session(self):
         if not self._tracker:
             return
-        hp = Path(f"./data/sessions/{self._tracker.session_id}.json")
+        hp = (
+            Config.MEMORY_PATH.parent
+            / "sessions"
+            / f"{self._tracker.session_id}.json"
+        )
         hp.parent.mkdir(parents=True, exist_ok=True)
         hp.write_text(
             json.dumps(self._conversation_history, indent=2), encoding="utf-8"

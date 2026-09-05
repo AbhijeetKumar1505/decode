@@ -1,245 +1,526 @@
-
 # Decode
 
-**Local-first cybersecurity agent — a governed universal tool-use loop**
+Decode is a local-first cybersecurity operating system and governed universal
+tool-use agent. You describe an authorized objective in natural language, and
+Decode plans the work, discovers tools installed on the host, executes one
+bounded action at a time, and explains the result.
 
-Decode is an open-source, AI-native cybersecurity agent. You describe an objective in natural language; the agent **discovers the tools installed on your machine**, drives them (and your own scripts) through a **governed execution layer**, and reports back — every action scope-checked, risk-classified, approvable, and audited. There is no hardcoded per-tool wrapper: if a tool is installed, the agent can use it; if it isn't, the agent tells you.
+Decode is designed for security researchers, defenders, penetration testers,
+students, and engineering teams. It is not an unrestricted exploitation
+system: scope, permissions, approvals, evidence capture, and audit logging are
+enforced by the runtime rather than delegated to a model.
 
----
+> Only use Decode against systems, networks, files, and accounts that you own
+> or are explicitly authorized to test.
 
-## Overview
+## What Decode does
 
-The bare `decode ❯` prompt is a single governed agent loop. Given a goal (or a plain question), it plans → calls one tool → observes the result → iterates, until the goal is met. Its tools are: **host control** (files, processes, services), **tool discovery** (`list_tools`, a `$PATH` scan), and **`shell_command`** — the general path for running any installed CLI. Nothing bypasses the `ExecutionCoordinator`: reads run freely, writes are gated, destructive actions need explicit approval, and everything is written to an audit trail with hashed evidence.
+The interactive agent uses one governed loop:
 
-It is designed for security researchers, penetration testers, students, and defenders — intelligent automation that never replaces human judgment or removes a safety control.
+```text
+user goal
+  -> plan
+  -> select one capability
+  -> governance and scope checks
+  -> approval when required
+  -> execute
+  -> capture evidence and telemetry
+  -> observe and continue
+```
 
-## Features
+The model can propose an action, but it cannot grant itself permission. Every
+consequential action is routed through `ExecutionCoordinator`, which applies:
 
-### Current
-| Area | Capability |
-|------|-----------|
-| **Universal agent loop** | One governed plan → call tool → observe → iterate loop drives the whole session; the bare prompt and `/agent` are the same path |
-| **Tool discovery** | `list_tools` scans `$PATH` so the agent finds whatever is installed — no hardcoded tool catalog |
-| **Governed shell** | `shell_command` runs any installed CLI (or your scripts) as an argument vector — policy-checked, per-command risk-classified, scoped, audited; missing tools are reported, never auto-installed |
-| **Host control** | Governed file read/write/edit/search, process list/kill, service status/control, and stateful command sessions |
-| **Safety controls** | Deny-by-default filesystem scope + command policy, permission modes (plan/ask/auto), bound approvals, mandatory telemetry, and protected evidence — nothing bypasses `ExecutionCoordinator` |
-| **Permission modes** | `plan` (preview only), `ask` (reads auto, writes/destructive gated), `auto` (reads+writes auto in scope, destructive still gated) |
-| **Markdown playbooks** | Author reusable procedures as `SKILL.md` files; the agent reads them as guidance and executes each step via governed `shell_command` — no Python wrapper needed |
-| **Provider agnostic** | OpenRouter orchestrator (one key, many models) plus OpenAI and Anthropic adapters; model routing with data-locality policy |
-| **Persistent memory** | SQLite (or optional MongoDB) session memory: targets, findings, evidence, chain-of-custody |
-| **Evidence & audit** | SHA-256 chain-of-custody, integrity verification, and an append-only audit trail for every governed action |
-| **Knowledge graph** | Entity-relationship graph linking threats, techniques, and mitigations; capability → MITRE ATT&CK mapping |
+- Target and filesystem allowlists.
+- Per-command risk classification.
+- Permission modes: `plan`, `ask`, and `auto`.
+- Human approval for writes and destructive operations.
+- Mandatory audit, structured logging, feedback, and protected evidence.
+- Secret redaction and fail-closed behavior when required safety services fail.
 
-### Roadmap
+## Main capabilities
 
-The verified implementation baseline and prioritized release gates are maintained in [ROADMAP.md](ROADMAP.md). Execution governance, universal capability/tool convergence, planning/recovery/memory, model orchestration, and Kali coverage are in place; the in-tree plugin SDK was built and then **removed** in favor of markdown playbooks and native capabilities. The De-code task-state spine (Neural Schema, prompt composition, verification/replan, role→model routing) is now implemented, along with the extension layer — MCP servers and declarative plugin packages behind a unified capability registry (`decode mcp …` / `decode plugin …`), with scoped config. See [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) and [docs/PLUGIN_MANIFEST.md](docs/PLUGIN_MANIFEST.md).
+| Area | What is included |
+| --- | --- |
+| Universal agent | Natural-language questions and goals through a bounded plan-call-observe loop |
+| Tool discovery | Finds installed commands on `$PATH`; it never auto-installs missing tools |
+| Governed commands | Runs installed CLIs and scripts through `shell_command` |
+| Host control | Governed file read/write/edit/search, process inspection, service operations, and persistent command sessions |
+| Security scope | Authorized hosts, URLs, CIDRs, domains, and filesystem roots |
+| Execution providers | Local, Docker, WSL, SSH, and MCP provider integrations |
+| Playbooks | Markdown procedures that provide reusable guidance without Python tool wrappers |
+| Persistence | SQLite by default, with optional MongoDB operational storage |
+| Evidence and audit | Protected evidence references, SHA-256 integrity checks, append-oriented audit records |
+| Knowledge and memory | Local project/session memory and a security knowledge graph |
 
 ## Architecture
 
+```text
+CLI / Rich REPL
+       |
+UniversalAgent and ToolUseLoop
+       |
+ExecutionCoordinator
+       |
+Governance: scope, risk, permission, approval
+       |
+Host capabilities and markdown playbooks
+       |
+Execution providers and installed tools
+       |
+Persistence, evidence, audit, logging, and feedback
 ```
-User (natural-language goal or question)
- │
- ▼
-┌──────────────────────────────┐
-│   CLI / REPL (Typer + Rich)  │
-└──────────┬───────────────────┘
-           │
-┌──────────▼───────────────────────────────────┐
-│        Universal Agent Loop                   │
-│   run_tool_loop: plan → call → observe → …    │
-│   (bare prompt and /agent are the same path)  │
-└──────────┬────────────────────────────────────┘
-           │  every call
-┌──────────▼───────────────────────────────────┐
-│           ExecutionCoordinator                │
-│  scope allowlist · per-command risk · approval│
-│  · audit trail · hashed evidence (fail-closed)│
-└──────────┬────────────────────────────────────┘
-           │
-┌──────────▼───────────────────────────────────┐
-│        Governed capabilities                  │
-│  list_tools │ shell_command │ file/proc/svc   │
-│      │            │                            │
-│      ▼            ▼                            │
-│  $PATH scan   any installed CLI + your scripts│
-│               (+ SKILL.md markdown playbooks) │
-└──────────┬────────────────────────────────────┘
-           │
-┌──────────▼───────────────────┐
-│      Persistence Layer       │
-│  SQLite / MongoDB            │
-│  Knowledge Graph  Evidence   │
-└──────────────────────────────┘
-```
+
+The source is organized under `src/decode/`:
+
+| Package | Responsibility |
+| --- | --- |
+| `app/` | CLI, configuration, and interactive TUI |
+| `agents/` | Agent abstractions and `HostAgent` |
+| `capabilities/` | Typed capability definitions and resolution |
+| `governance/` | Scope and pre-execution policy |
+| `hostcontrol/` | Filesystem, command, process, service, and session operations |
+| `runtime/` | Agent loop, coordinator, and host controller |
+| `execution/` | Local, Docker, WSL, SSH, and MCP providers |
+| `persistence/` | SQLite/Mongo stores and protected evidence |
+| `observability/` | Audit, logging, feedback, and replay records |
+| `skills/` | Markdown playbook discovery and registration |
+| `models/`, `memory/`, `knowledge/` | Model routing, memory, and security knowledge |
 
 ## Installation
 
 ### Prerequisites
-- Python 3.11+
-- Kali Linux, Debian, or any Linux distribution with security tools
-- API key for your chosen LLM provider (OpenRouter, OpenAI, or Anthropic)
 
-### Quick Start
+- Python 3.11 or newer.
+- Git.
+- Linux, macOS, Windows, or Windows with WSL.
+- An API key for one supported model provider:
+  - OpenRouter (default)
+  - OpenAI
+  - Anthropic
+- Any security tools you want Decode to drive, such as `nmap`, `nuclei`,
+  `whatweb`, or `tshark`. These are optional and are not installed by Decode.
+
+On Windows, use WSL for Linux-native security tools and follow the repository's
+WSL testing guidance.
+
+### Install from a clone
 
 ```bash
-git clone https://github.com/AbhijeetKumar1505/decode
+git clone https://github.com/AbhijeetKumar1505/decode.git
 cd decode
 
-python -m venv venv
-source venv/bin/activate
-
-pip install -r requirements.txt
-
-cp .env.example .env
-# Edit .env with your API key
-
-decode
+python -m venv .venv
 ```
+
+Activate the environment:
+
+```bash
+# Linux or macOS
+source .venv/bin/activate
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+```
+
+Install Decode in editable mode:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+For development and tests:
+
+```bash
+python -m pip install ruff pytest mongomock
+```
+
+The project uses `pyproject.toml` as its packaging and dependency definition.
+`requirements.txt` is retained as a small editable-install convenience file.
 
 ### Docker
 
+Build the image:
+
 ```bash
 docker build -t decode -f docker/Dockerfile .
-docker run -it --network=host decode
 ```
 
-## Usage
+Run the interactive client:
 
-### Interactive Shell
+```bash
+docker run --rm -it --network=host decode
+```
+
+Review the container and network policy before using Docker for sensitive or
+active work. Docker is an execution provider, not an automatic authorization
+grant.
+
+## First-time setup
+
+### 1. Configure a model provider
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Then set one provider and its API key. For example:
+
+```dotenv
+DECODE_PROVIDER=openrouter
+OPENROUTER_API_KEY=your-key-here
+DECODE_MODEL=z-ai/glm-5.2:free
+```
+
+Alternative providers use:
+
+```dotenv
+DECODE_PROVIDER=openai
+OPENAI_API_KEY=your-key-here
+```
+
+or:
+
+```dotenv
+DECODE_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your-key-here
+```
+
+Never commit `.env`, API keys, credentials, or raw evidence.
+
+### 2. Check the installation
+
+```bash
+python -m decode --help
+python -m decode --doctor
+```
+
+The installed console script is equivalent:
+
+```bash
+decode --doctor
+```
+
+`--doctor` checks the local environment and available dependencies. It does not
+install missing security tools.
+
+### 3. Understand runtime storage
+
+Runtime state is kept outside the repository by default:
+
+```text
+~/.decode/
+  data/       SQLite database and local model-related state
+  audit/      Audit records
+  evidence/   Protected execution evidence
+  feedback/   Execution and decision feedback
+  logs/       Structured logs
+  profiles/   Local profiles
+  sessions/   REPL conversation snapshots
+```
+
+Set a different root when required:
+
+```bash
+DECODE_HOME=/path/to/decode-state decode
+```
+
+Individual paths can also be configured with variables such as `LOGS_PATH`,
+`AUDIT_PATH`, `EVIDENCE_PATH`, `MEMORY_PATH`, and `PROFILES_PATH`.
+
+## Basic workflow
+
+### 1. Start Decode
 
 ```bash
 decode
 ```
 
-Just type a goal or a question — it runs through the governed agent loop. Slash
-commands cover setup, scope, and direct host operations:
+You can also resume a session:
 
-| Command | Description |
-|---------|-------------|
-| *(type a goal or question)* | Run it through the governed universal agent loop |
-| `/agent <goal>` | The same loop, invoked explicitly |
-| `/scope [targets]` | Show or set the authorized target allowlist (empty scope denies target execution) |
-| `/mode plan\|ask\|auto` | Set the permission mode |
-| `/fsscope <read> [write]` | Set the filesystem scope for host operations |
-| `/tools [query]` | List installed CLI tools (`list_tools`) |
-| `/read <path>`, `/ls`, `/ps`, `/run <cmd>` | Governed host operations (files, processes, commands) |
-| `/providers` | Show execution providers and health |
-| `/knowledge <query>` | Search the local knowledge graph |
-| `/start`, `/session`, `/findings`, `/evidence`, `/target` | Session tracking, findings, and evidence |
-| `/resume`, `/clear`, `/help`, `/exit` | Session and shell control |
-
-### CLI Subcommands
-
-| Command | Description |
-|---------|-------------|
-| `decode` | Launch the interactive agent (add `--resume <id>` or `--continue`) |
-| `decode tools [query]` | List command-line tools installed on `$PATH` |
-| `decode providers` | List execution providers and their health |
-| `decode knowledge <query>` | Search the knowledge base |
-| `decode doctor` | Run system health diagnostics |
-| `decode bootstrap` | Run the first-startup bootstrap sequence |
-| `decode --setup` | Configure provider and API key |
-
-### Examples
-
-Everything is a natural-language goal — the agent discovers the tools it needs and
-runs them through the governed loop. Active scanning requires an authorized target
-(`/scope`) first.
-
-```text
-> what web-scanning tools are installed on this host?
-
-> /scope 10.0.0.5
-> scan 10.0.0.5 for open ports and services, then summarize what's exposed
-
-> capture 200 packets on eth0 with tshark and summarize the top talkers
-
-> read /etc/os-release and tell me the distro
-
-> run my ./enum.sh script against the authorized target and explain the output
-
-> what is a SYN scan and when would I use one?   # answered directly, no tool call
+```bash
+decode --resume SESSION_ID
+decode --continue
 ```
 
-If a tool the agent wants isn't installed, it reports that (e.g. `command not
-found: nuclei`) instead of failing silently — and never installs anything itself.
+### 2. Choose a permission mode
 
-## Documentation
+Start conservatively:
 
-| Document | Description |
-|----------|-------------|
-| [Documentation Hub](docs/README.md) | Canonical product, architecture, security, research, and engineering index |
-| [Product Constitution](docs/PRODUCT.md) | Vision, mission, principles, constraints, and success metrics |
-| [System Architecture](docs/SYSTEM_ARCHITECTURE.md) | The universal agent loop, coordinator, and host control |
-| [Execution Pipeline](docs/EXECUTION_PIPELINE.md) | The normative intent → govern → execute → evidence path |
-| [Security Model](docs/SECURITY_MODEL.md) | Scope, permissions, secrets, plugins, sandboxes, and confirmations |
-| [Host Control](docs/HOST_CONTROL.md) | Governed host capabilities and the `/agent` loop |
-| [Architecture Decisions](docs/adr/README.md) | Accepted and research decisions |
+```text
+> /mode ask
+```
 
-## Extending with playbooks
+The modes are:
 
-Decode has no per-tool Python wrappers. To package a reusable procedure, write
-a **markdown playbook** — a `SKILL.md`-style file with YAML frontmatter and a body
-of instructions. The agent surfaces it as a tool, reads the instructions as
-guidance, and carries out each step through governed `shell_command` (so every
-command is still scope-checked, risk-classified, and audited).
+| Mode | Behavior |
+| --- | --- |
+| `plan` | Preview work without executing actions |
+| `ask` | Reads may run in scope; writes require approval |
+| `auto` | Reads and in-scope writes may run automatically; destructive actions still require explicit controls and approval |
+
+### 3. Set target scope before active work
+
+Use only targets you are authorized to test. A synthetic documentation example
+is:
+
+```text
+> /scope 192.0.2.10
+```
+
+An empty target scope denies target execution. Scope is checked again
+immediately before execution; a model, prompt, playbook, or tool output cannot
+expand it.
+
+### 4. Set filesystem scope
+
+Authorize a read root and, if needed, a separate write root:
+
+```text
+> /fsscope /home/research/lab /home/research/lab/output
+```
+
+On Windows, use an absolute Windows path or operate through WSL with the
+corresponding mounted path.
+
+### 5. Discover installed tools
+
+```text
+> /tools
+> /tools nmap
+```
+
+Decode reports missing commands instead of installing them automatically.
+
+### 6. Ask for a bounded task
+
+Natural-language input and `/agent` use the same governed loop:
+
+```text
+> /agent inspect the authorized lab host and summarize its exposed services
+```
+
+For a plain question, no tool call is necessary:
+
+```text
+> explain the difference between passive and active reconnaissance
+```
+
+### 7. Inspect the result and evidence
+
+Useful commands include:
+
+```text
+> /session
+> /findings
+> /evidence
+> /providers
+> /knowledge authentication logging
+```
+
+Execution output is preserved as protected evidence and linked from the
+operational session record. Audit and log files contain references and
+redacted metadata rather than secrets.
+
+## Interactive commands
+
+| Command | Purpose |
+| --- | --- |
+| `/agent <goal>` | Run an explicit governed agent task |
+| `/scope [targets]` | Show or set authorized target scope |
+| `/mode plan\|ask\|auto` | Show or set permission mode |
+| `/fsscope <read> [write]` | Show or set filesystem scope |
+| `/tools [query]` | Discover installed command-line tools |
+| `/read <path>` | Read a file within filesystem scope |
+| `/ls [path]` | List a directory within filesystem scope |
+| `/ps` | List processes |
+| `/run <command>` | Execute a governed command |
+| `! <command>` | Run a command through governed shell mode |
+| `/providers` | Show execution providers and health |
+| `/knowledge <query>` | Search the local knowledge graph |
+| `/start`, `/session`, `/target` | Manage session and target context |
+| `/findings`, `/evidence` | Review findings and evidence references |
+| `/model [id]` | List or select a configured model |
+| `/resume <id>` | Resume a saved session |
+| `/clear` | Clear the current interactive context |
+| `/help` | Show command help |
+| `/exit` | Exit the REPL |
+
+Use `/help <command>` for command-specific details.
+
+## Usage examples
+
+### Host inspection
+
+```text
+> /fsscope /etc
+> /read /etc/os-release
+> /ps
+```
+
+### Tool-assisted work against an authorized lab target
+
+```text
+> /scope 192.0.2.10
+> /mode ask
+> /agent use an installed port scanner against 192.0.2.10 and summarize the results
+```
+
+### Run an installed script
+
+```text
+> /scope 192.0.2.10
+> /fsscope /home/research/scripts /home/research/results
+> /agent run /home/research/scripts/enum.sh against the authorized lab target and explain the output
+```
+
+### Direct command mode
+
+```text
+> ! nmap -sV 192.0.2.10
+```
+
+Direct mode still passes through command policy, target scope, approval,
+evidence capture, and audit. It is not an unrestricted shell escape.
+
+## Markdown playbooks
+
+Reusable procedures are authored as Markdown, not Python wrappers. A playbook
+contains YAML frontmatter and instructions that the agent follows. Each command
+from the procedure is still executed through the governed command capability.
+
+Playbooks are discovered from:
+
+```text
+src/decode/skills/playbooks/
+```
+
+or from directories listed in `DECODE_PLAYBOOKS_DIR`.
+
+Example:
 
 ```markdown
 ---
 name: web_recon_playbook
-description: Progressive passive-to-active web recon of one HTTP(S) target.
+description: Progressive reconnaissance of one authorized web target.
 category: web_scanning
 risk: READ
 tags: [web, recon]
-inputs:
-  target: { type: string, description: Authorized base URL, required: true }
 target_required: true
 ---
 
-# Web Reconnaissance Playbook
-1. Confirm the host responds: `curl -sS -I <target>` (or `httpx` if installed).
-2. Fingerprint the stack: `whatweb <target>`.
-3. Enumerate content (only if in scope) with an authorized wordlist.
-4. If `nuclei` is installed, run default templates and summarize by severity.
+# Web reconnaissance
+
+1. Confirm the authorized host responds.
+2. Fingerprint the web stack.
+3. Enumerate content only when it remains in scope.
+4. Summarize findings with evidence references.
 ```
 
-Drop `.md` files in `decode/skills/playbooks/`, or point
-`DECODE_PLAYBOOKS_DIR` at your own directory. See
-[decode/skills/playbooks/web_recon.md](decode/skills/playbooks/web_recon.md)
-for a complete example.
+See [the bundled web reconnaissance playbook](src/decode/skills/playbooks/web_recon.md)
+and [the development guide](docs/DEVELOPMENT_GUIDE.md) for the complete format.
 
-### Bundled engineering playbooks
+## Configuration reference
 
-Beyond the security playbooks, Decode ships a vendored copy of the
-[mattpocock/skills](https://github.com/mattpocock/skills) engineering and
-productivity set — TDD, code review, domain modeling, bug diagnosis, spec/ticket
-writing, grilling, and more. Each upstream skill is imported as a single
-consolidated playbook (companion reference files inlined) with frontmatter
-conformed to Decode's schema (`category: agent_core`, `risk: READ`), so the agent
-surfaces them as guidance tools like any other playbook. They are discovered
-automatically from `decode/skills/playbooks/`. Because a playbook only returns
-guidance — the agent still executes every step through governed `shell_command` —
-these general-purpose procedures inherit the same scope, risk, and audit controls.
+Common environment variables:
 
-Because they are general-purpose (`category: agent_core`) rather than
-security-domain, these engineering playbooks are offered in **every task mode,
-including `CODING`** — unlike security-domain playbooks (e.g. `web_scanning`),
-which stay gated to `SECURITY`/`HYBRID`. See
-[decode/capabilities/registry.py](decode/capabilities/registry.py)
-(`GENERAL_SKILL_CATEGORIES`).
+| Variable | Purpose |
+| --- | --- |
+| `DECODE_PROVIDER` | `openrouter`, `openai`, or `anthropic` |
+| `DECODE_MODEL` | Default model identifier |
+| `OPENROUTER_API_KEY` | OpenRouter credential |
+| `OPENAI_API_KEY` | OpenAI credential |
+| `ANTHROPIC_API_KEY` | Anthropic credential |
+| `DECODE_EXECUTOR` | Default execution provider |
+| `DECODE_HOME` | Root directory for runtime state |
+| `MEMORY_PATH` | Memory/model state path |
+| `LOGS_PATH` | Structured log path |
+| `AUDIT_PATH` | Audit record path |
+| `EVIDENCE_PATH` | Protected evidence path |
+| `FEEDBACK_PATH` | Feedback path |
+| `PROFILES_PATH` | Profile path |
+| `DECODE_PLAYBOOKS_DIR` | Additional playbook directories |
+| `MONGODB_URI` | Optional MongoDB connection |
+| `MONGODB_DB` | MongoDB database name, default `decode` |
+
+SQLite remains the default operational store. MongoDB is optional and does not
+change scope, permission, approval, audit, or evidence requirements.
+
+## Development
+
+Install development dependencies:
+
+```bash
+python -m pip install -e .
+python -m pip install ruff pytest mongomock
+```
+
+Run the required checks:
+
+```bash
+ruff check .
+python -m pytest tests/
+```
+
+For Windows, run the suite in WSL when testing Linux command behavior:
+
+```bash
+wsl -- python -m pytest tests/
+```
+
+Read [docs/README.md](docs/README.md) for the canonical documentation index,
+[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) for architecture,
+[docs/HOST_CONTROL.md](docs/HOST_CONTROL.md) for host operations, and
+[docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) for trust and authorization
+rules.
+
+## Troubleshooting
+
+### `command not found`
+
+The requested CLI is not installed or is not visible on `$PATH`. Install it
+through your operating system's approved process, then restart or re-run
+`/tools`. Decode never installs tools automatically.
+
+### Missing provider credential
+
+Run `decode --doctor`, check `DECODE_PROVIDER`, and verify the matching API key
+is present in `.env` or the process environment. Do not paste keys into chat,
+prompts, playbooks, or source files.
+
+### Scope or approval denial
+
+Review `/scope`, `/fsscope`, and `/mode`. A denial is intentional when the
+target or path is not explicitly authorized, the command risk is too high, or
+required approval was not provided.
+
+### Runtime files in the repository
+
+Set `DECODE_HOME` to a user-owned state directory and remove only known,
+disposable generated files. Do not delete audit or evidence data that may be
+needed for an investigation.
+
+## Documentation
+
+- [Documentation hub](docs/README.md)
+- [System architecture](docs/SYSTEM_ARCHITECTURE.md)
+- [Execution pipeline](docs/EXECUTION_PIPELINE.md)
+- [Security model](docs/SECURITY_MODEL.md)
+- [Host control](docs/HOST_CONTROL.md)
+- [Development guide](docs/DEVELOPMENT_GUIDE.md)
+- [Plugin and extension manifest](docs/PLUGIN_MANIFEST.md)
+- [Roadmap](ROADMAP.md)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details on:
-- Writing markdown playbooks
-- Code style guide
-- Pull request process
-- Development setup
+See [CONTRIBUTING.md](CONTRIBUTING.md) for coding standards, testing,
+playbooks, and pull request guidance.
 
-## License
+## License and security
 
-MIT License — see [LICENSE](LICENSE).
-
-## Security
-
-For security vulnerabilities, see [SECURITY.md](SECURITY.md).
+Decode is released under the [MIT License](LICENSE). To report a vulnerability,
+follow [SECURITY.md](SECURITY.md) and do not disclose sensitive details in a
+public issue.

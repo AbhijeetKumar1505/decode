@@ -1,0 +1,5 @@
+"""Compatibility export for application configuration."""
+
+from .app.config import Config, load_config
+
+__all__ = ["Config", "load_config"]

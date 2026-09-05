@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import uuid
 from datetime import UTC, datetime
@@ -10,7 +11,10 @@ from .evidence import ProtectedEvidenceStore
 
 class SessionStore:
     def __init__(self, db_path: Path | None = None):
-        self._db_path = db_path or Path("data/decode.db")
+        runtime_root = Path(
+            os.getenv("DECODE_HOME", str(Path.home() / ".decode"))
+        ).expanduser()
+        self._db_path = db_path or runtime_root / "data/decode.db"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._evidence_store = ProtectedEvidenceStore(self._db_path.parent / "evidence")
         self._conn: sqlite3.Connection | None = None

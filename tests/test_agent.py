@@ -195,7 +195,7 @@ class TestUniversalAgentExecutionPath(unittest.TestCase):
 
 class TestCliGovernedDomainEntryPoints(unittest.TestCase):
     def _tree(self) -> ast.Module:
-        cli_path = Path(__file__).parents[1] / "decode" / "cli.py"
+        cli_path = Path(__file__).parents[1] / "src" / "decode" / "app" / "cli.py"
         return ast.parse(cli_path.read_text(encoding="utf-8"))
 
     def test_cli_has_no_direct_domain_module_imports(self) -> None:
