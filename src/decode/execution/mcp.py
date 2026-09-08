@@ -8,7 +8,9 @@ provider is fully testable with a fake. The real client is built by
 transport only) and bound via ``MCPServerManager.executor_for``.
 """
 
+import asyncio
 import json
+import time
 from typing import Any, Protocol
 
 from .base import Command, ExecutionProvider, ExecutionResult, command_display
@@ -45,6 +47,7 @@ class MCPExecutor(ExecutionProvider):
     async def execute(
         self, command: Command, timeout: int = 60, env: dict[str, str] | None = None
     ) -> ExecutionResult:
+        start = time.time()
         display = command_display(command)
         if not isinstance(command, str):
             return ExecutionResult(
@@ -53,6 +56,7 @@ class MCPExecutor(ExecutionProvider):
                 success=False,
                 stderr="MCP commands require a structured JSON payload",
                 exit_code=-1,
+                duration=time.time() - start,
                 error="invalid_mcp_command",
             )
         if self._client is None:
@@ -62,12 +66,19 @@ class MCPExecutor(ExecutionProvider):
                 success=False,
                 stderr="No MCP client configured for this server",
                 exit_code=-1,
+                duration=time.time() - start,
                 error="mcp_not_configured",
             )
         try:
             payload = json.loads(command)
             tool = payload["tool"]
-            arguments = payload.get("arguments", {})
+            arguments = payload.get("arguments")
+            if arguments is None:
+                arguments = {}
+            if not isinstance(tool, str) or not isinstance(arguments, dict):
+                raise TypeError(
+                    "tool must be a string and arguments must be a dictionary"
+                )
         except (json.JSONDecodeError, KeyError, TypeError):
             return ExecutionResult(
                 command=display,
@@ -75,10 +86,28 @@ class MCPExecutor(ExecutionProvider):
                 success=False,
                 stderr='MCP command must be JSON: {"tool": "<name>", "arguments": {...}}',
                 exit_code=-1,
+                duration=time.time() - start,
                 error="invalid_mcp_command",
             )
         try:
-            result = await self._client.call_tool(tool, arguments)
+            result = await asyncio.wait_for(
+                self._client.call_tool(tool, arguments),
+                timeout=timeout
+                if timeout is not None and timeout > 0
+                else (0 if timeout == 0 else None),
+            )
+        except TimeoutError:
+            return ExecutionResult(
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr=f"MCP command timed out after {timeout}s",
+                exit_code=-1,
+                duration=time.time() - start,
+                timed_out=True,
+                error="timeout",
+                metadata={"tool": tool},
+            )
         except Exception as e:
             return ExecutionResult(
                 command=display,
@@ -86,9 +115,11 @@ class MCPExecutor(ExecutionProvider):
                 success=False,
                 stderr=str(e),
                 exit_code=-1,
+                duration=time.time() - start,
                 error=str(e),
                 metadata={"tool": tool},
             )
+        duration = time.time() - start
         stdout = result if isinstance(result, str) else json.dumps(result, default=str)
         return ExecutionResult(
             command=display,
@@ -96,6 +127,7 @@ class MCPExecutor(ExecutionProvider):
             success=True,
             stdout=stdout,
             exit_code=0,
+            duration=duration,
             metadata={"tool": tool},
         )
 

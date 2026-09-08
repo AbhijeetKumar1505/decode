@@ -12,13 +12,16 @@ from decode.skills.base import RiskLevel
 
 
 class _FakeMCPClient:
-    def __init__(self, healthy=True, raises=False):
+    def __init__(self, healthy=True, raises=False, delay=0.0):
         self.healthy = healthy
         self.raises = raises
+        self.delay = delay
         self.calls = []
 
     async def call_tool(self, name, arguments):
         self.calls.append((name, arguments))
+        if self.delay > 0:
+            await asyncio.sleep(self.delay)
         if self.raises:
             raise RuntimeError("tool exploded")
         return {"tool": name, "args": arguments, "result": "ok"}
@@ -27,7 +30,7 @@ class _FakeMCPClient:
         return self.healthy
 
 
-def _run_provider(executor, command):
+def _run_provider(executor, command, timeout=60):
     with tempfile.TemporaryDirectory() as directory:
         audit = AuditLayer(Path(directory) / "audit")
         coordinator = ExecutionCoordinator(
@@ -42,7 +45,7 @@ def _run_provider(executor, command):
         )
 
         async def operation():
-            return await executor.execute(command)
+            return await executor.execute(command, timeout=timeout)
 
         return asyncio.run(coordinator.execute(request, operation)).value
 
@@ -61,6 +64,7 @@ class TestMCPExecutor(unittest.TestCase):
         self.assertTrue(r.success)
         self.assertEqual(r.metadata["tool"], "port_scan")
         self.assertIn("ok", r.stdout)
+        self.assertGreaterEqual(r.duration, 0.0)
         self.assertEqual(client.calls[0][0], "port_scan")
         self.assertEqual(ex.name, "mcp/lab")
 
@@ -77,11 +81,32 @@ class TestMCPExecutor(unittest.TestCase):
         self.assertFalse(r.success)
         self.assertEqual(r.error, "invalid_mcp_command")
 
+    def test_non_dict_arguments_or_non_string_tool_rejected(self):
+        ex = MCPExecutor(client=_FakeMCPClient())
+        r1 = _run_provider(ex, json.dumps({"tool": 123}))
+        self.assertFalse(r1.success)
+        self.assertEqual(r1.error, "invalid_mcp_command")
+
+        r2 = _run_provider(ex, json.dumps({"tool": "scan", "arguments": "invalid"}))
+        self.assertFalse(r2.success)
+        self.assertEqual(r2.error, "invalid_mcp_command")
+
     def test_tool_error_is_captured(self):
         ex = MCPExecutor(client=_FakeMCPClient(raises=True))
         r = _run_provider(ex, MCPExecutor.encode("boom"))
         self.assertFalse(r.success)
         self.assertIn("exploded", r.stderr)
+        self.assertGreaterEqual(r.duration, 0.0)
+
+    def test_timeout_is_enforced_and_flagged(self):
+        client = _FakeMCPClient(delay=0.3)
+        ex = MCPExecutor(client=client)
+        r = _run_provider(ex, MCPExecutor.encode("slow_tool"), timeout=0.05)
+        self.assertFalse(r.success)
+        self.assertTrue(r.timed_out)
+        self.assertEqual(r.error, "timeout")
+        self.assertIn("timed out after 0.05s", r.stderr)
+        self.assertGreaterEqual(r.duration, 0.04)
 
     def test_health_reflects_client(self):
         self.assertTrue(
