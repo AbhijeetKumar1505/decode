@@ -95,13 +95,19 @@ shippable and reuses existing seams.
   http --url …`), not just stdio. Both server and client verified end-to-end with real MCP
   sessions (initialize → list_tools → call_tool).
 
-**Phase 2 — Session core + command/UX parity**
-- Extract a core `SessionManager` around `SessionStore`/`TargetContextTracker`; the REPL only
-  resolves and displays.
-- Unconditional auto-init on first task; `dc_YYYYMMDD_xxxx` IDs in `SessionStore._new_id()` (+ Mongo mirror).
-- Slash commands `/status /sessions /continue /checkpoint /reset` and `/mcp start|stop|status`;
-  connect `TaskStateStore` checkpointing to the live session id.
-- `--json` / non-interactive output for scriptable subcommands.
+**Phase 2 — Session core + command/UX parity** — *in progress*
+- Done: core `SessionManager` (`persistence/manager.py`) wrapping `SessionStore` — create /
+  resolve / list / latest / status / close / reactivate + transcript save/load; the REPL now
+  instantiates it (`self._sessions`) and the new commands use it.
+- Done: **`dc_YYYYMMDD_xxxx`** session ids via `_new_session_id()` in both the SQLite and Mongo
+  stores (other entity ids stay UUIDs).
+- Done: **unconditional auto-init** — a session is created on the first task (no `/start`),
+  seeded with the task as its goal and any detected target as scope (`_ensure_session`).
+- Done: slash commands **`/sessions` `/status` `/continue` `/reset`** (help + autocomplete +
+  dispatch), alongside the existing `/mcp start|stop|status`.
+- Remaining: connect `TaskStateStore` checkpointing to the live session id (`/checkpoint`);
+  `--json` / non-interactive output for scriptable subcommands; migrate the legacy REPL
+  `_resume_session`/`_save_session` onto `SessionManager`.
 
 **Phase 3 — Providers, classifier & usage metering**
 - `BedrockProvider` (and optionally `MistralProvider`) implementing `LLMProvider`; register in
