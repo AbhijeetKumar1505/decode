@@ -30,9 +30,13 @@ defusedxml = "^0.7.1"
 pymongo = "^4.6.0"
 # Optional: real MCP transport (stdio only). Install with `poetry install -E mcp`.
 mcp = { version = "^1.0.0", optional = true }
+# Optional: local MCP/HTTP server (`decode mcp start`). Install with `-E server`.
+fastapi = { version = "^0.115.0", optional = true }
+uvicorn = { version = "^0.30.0", optional = true }
 
 [tool.poetry.extras]
 mcp = ["mcp"]
+server = ["fastapi", "uvicorn"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
