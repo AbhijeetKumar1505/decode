@@ -72,7 +72,7 @@ shippable and reuses existing seams.
 - Corrected stale references: this `ROADMAP.md`/adapter list and the `/model` help example.
 - Added `decode version` and the `/version` slash command (wires `__version__`).
 
-**Phase 1 — MCP server + FastAPI localhost** (biggest gap) — *core shipped*
+**Phase 1 — MCP server + FastAPI localhost** (biggest gap) — *complete*
 - Done: `src/decode/mcp/` package — a transport-independent core (`config.py`, `server.py`)
   serving the *existing* governed capabilities via `hostcontrol/mcp.py::host_capability_tools()`,
   routing every call through `ExecutionCoordinator` (governance, approval, audit, evidence all
@@ -87,9 +87,13 @@ shippable and reuses existing seams.
   status / config` (local bind by default; governance `--mode` and `--read-root`/`--write-root`
   scope flags). `tests/test_mcp_server.py` covers discovery, governance modes, approval gating,
   the HTTP layer, the schema normalizer, and the stdio server build.
-- Remaining Phase-1 tail: MCP **streamable-HTTP** server transport (remote clients over one HTTP
-  endpoint); and completing the *client-side* http/sse transport in `extensions/mcp_client.py`
-  (still `NotImplementedError`).
+- Done: native MCP **streamable-HTTP** server transport — the FastAPI app mounts a
+  `StreamableHTTPSessionManager` at `/mcp` (when `decode[mcp]` is installed), so `decode mcp
+  start` serves the REST convenience API *and* native MCP over one port for remote clients.
+- Done: **client-side** http/sse transport in `extensions/mcp_client.py` — De-code can now also
+  *consume* external MCP servers over streamable-HTTP and SSE (`decode mcp add … --transport
+  http --url …`), not just stdio. Both server and client verified end-to-end with real MCP
+  sessions (initialize → list_tools → call_tool).
 
 **Phase 2 — Session core + command/UX parity**
 - Extract a core `SessionManager` around `SessionStore`/`TargetContextTracker`; the REPL only

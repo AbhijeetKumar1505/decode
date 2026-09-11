@@ -20,7 +20,13 @@ _SERVER_MISSING = (
 
 
 def build_fastapi_app(server: DecodeMCPServer):
-    """Build the FastAPI app exposing /health, /tools, and POST /tools/{name}."""
+    """Build the FastAPI app.
+
+    Always serves the convenience REST API (/health, /tools, POST /tools/{name}).
+    When the optional ``mcp`` SDK is installed it also mounts a native MCP
+    streamable-HTTP endpoint at ``/mcp`` so standard MCP clients can connect over
+    one HTTP endpoint.
+    """
     try:
         from fastapi import FastAPI, Request
     except ImportError as exc:  # pragma: no cover - exercised only without extra
@@ -28,11 +34,15 @@ def build_fastapi_app(server: DecodeMCPServer):
 
     from .. import __version__
 
-    app = FastAPI(title="De-code MCP Server", version=__version__)
+    mcp_mount = _build_mcp_asgi(server)  # (handler, lifespan) or None
+    lifespan = mcp_mount[1] if mcp_mount else None
+    app = FastAPI(title="De-code MCP Server", version=__version__, lifespan=lifespan)
 
     @app.get("/health")
     def health() -> dict[str, Any]:
-        return server.health()
+        info = server.health()
+        info["mcp_endpoint"] = "/mcp" if mcp_mount else None
+        return info
 
     @app.get("/tools")
     def tools() -> dict[str, Any]:
@@ -43,7 +53,38 @@ def build_fastapi_app(server: DecodeMCPServer):
         arguments = await _extract_arguments(request)
         return await server.call_tool(name, arguments)
 
+    if mcp_mount:
+        app.mount("/mcp", app=mcp_mount[0])
+
     return app
+
+
+def _build_mcp_asgi(server: DecodeMCPServer):
+    """Build the native MCP streamable-HTTP ASGI handler + lifespan.
+
+    Returns ``(handler, lifespan)`` when the ``mcp`` SDK is available, else
+    ``None`` (the REST API still works without it).
+    """
+    try:
+        import contextlib
+
+        from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+    except ImportError:
+        return None
+
+    from .stdio import build_mcp_server
+
+    manager = StreamableHTTPSessionManager(app=build_mcp_server(server))
+
+    async def handle(scope, receive, send):
+        await manager.handle_request(scope, receive, send)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app):
+        async with manager.run():
+            yield
+
+    return handle, lifespan
 
 
 async def _extract_arguments(request) -> dict[str, Any]:

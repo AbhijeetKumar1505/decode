@@ -260,5 +260,38 @@ class MCPStdioServerTest(unittest.TestCase):
         self.assertIn(types.CallToolRequest, app.request_handlers)
 
 
+@unittest.skipUnless(_HAS_MCP, "requires the optional decode[mcp] SDK")
+class MCPClientBuildTest(unittest.TestCase):
+    """`build_client` dispatches to the right transport adapter."""
+
+    def test_transport_dispatch(self):
+        from decode.extensions.mcp_client import (
+            _HTTPMCPClient,
+            _StdioMCPClient,
+            build_client,
+        )
+        from decode.extensions.mcp_manager import MCPServerSpec
+
+        stdio = build_client(MCPServerSpec(name="a", transport="stdio", command="x"))
+        self.assertIsInstance(stdio, _StdioMCPClient)
+
+        http = build_client(
+            MCPServerSpec(name="b", transport="http", url="http://h/mcp")
+        )
+        self.assertIsInstance(http, _HTTPMCPClient)
+        self.assertFalse(http._sse)
+
+        sse = build_client(MCPServerSpec(name="c", transport="sse", url="http://h/sse"))
+        self.assertIsInstance(sse, _HTTPMCPClient)
+        self.assertTrue(sse._sse)
+
+    def test_http_transport_requires_url(self):
+        from decode.extensions.mcp_client import build_client
+        from decode.extensions.mcp_manager import MCPServerSpec
+
+        with self.assertRaises(ValueError):
+            build_client(MCPServerSpec(name="d", transport="http", url=""))
+
+
 if __name__ == "__main__":
     unittest.main()

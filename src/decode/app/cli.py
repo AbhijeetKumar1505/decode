@@ -453,8 +453,15 @@ def mcp_start(
         f"[green]De-code MCP server[/green] on [cyan]{config.url}[/cyan]  "
         f"mode=[bold]{perm.value}[/bold]  tools={len(server.list_tools())}"
     )
+    import importlib.util
+
+    mcp_note = (
+        "  Native MCP: POST /mcp"
+        if importlib.util.find_spec("mcp")
+        else "  (install decode[mcp] for a native /mcp endpoint)"
+    )
     console.print(
-        "[dim]Endpoints: GET /health, GET /tools, POST /tools/{name}.  "
+        "[dim]Endpoints: GET /health, GET /tools, POST /tools/{name}." + mcp_note + "  "
         "Press Ctrl+C to stop.[/dim]"
     )
     try:
