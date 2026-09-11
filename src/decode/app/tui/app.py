@@ -157,7 +157,7 @@ COMMAND_GROUPS: dict[str, list[tuple]] = {
             "/model",
             "[id]",
             "Show or switch the active model",
-            "With no argument, list available models with their TPM/RPS limits. With an id (bare name or provider/name, e.g. devstral-2512), switch the active model.",
+            "With no argument, list available models with their TPM/RPS limits. With an id (bare name or provider/name, e.g. z-ai/glm-5.2:free), switch the active model.",
         ),
     ],
     "Session": [
@@ -220,6 +220,7 @@ COMMAND_GROUPS: dict[str, list[tuple]] = {
             "With no argument, list all commands. With a command, show its detail.",
         ),
         ("/clear", "", "Clear conversation history", "Reset the conversation context."),
+        ("/version", "", "Show the De-code version", "Print the installed De-code version."),
         ("/exit", "", "Exit Decode", "Quit the REPL (or press Ctrl+D)."),
     ],
 }
@@ -379,6 +380,11 @@ class AgentREPL:
             if text == "/clear":
                 self._conversation_history.clear()
                 console.print("[dim]Conversation history cleared.[/dim]")
+                continue
+            if text == "/version":
+                from ... import __version__
+
+                console.print(f"[cyan]De-code[/cyan] {__version__}")
                 continue
             if text in ("/plugins", "/skills"):
                 self._print_plugins()

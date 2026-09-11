@@ -85,7 +85,7 @@ def start_repl(
     _apply_plugin_playbook_dirs()
 
     try:
-        from .universal_agent import UniversalAgent
+        from ..universal_agent import UniversalAgent
 
         agent = UniversalAgent(provider=provider or Config.PROVIDER)
     except ImportError as e:
@@ -141,6 +141,14 @@ def doctor():
     """Run system health diagnostics"""
     Config.ensure_dirs()
     run_doctor()
+
+
+@app.command()
+def version():
+    """Show the installed De-code version"""
+    from .. import __version__
+
+    console.print(f"De-code {__version__}")
 
 
 @app.command()
@@ -245,7 +253,10 @@ def bootstrap(
     console.print("[green]Report saved:[/green] data/bootstrap_report.json")
 
 
-mcp_app = typer.Typer(help="Manage MCP servers (external tool providers)")
+mcp_app = typer.Typer(
+    help="Manage external MCP providers (add/list/…) and run De-code's own "
+    "MCP/HTTP server (start/stop/status/config)"
+)
 app.add_typer(mcp_app, name="mcp")
 
 
@@ -362,6 +373,179 @@ def mcp_disable(
         if ok
         else f"[yellow]No MCP server '{name}'.[/yellow]"
     )
+
+
+@mcp_app.command("start")
+def mcp_start(
+    port: int = typer.Option(8765, "--port", help="Port to bind (http transport)"),
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Bind address (local-only by default)"
+    ),
+    transport: str = typer.Option(
+        "http", "--transport", help="http (localhost REST) | stdio (native MCP)"
+    ),
+    mode: str = typer.Option(
+        "ask", "--mode", help="Governance mode: plan | ask | auto"
+    ),
+    read_root: list[str] = typer.Option(
+        None, "--read-root", help="Filesystem read-scope root (repeatable)"
+    ),
+    write_root: list[str] = typer.Option(
+        None, "--write-root", help="Filesystem write-scope root (repeatable)"
+    ),
+):
+    """Start De-code's MCP server: localhost HTTP (default) or native MCP stdio."""
+    from pathlib import Path
+
+    from ..hostcontrol import PermissionMode
+    from ..mcp import DecodeMCPServer, MCPServerConfig
+
+    if transport not in ("http", "stdio"):
+        console.print("[red]Invalid --transport. Use http or stdio.[/red]")
+        raise typer.Exit(1) from None
+
+    Config.ensure_dirs()
+    try:
+        perm = PermissionMode(mode.lower())
+    except ValueError:
+        console.print("[red]Invalid --mode. Use plan, ask, or auto.[/red]")
+        raise typer.Exit(1) from None
+
+    config = MCPServerConfig(
+        host=host,
+        port=port,
+        mode=perm,
+        read_roots=list(read_root) if read_root else [str(Path.cwd())],
+        write_roots=list(write_root) if write_root else [],
+    )
+    server = DecodeMCPServer(config)
+
+    if transport == "stdio":
+        # The stdio transport speaks the MCP protocol on stdout, so emit the
+        # startup note on stderr to avoid corrupting the stream.
+        from ..mcp.stdio import run_stdio
+
+        print(
+            f"De-code MCP stdio server (mode={perm.value}, "
+            f"tools={len(server.list_tools())}). Connect an MCP client to this "
+            "process's stdio.",
+            file=sys.stderr,
+        )
+        try:
+            asyncio.run(run_stdio(server))
+        except RuntimeError as exc:
+            from rich.markup import escape
+
+            console.print(f"[red]{escape(str(exc))}[/red]")
+            raise typer.Exit(1) from None
+        except KeyboardInterrupt:
+            pass
+        return
+
+    from ..mcp.transport import run_http
+
+    if not config.is_local:
+        console.print(
+            f"[yellow]Warning: binding to a non-local address ({host}); "
+            "the server has no authentication yet.[/yellow]"
+        )
+    console.print(
+        f"[green]De-code MCP server[/green] on [cyan]{config.url}[/cyan]  "
+        f"mode=[bold]{perm.value}[/bold]  tools={len(server.list_tools())}"
+    )
+    import importlib.util
+
+    mcp_note = (
+        "  Native MCP: POST /mcp"
+        if importlib.util.find_spec("mcp")
+        else "  (install decode[mcp] for a native /mcp endpoint)"
+    )
+    console.print(
+        "[dim]Endpoints: GET /health, GET /tools, POST /tools/{name}." + mcp_note + "  "
+        "Press Ctrl+C to stop.[/dim]"
+    )
+    try:
+        run_http(server, config)
+    except RuntimeError as exc:
+        from rich.markup import escape
+
+        console.print(f"[red]{escape(str(exc))}[/red]")
+        raise typer.Exit(1) from None
+    except KeyboardInterrupt:
+        console.print("\n[dim]MCP server stopped.[/dim]")
+
+
+@mcp_app.command("status")
+def mcp_status():
+    """Show the local MCP server's recorded endpoint and ping its health."""
+    from ..mcp.transport import read_state
+
+    state = read_state()
+    if not state:
+        console.print(
+            "[dim]No MCP server state found. Start one with `decode mcp start`.[/dim]"
+        )
+        return
+    url = state.get("url", "")
+    console.print(
+        f"[cyan]Endpoint:[/cyan] {url}   [cyan]pid:[/cyan] {state.get('pid')}   "
+        f"[cyan]mode:[/cyan] {state.get('mode')}"
+    )
+    try:
+        import requests
+
+        resp = requests.get(f"{url}/health", timeout=2)
+        console.print(f"[green]Health:[/green] {resp.json()}")
+    except Exception as exc:
+        console.print(
+            f"[yellow]Health check failed (server may be stopped): {exc}[/yellow]"
+        )
+
+
+@mcp_app.command("stop")
+def mcp_stop():
+    """Stop the local MCP server recorded by `decode mcp start`."""
+    import os
+    import signal
+
+    from ..mcp.transport import clear_state, read_state
+
+    state = read_state()
+    if not state or not state.get("pid"):
+        console.print("[dim]No running MCP server recorded.[/dim]")
+        return
+    pid = int(state["pid"])
+    try:
+        os.kill(pid, signal.SIGTERM)
+        console.print(f"[green]Sent stop signal to MCP server (pid {pid}).[/green]")
+    except ProcessLookupError:
+        console.print(
+            "[yellow]Recorded process not found; clearing stale state.[/yellow]"
+        )
+    except OSError as exc:
+        console.print(f"[red]Could not stop server: {exc}[/red]")
+        return
+    clear_state()
+
+
+@mcp_app.command("config")
+def mcp_config():
+    """Show the default server binding and the governed tools it would expose."""
+    from ..mcp import DecodeMCPServer, MCPServerConfig
+
+    cfg = MCPServerConfig()
+    server = DecodeMCPServer(cfg)
+    console.print(
+        f"[bold]Default bind:[/bold] {cfg.url}   mode={cfg.mode.value}   "
+        f"read_roots={cfg.read_roots}"
+    )
+    table = Table(title="Exposed governed tools", box=box.ROUNDED)
+    table.add_column("Tool", style="cyan")
+    table.add_column("Risk")
+    table.add_column("Description")
+    for tool in server.list_tools():
+        table.add_row(tool["name"], tool["risk"], tool["description"])
+    console.print(table)
 
 
 plugin_app = typer.Typer(help="Manage plugin packages (declarative capability bundles)")

@@ -79,7 +79,7 @@ target-scope declarations for MCP.
 - Recon, web, AD, credential, exploit, and reporting agents.
 - Local, Docker, WSL, SSH, and MCP executor implementations.
 - Provider-aware tool discovery and generated capability index.
-- Mistral, OpenAI, and Anthropic model adapters.
+- OpenRouter, OpenAI, and Anthropic model adapters.
 - Scope policy and governance gate in mission/workflow execution.
 - SQLite sessions, projects, targets, ports, findings, evidence, and artifacts.
 - Knowledge graph, report rendering, evidence, and domain modules.

@@ -1,8 +1,9 @@
 """Real MCP transport adapters (optional ``mcp`` SDK).
 
-Only the ``stdio`` transport is supported; ``http``/``sse`` are not yet wired and
-fail closed in :func:`build_client`. Install the SDK with the ``mcp`` extra
-(``pip install .[mcp]`` / ``poetry install -E mcp``).
+Supports ``stdio`` (subprocess), ``http`` / ``streamable-http`` (the modern MCP
+HTTP transport), and ``sse`` (the legacy Server-Sent-Events transport). Install
+the SDK with the ``mcp`` extra (``pip install .[mcp]`` / ``poetry install -E
+mcp``).
 
 Kept behind an optional import and excluded from coverage: exercising it needs a
 live MCP server. The manager and executor are fully tested with injected fake
@@ -67,6 +68,62 @@ class _StdioMCPClient:  # pragma: no cover - requires a live MCP server
             return False
 
 
+class _HTTPMCPClient:  # pragma: no cover - requires a live MCP server
+    """Client for the modern MCP streamable-HTTP transport, and legacy SSE."""
+
+    def __init__(self, spec: MCPServerSpec, *, sse: bool = False) -> None:
+        self._spec = spec
+        self._sse = sse
+
+    def _connect(self):
+        if self._sse:
+            from mcp.client.sse import sse_client
+
+            return sse_client(self._spec.url, headers=dict(self._spec.env) or None)
+        from mcp.client.streamable_http import streamablehttp_client
+
+        return streamablehttp_client(
+            self._spec.url, headers=dict(self._spec.env) or None
+        )
+
+    async def list_tools(self) -> list[dict[str, Any]]:
+        from mcp import ClientSession
+
+        async with self._connect() as streams:
+            read, write = streams[0], streams[1]
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                listing = await session.list_tools()
+                return [
+                    {
+                        "name": t.name,
+                        "description": t.description or "",
+                        "inputSchema": getattr(t, "inputSchema", {}),
+                    }
+                    for t in listing.tools
+                ]
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        from mcp import ClientSession
+
+        async with self._connect() as streams:
+            read, write = streams[0], streams[1]
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool(name, arguments)
+                return getattr(result, "content", result)
+
+    async def check(self) -> bool:
+        try:
+            await self.list_tools()
+            return True
+        except Exception:
+            return False
+
+
+_HTTP_TRANSPORTS = {"http", "streamable-http", "streamable_http", "streamablehttp"}
+
+
 def build_client(spec: MCPServerSpec) -> MCPToolProvider:  # pragma: no cover
     try:
         import mcp  # noqa: F401
@@ -77,4 +134,16 @@ def build_client(spec: MCPServerSpec) -> MCPToolProvider:  # pragma: no cover
         ) from exc
     if spec.transport == "stdio":
         return _StdioMCPClient(spec)
+    if spec.transport in _HTTP_TRANSPORTS:
+        if not spec.url:
+            raise ValueError(
+                f"MCP server '{spec.name}' needs a --url for http transport"
+            )
+        return _HTTPMCPClient(spec)
+    if spec.transport == "sse":
+        if not spec.url:
+            raise ValueError(
+                f"MCP server '{spec.name}' needs a --url for sse transport"
+            )
+        return _HTTPMCPClient(spec, sse=True)
     raise NotImplementedError(f"MCP transport '{spec.transport}' is not yet wired")
