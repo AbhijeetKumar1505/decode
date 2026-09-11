@@ -175,10 +175,14 @@ class SessionStore:
     def _new_id(self) -> str:
         return str(uuid.uuid4())
 
+    def _new_session_id(self) -> str:
+        """Human-readable, sortable session id: ``dc_YYYYMMDD_<8 hex>``."""
+        return f"dc_{datetime.now(UTC):%Y%m%d}_{uuid.uuid4().hex[:8]}"
+
     # ── Sessions ──
 
     def create_session(self, goal: str = "", target_focus: str = "") -> str:
-        sid = self._new_id()
+        sid = self._new_session_id()
         now = self._now()
         self._conn.execute(
             "INSERT INTO sessions (id, goal, target_focus, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)",

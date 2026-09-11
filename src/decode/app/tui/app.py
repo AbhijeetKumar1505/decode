@@ -35,6 +35,7 @@ from decode.models import default_model_registry
 from decode.observability.logging_service import LoggingService
 from decode.persistence import create_store
 from decode.persistence.evidence import EvidenceCollector
+from decode.persistence.manager import SessionManager
 from decode.persistence.target_tracker import TargetContextTracker, TargetFinding
 from decode.runtime import redact_sensitive
 from decode.skills.registry import SkillRegistry
@@ -197,6 +198,30 @@ COMMAND_GROUPS: dict[str, list[tuple]] = {
             "Resume a previous session",
             "Reload a saved session by id.",
         ),
+        (
+            "/continue",
+            "",
+            "Resume the most recent session",
+            "Reload the most recently used session (like `decode --continue`).",
+        ),
+        (
+            "/sessions",
+            "",
+            "List recent sessions",
+            "Show recent session ids, status, and goals; resume one with /resume.",
+        ),
+        (
+            "/status",
+            "",
+            "Show the active session status",
+            "Show the active session's id, goal, target, model, mode, findings, and message count.",
+        ),
+        (
+            "/reset",
+            "",
+            "Close the session and reset context",
+            "Save and close the active session and clear the conversation so the next task starts fresh.",
+        ),
     ],
     "General": [
         (
@@ -220,7 +245,12 @@ COMMAND_GROUPS: dict[str, list[tuple]] = {
             "With no argument, list all commands. With a command, show its detail.",
         ),
         ("/clear", "", "Clear conversation history", "Reset the conversation context."),
-        ("/version", "", "Show the De-code version", "Print the installed De-code version."),
+        (
+            "/version",
+            "",
+            "Show the De-code version",
+            "Print the installed De-code version.",
+        ),
         ("/exit", "", "Exit Decode", "Quit the REPL (or press Ctrl+D)."),
     ],
 }
@@ -259,6 +289,7 @@ class AgentREPL:
         self._domain = domain
         self._model = getattr(agent, "provider_name", "openrouter")
         self._store = create_store()
+        self._sessions = SessionManager(self._store)
         self._log_svc = LoggingService(Config.LOGS_PATH)
         self._tracker: TargetContextTracker | None = None
         self._evidence = EvidenceCollector(Config.EVIDENCE_PATH)
@@ -395,8 +426,20 @@ class AgentREPL:
             if text.startswith("/logs"):
                 self._handle_logs(text)
                 continue
+            if text == "/sessions":
+                self._list_sessions()
+                continue
             if text == "/session":
                 self._show_session()
+                continue
+            if text == "/status":
+                self._handle_status()
+                continue
+            if text == "/continue":
+                self._handle_continue()
+                continue
+            if text == "/reset":
+                self._handle_reset()
                 continue
             if text.startswith("/resume "):
                 self._handle_resume(text)
@@ -1019,6 +1062,94 @@ class AgentREPL:
         console.print(f"[bold green]Session started: [bold]{sid}[/bold][/bold green]")
         console.print(f"[dim]Target: {target_focus}[/dim]")
 
+    def _ensure_session(self, text: str = ""):
+        """Create a session on the first task if none is active (no /start needed)."""
+        if self._session_active and self._tracker:
+            return
+        target_focus = self._current_target or ""
+        if (
+            target_focus
+            and not self._scope_entries
+            and hasattr(self._agent, "set_scope")
+        ):
+            self._agent.set_scope([target_focus])
+        goal = next((ln.strip() for ln in (text or "").splitlines() if ln.strip()), "")
+        goal = goal[:80] or "De-code session"
+        self._tracker = TargetContextTracker(self._store)
+        sid = self._tracker.start_session(goal=goal, target_focus=target_focus)
+        self._session_active = True
+        console.print(f"[dim]Session started: [cyan]{sid}[/cyan][/dim]")
+
+    def _list_sessions(self):
+        sessions = self._sessions.list(limit=15)
+        if not sessions:
+            console.print("[dim]No sessions yet. Type a task to begin one.[/dim]")
+            return
+        active = self._tracker.session_id if self._tracker else None
+        table = Table(title="Sessions", box=box.ROUNDED)
+        table.add_column("ID", style="cyan")
+        table.add_column("Status")
+        table.add_column("Created")
+        table.add_column("Goal")
+        for s in sessions:
+            marker = " [green]●[/green]" if s["id"] == active else ""
+            table.add_row(
+                s["id"] + marker,
+                s.get("status", ""),
+                (s.get("created_at", "") or "")[:19],
+                (s.get("goal", "") or "")[:48],
+            )
+        console.print(table)
+        console.print("[dim]Resume one with [cyan]/resume <id>[/cyan].[/dim]")
+
+    def _handle_status(self):
+        if not self._session_active or not self._tracker:
+            console.print(
+                "[dim]No active session. Type a task to begin one, or "
+                "[cyan]/continue[/cyan] to resume the most recent.[/dim]"
+            )
+            return
+        info = self._sessions.status(self._tracker.session_id)
+        if not info:
+            console.print("[yellow]Active session not found in the store.[/yellow]")
+            return
+        body = (
+            f"ID:        [cyan]{info['id']}[/cyan]\n"
+            f"Status:    {info['status']}\n"
+            f"Goal:      {info['goal'] or '—'}\n"
+            f"Target:    {info['target_focus'] or '—'}\n"
+            f"Model:     {self._model}\n"
+            f"Mode:      {self._perm_mode.value}\n"
+            f"Findings:  {info['findings']}\n"
+            f"Messages:  {len(self._conversation_history)}\n"
+            f"Created:   {info['created_at'][:19]}"
+        )
+        console.print(
+            Panel(body, title="Session status", border_style="cyan", box=box.ROUNDED)
+        )
+
+    def _handle_continue(self):
+        if self._session_active:
+            console.print(
+                "[dim]A session is already active. Use [cyan]/sessions[/cyan] then "
+                "[cyan]/resume <id>[/cyan] to switch.[/dim]"
+            )
+            return
+        self._resume_latest()
+
+    def _handle_reset(self):
+        """Close the active session and clear context for a fresh start."""
+        if self._session_active and self._tracker:
+            self._save_session()
+        self._tracker = None
+        self._session_active = False
+        self._conversation_history.clear()
+        if hasattr(self._agent, "conversation_history"):
+            self._agent.conversation_history = self._conversation_history
+        console.print(
+            "[dim]Session closed and context reset. The next task starts fresh.[/dim]"
+        )
+
     # ── scope + providers ──
 
     def _handle_scope(self, text):
@@ -1313,8 +1444,9 @@ class AgentREPL:
             detected = ip_match.group(1)
             self._current_target = detected
             console.print(f"[dim]Detected target: {detected}[/dim]")
-        if not self._session_active and self._current_target:
-            self._handle_start(f"/start {self._current_target}")
+        # A session is created automatically on the first task (Claude Code style);
+        # no /start required. If a target was detected it seeds the session scope.
+        self._ensure_session(text)
         await self._handle_agent(text)
 
     async def _execute_tool(self, action, params=None):
@@ -1460,11 +1592,7 @@ class AgentREPL:
     def _save_session(self):
         if not self._tracker:
             return
-        hp = (
-            Config.MEMORY_PATH.parent
-            / "sessions"
-            / f"{self._tracker.session_id}.json"
-        )
+        hp = Config.MEMORY_PATH.parent / "sessions" / f"{self._tracker.session_id}.json"
         hp.parent.mkdir(parents=True, exist_ok=True)
         hp.write_text(
             json.dumps(self._conversation_history, indent=2), encoding="utf-8"
