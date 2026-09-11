@@ -20,6 +20,7 @@ from ..runtime import (
 )
 from ..runtime.coordinator import ApprovalCallback
 from .config import MCPServerConfig
+from .schema import normalize_input_schema
 
 
 class DecodeMCPServer:
@@ -46,12 +47,21 @@ class DecodeMCPServer:
 
     # -- discovery ---------------------------------------------------------
     def list_tools(self) -> list[dict[str, Any]]:
-        """Governed host capabilities as MCP-style tool descriptors."""
+        """Governed host capabilities as MCP-style tool descriptors.
+
+        Input schemas are normalized to valid JSON Schema so MCP clients (which
+        validate against the metaschema) accept them.
+        """
         tools = host_capability_tools()
         if self.config.enabled_tools is not None:
             allowed = set(self.config.enabled_tools)
             tools = [t for t in tools if t["name"] in allowed]
-        return tools
+        normalized: list[dict[str, Any]] = []
+        for tool in tools:
+            item = dict(tool)
+            item["input_schema"] = normalize_input_schema(tool.get("input_schema", {}))
+            normalized.append(item)
+        return normalized
 
     def _tool_names(self) -> set[str]:
         return {t["name"] for t in self.list_tools()}
@@ -78,11 +88,17 @@ class DecodeMCPServer:
 
     @staticmethod
     def _normalize(name: str, result: CoordinatedResult) -> dict[str, Any]:
+        value = result.value
+        if hasattr(value, "model_dump"):  # pydantic model -> JSON-native dict
+            try:
+                value = value.model_dump(mode="json")
+            except Exception:
+                value = str(value)
         return {
             "tool": name,
             "ok": bool(result.success),
             "status": result.status.value,
-            "value": result.value,
+            "value": value,
             "error": result.error,
             "error_category": (
                 result.error_category.value if result.error_category else None

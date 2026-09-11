@@ -78,12 +78,18 @@ shippable and reuses existing seams.
   routing every call through `ExecutionCoordinator` (governance, approval, audit, evidence all
   apply). `transport.py` provides a lazy FastAPI app (`/health`, `GET /tools`, `POST /tools/{name}`)
   behind the optional `decode[server]` extra, with run-state bookkeeping.
-- Done: `mcp` Typer group extended with `start --port 8765 / stop / status / config`
-  (local bind by default; governance `--mode` and `--read-root`/`--write-root` scope flags).
-  Tests in `tests/test_mcp_server.py` cover discovery, governance modes, and approval gating.
-- Remaining Phase-1 tail: native MCP-protocol binding via the `mcp` SDK (stdio / streamable-HTTP)
-  so standard MCP clients discover the tools directly; and completing the *client-side* http/sse
-  transport in `extensions/mcp_client.py` (still `NotImplementedError`).
+- Done: native **MCP-protocol stdio binding** (`src/decode/mcp/stdio.py`) via the `mcp` SDK
+  (`decode[mcp]` extra) — `decode mcp start --transport stdio` serves the governed tools so
+  standard MCP clients (Claude Desktop, IDEs, other agents) discover and invoke them directly.
+  A shorthand→JSON-Schema normalizer (`schema.py`) makes the tool schemas pass MCP metaschema
+  validation; verified end-to-end with a real MCP client (initialize → list_tools → call_tool).
+- Done: `mcp` Typer group extended with `start [--transport http|stdio] --port 8765 / stop /
+  status / config` (local bind by default; governance `--mode` and `--read-root`/`--write-root`
+  scope flags). `tests/test_mcp_server.py` covers discovery, governance modes, approval gating,
+  the HTTP layer, the schema normalizer, and the stdio server build.
+- Remaining Phase-1 tail: MCP **streamable-HTTP** server transport (remote clients over one HTTP
+  endpoint); and completing the *client-side* http/sse transport in `extensions/mcp_client.py`
+  (still `NotImplementedError`).
 
 **Phase 2 — Session core + command/UX parity**
 - Extract a core `SessionManager` around `SessionStore`/`TargetContextTracker`; the REPL only

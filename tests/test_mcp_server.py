@@ -12,6 +12,7 @@ from decode.hostcontrol import PermissionMode
 from decode.mcp import DecodeMCPServer, MCPServerConfig
 
 _HAS_FASTAPI = importlib.util.find_spec("fastapi") is not None
+_HAS_MCP = importlib.util.find_spec("mcp") is not None
 
 
 class MCPServerCoreTest(unittest.TestCase):
@@ -185,6 +186,78 @@ class MCPServerHTTPTest(unittest.TestCase):
         # No "arguments" wrapper — the bare object is treated as the arguments.
         resp = self.client.post("/tools/file_read", json={"path": str(target)})
         self.assertTrue(resp.json()["ok"], resp.json())
+
+
+class SchemaNormalizeTest(unittest.TestCase):
+    """Shorthand capability schemas expand to valid JSON Schema."""
+
+    def test_expands_shorthand_to_json_schema(self):
+        from decode.mcp.schema import normalize_input_schema
+
+        raw = {
+            "type": "object",
+            "properties": {
+                "command": "string (full command line)",
+                "glob": "string?",
+                "action": "enum[start,stop,restart]",
+                "commands": "string[][]",
+                "pid": "integer",
+            },
+        }
+        out = normalize_input_schema(raw)
+        self.assertEqual(out["type"], "object")
+        self.assertNotIn("required", out)  # deliberately omitted
+        props = out["properties"]
+        self.assertEqual(props["command"]["type"], "string")
+        self.assertEqual(props["command"]["description"], "full command line")
+        self.assertEqual(props["glob"], {"type": "string"})
+        self.assertEqual(
+            props["action"], {"type": "string", "enum": ["start", "stop", "restart"]}
+        )
+        self.assertEqual(
+            props["commands"],
+            {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
+        )
+        self.assertEqual(props["pid"]["type"], "integer")
+
+    def test_server_tools_have_valid_schemas(self):
+        # Every exposed tool's input schema must have object type + dict props.
+        server = DecodeMCPServer(MCPServerConfig())
+        for tool in server.list_tools():
+            schema = tool["input_schema"]
+            self.assertEqual(schema["type"], "object")
+            for prop in schema["properties"].values():
+                self.assertIsInstance(prop, dict)
+                self.assertIn("type", prop)
+
+
+class MCPStdioPayloadTest(unittest.TestCase):
+    """The SDK-free payload builder used by the native stdio binding."""
+
+    def test_payloads_shape(self):
+        from decode.mcp.stdio import mcp_tool_payloads
+
+        server = DecodeMCPServer(MCPServerConfig())
+        payloads = mcp_tool_payloads(server)
+        self.assertEqual(len(payloads), len(server.list_tools()))
+        sample = payloads[0]
+        self.assertEqual(set(sample), {"name", "description", "inputSchema"})
+        self.assertEqual(sample["inputSchema"]["type"], "object")
+
+
+@unittest.skipUnless(_HAS_MCP, "requires the optional decode[mcp] SDK")
+class MCPStdioServerTest(unittest.TestCase):
+    """Build the native MCP server and confirm its handlers are registered."""
+
+    def test_build_registers_tool_handlers(self):
+        from mcp import types
+
+        from decode.mcp.stdio import build_mcp_server
+
+        app = build_mcp_server(DecodeMCPServer(MCPServerConfig()))
+        self.assertEqual(app.name, "decode")
+        self.assertIn(types.ListToolsRequest, app.request_handlers)
+        self.assertIn(types.CallToolRequest, app.request_handlers)
 
 
 if __name__ == "__main__":

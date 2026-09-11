@@ -377,9 +377,12 @@ def mcp_disable(
 
 @mcp_app.command("start")
 def mcp_start(
-    port: int = typer.Option(8765, "--port", help="Port to bind"),
+    port: int = typer.Option(8765, "--port", help="Port to bind (http transport)"),
     host: str = typer.Option(
         "127.0.0.1", "--host", help="Bind address (local-only by default)"
+    ),
+    transport: str = typer.Option(
+        "http", "--transport", help="http (localhost REST) | stdio (native MCP)"
     ),
     mode: str = typer.Option(
         "ask", "--mode", help="Governance mode: plan | ask | auto"
@@ -391,12 +394,15 @@ def mcp_start(
         None, "--write-root", help="Filesystem write-scope root (repeatable)"
     ),
 ):
-    """Start the De-code MCP/HTTP server, exposing governed host capabilities."""
+    """Start De-code's MCP server: localhost HTTP (default) or native MCP stdio."""
     from pathlib import Path
 
     from ..hostcontrol import PermissionMode
     from ..mcp import DecodeMCPServer, MCPServerConfig
-    from ..mcp.transport import run_http
+
+    if transport not in ("http", "stdio"):
+        console.print("[red]Invalid --transport. Use http or stdio.[/red]")
+        raise typer.Exit(1) from None
 
     Config.ensure_dirs()
     try:
@@ -413,6 +419,31 @@ def mcp_start(
         write_roots=list(write_root) if write_root else [],
     )
     server = DecodeMCPServer(config)
+
+    if transport == "stdio":
+        # The stdio transport speaks the MCP protocol on stdout, so emit the
+        # startup note on stderr to avoid corrupting the stream.
+        from ..mcp.stdio import run_stdio
+
+        print(
+            f"De-code MCP stdio server (mode={perm.value}, "
+            f"tools={len(server.list_tools())}). Connect an MCP client to this "
+            "process's stdio.",
+            file=sys.stderr,
+        )
+        try:
+            asyncio.run(run_stdio(server))
+        except RuntimeError as exc:
+            from rich.markup import escape
+
+            console.print(f"[red]{escape(str(exc))}[/red]")
+            raise typer.Exit(1) from None
+        except KeyboardInterrupt:
+            pass
+        return
+
+    from ..mcp.transport import run_http
+
     if not config.is_local:
         console.print(
             f"[yellow]Warning: binding to a non-local address ({host}); "
