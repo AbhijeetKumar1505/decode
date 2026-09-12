@@ -38,6 +38,7 @@ from decode.persistence.evidence import EvidenceCollector
 from decode.persistence.manager import SessionManager
 from decode.persistence.target_tracker import TargetContextTracker, TargetFinding
 from decode.runtime import redact_sensitive
+from decode.schema.store import TaskStateStore
 from decode.skills.registry import SkillRegistry
 
 from .theme import _SPINNER_FRAMES, DECODE_THEME, code_panel, diamond, fmt_path
@@ -217,6 +218,12 @@ COMMAND_GROUPS: dict[str, list[tuple]] = {
             "Show the active session's id, goal, target, model, mode, findings, and message count.",
         ),
         (
+            "/checkpoint",
+            "",
+            "Save a manual checkpoint",
+            "Persist the transcript and a TaskState snapshot for the active session without closing it, so a long run can be resumed from a known point.",
+        ),
+        (
             "/reset",
             "",
             "Close the session and reset context",
@@ -290,6 +297,7 @@ class AgentREPL:
         self._model = getattr(agent, "provider_name", "openrouter")
         self._store = create_store()
         self._sessions = SessionManager(self._store)
+        self._task_states = TaskStateStore(self._store)
         self._log_svc = LoggingService(Config.LOGS_PATH)
         self._tracker: TargetContextTracker | None = None
         self._evidence = EvidenceCollector(Config.EVIDENCE_PATH)
@@ -438,6 +446,9 @@ class AgentREPL:
             if text == "/continue":
                 self._handle_continue()
                 continue
+            if text == "/checkpoint":
+                self._handle_checkpoint()
+                continue
             if text == "/reset":
                 self._handle_reset()
                 continue
@@ -554,29 +565,26 @@ class AgentREPL:
             self._resume_latest()
 
     def _resume_latest(self):
-        sessions = self._store.list_sessions(limit=1)
-        if not sessions:
+        latest = self._sessions.latest()
+        if not latest:
             console.print("[yellow]No previous session to continue.[/yellow]")
             return
-        self._resume_session(sessions[0]["id"])
+        self._resume_session(latest["id"])
 
     def _resume_session(self, sid: str):
-        session = self._store.get_session(sid)
+        session = self._sessions.get(sid)
         if not session:
             console.print(f"[red]Session not found: {sid}[/red]")
             return
         if self._session_active:
             self._save_session()
-        loaded: list[dict[str, str]] = []
-        hp = Config.MEMORY_PATH.parent / "sessions" / f"{sid}.json"
-        if hp.exists():
-            loaded = json.loads(hp.read_text(encoding="utf-8"))
         # Restore conversation for both the REPL and the agent so chat() has context.
+        loaded = self._sessions.load_transcript(sid)
         self._conversation_history = loaded
         if hasattr(self._agent, "conversation_history"):
             self._agent.conversation_history = loaded
         self._tracker = TargetContextTracker(self._store, session_id=sid)
-        self._store.update_session(sid, status="active")
+        self._sessions.reactivate(sid)
         self._current_target = session.get("target_focus", "")
         if (
             not self._scope_entries
@@ -1137,6 +1145,42 @@ class AgentREPL:
             return
         self._resume_latest()
 
+    def _handle_checkpoint(self):
+        """Save a manual checkpoint (transcript + TaskState) without closing the session."""
+        if not self._session_active or not self._tracker:
+            console.print("[dim]No active session to checkpoint.[/dim]")
+            return
+        sid = self._tracker.session_id
+        self._sessions.save_transcript(sid, self._conversation_history)
+        state = getattr(self._agent, "_last_task_state", None)
+        if state is not None and getattr(state, "session_id", None) == sid:
+            actions = len(getattr(state, "actions", []))
+        else:
+            # No live agent run yet — snapshot the current scope/goal instead.
+            from decode.schema.task_state import ScopeView, TaskState
+
+            session = self._sessions.get(sid) or {}
+            state = TaskState(
+                session_id=sid,
+                objective=session.get("goal", ""),
+                scope=ScopeView(
+                    read_roots=[
+                        str(r) for r in getattr(self._fs_scope, "read_roots", [])
+                    ],
+                    write_roots=[
+                        str(r) for r in getattr(self._fs_scope, "write_roots", [])
+                    ],
+                    targets=list(self._scope_entries),
+                ),
+            )
+            actions = 0
+        self._task_states.save(state)
+        console.print(
+            f"[green]Checkpoint saved[/green] for [cyan]{sid}[/cyan] "
+            f"([dim]{len(self._conversation_history)} messages, {actions} actions[/dim]). "
+            f"Resume with [cyan]/resume {sid}[/cyan]."
+        )
+
     def _handle_reset(self):
         """Close the active session and clear context for a fresh start."""
         if self._session_active and self._tracker:
@@ -1366,6 +1410,7 @@ class AgentREPL:
             approval_callback=self._host_approval,
             on_step=on_step,
             mcp_manager=self._mcp(),
+            session_id=self._tracker.session_id if self._tracker else None,
         )
         console.print(f"\n[bold]{result.get('final', '')}[/bold]\n")
 
@@ -1592,9 +1637,7 @@ class AgentREPL:
     def _save_session(self):
         if not self._tracker:
             return
-        hp = Config.MEMORY_PATH.parent / "sessions" / f"{self._tracker.session_id}.json"
-        hp.parent.mkdir(parents=True, exist_ok=True)
-        hp.write_text(
-            json.dumps(self._conversation_history, indent=2), encoding="utf-8"
+        self._sessions.save_transcript(
+            self._tracker.session_id, self._conversation_history
         )
-        self._store.close_session(self._tracker.session_id)
+        self._sessions.close(self._tracker.session_id)

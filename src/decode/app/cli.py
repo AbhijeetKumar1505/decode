@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 
 import typer
@@ -60,7 +61,7 @@ def _apply_plugin_playbook_dirs() -> None:
     import os
 
     try:
-        from .extensions import ExtensionManager
+        from ..extensions import ExtensionManager
 
         dirs = [str(d) for d in ExtensionManager().playbook_dirs()]
     except Exception:
@@ -152,14 +153,11 @@ def version():
 
 
 @app.command()
-def providers():
+def providers(
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+):
     """List execution providers and their health status"""
-    from .execution import available_provider_names, create_executor
-
-    table = Table(title="Execution Providers", box=box.ROUNDED)
-    table.add_column("Provider", style="cyan")
-    table.add_column("Name", style="dim")
-    table.add_column("Health", style="bold")
+    from ..execution import available_provider_names, create_executor
 
     async def _health(name):
         provider = create_executor(name)
@@ -169,10 +167,26 @@ def providers():
             ok = False
         return provider.name, ok
 
+    rows = []
     for key in available_provider_names():
         name, ok = asyncio.run(_health(key))
-        status = "[green]available[/green]" if ok else "[yellow]unavailable[/yellow]"
-        table.add_row(key, name, status)
+        rows.append({"provider": key, "name": name, "available": ok})
+
+    if json_output:
+        print(json.dumps({"active": Config.EXECUTOR, "providers": rows}, indent=2))
+        return
+
+    table = Table(title="Execution Providers", box=box.ROUNDED)
+    table.add_column("Provider", style="cyan")
+    table.add_column("Name", style="dim")
+    table.add_column("Health", style="bold")
+    for row in rows:
+        status = (
+            "[green]available[/green]"
+            if row["available"]
+            else "[yellow]unavailable[/yellow]"
+        )
+        table.add_row(row["provider"], row["name"], status)
     console.print(table)
     console.print(
         f"[dim]Active provider: [bold]{Config.EXECUTOR}[/bold] (set DECODE_EXECUTOR to change)[/dim]"
@@ -183,15 +197,19 @@ def providers():
 def tools(
     query: str = typer.Argument("", help="Filter installed tools by name substring"),
     limit: int = typer.Option(400, "--limit", "-n", help="Max tools to list"),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
 ):
     """List command-line tools installed on this host (from $PATH).
 
     Mirrors the governed ``list_tools`` capability the agent uses to discover what
     it can run; there is no hardcoded tool catalog.
     """
-    from .hostcontrol import operations as ops
+    from ..hostcontrol import operations as ops
 
     result = ops.list_tools(query=query, limit=limit)
+    if json_output:
+        print(json.dumps(result, indent=2))
+        return
     console.print(
         f"[green]Installed tools on $PATH:[/green] {result['count']}"
         + (f"  [dim](filter: '{query}')[/dim]" if query else "")
@@ -206,6 +224,38 @@ def tools(
 
 
 @app.command()
+def sessions(
+    limit: int = typer.Option(20, "--limit", "-n", help="Max sessions to list"),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+):
+    """List recent sessions (the non-interactive equivalent of /sessions)."""
+    from ..persistence.manager import SessionManager
+
+    rows = SessionManager(_store).list(limit=limit)
+    if json_output:
+        print(json.dumps(rows, indent=2, default=str))
+        return
+    if not rows:
+        console.print(
+            "[dim]No sessions yet. Run `decode` and type a task to begin one.[/dim]"
+        )
+        return
+    table = Table(title="Sessions", box=box.ROUNDED)
+    table.add_column("ID", style="cyan")
+    table.add_column("Status")
+    table.add_column("Created")
+    table.add_column("Goal")
+    for s in rows:
+        table.add_row(
+            s.get("id", ""),
+            s.get("status", ""),
+            (s.get("created_at", "") or "")[:19],
+            (s.get("goal", "") or "")[:48],
+        )
+    console.print(table)
+
+
+@app.command()
 def knowledge(
     query: str = typer.Argument(
         ..., help="Search the knowledge base (techniques, threats, mitigations)"
@@ -213,7 +263,7 @@ def knowledge(
 ):
     """Search the knowledge base for relevant techniques and references"""
     Config.ensure_dirs()
-    from .knowledge import KnowledgeRetriever
+    from ..knowledge import KnowledgeRetriever
 
     retriever = KnowledgeRetriever()
     hits = retriever.relevant_for_goal(query)
@@ -261,13 +311,13 @@ app.add_typer(mcp_app, name="mcp")
 
 
 def _mcp_manager():
-    from .extensions import ExtensionManager
+    from ..extensions import ExtensionManager
 
     return ExtensionManager().mcp
 
 
 def _parse_scope(scope: str):
-    from .extensions import Scope
+    from ..extensions import Scope
 
     try:
         return Scope(scope)
@@ -292,7 +342,7 @@ def mcp_add(
     scope: str = typer.Option("user", "--scope", help="user | project | system"),
 ):
     """Register an MCP server, e.g. `decode mcp add mongodb -- npx -y mongodb-mcp-server`."""
-    from .extensions.mcp_manager import MCPServerSpec
+    from ..extensions.mcp_manager import MCPServerSpec
 
     parts = command_parts or []
     spec = MCPServerSpec(
@@ -476,29 +526,46 @@ def mcp_start(
 
 
 @mcp_app.command("status")
-def mcp_status():
+def mcp_status(
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+):
     """Show the local MCP server's recorded endpoint and ping its health."""
     from ..mcp.transport import read_state
 
     state = read_state()
+    health = None
+    if state:
+        url = state.get("url", "")
+        try:
+            import requests
+
+            health = requests.get(f"{url}/health", timeout=2).json()
+        except Exception as exc:
+            health = {"error": str(exc)}
+
+    if json_output:
+        print(
+            json.dumps(
+                {"running": bool(state), "state": state, "health": health}, indent=2
+            )
+        )
+        return
+
     if not state:
         console.print(
             "[dim]No MCP server state found. Start one with `decode mcp start`.[/dim]"
         )
         return
-    url = state.get("url", "")
     console.print(
-        f"[cyan]Endpoint:[/cyan] {url}   [cyan]pid:[/cyan] {state.get('pid')}   "
-        f"[cyan]mode:[/cyan] {state.get('mode')}"
+        f"[cyan]Endpoint:[/cyan] {state.get('url', '')}   "
+        f"[cyan]pid:[/cyan] {state.get('pid')}   [cyan]mode:[/cyan] {state.get('mode')}"
     )
-    try:
-        import requests
-
-        resp = requests.get(f"{url}/health", timeout=2)
-        console.print(f"[green]Health:[/green] {resp.json()}")
-    except Exception as exc:
+    if isinstance(health, dict) and "error" not in health:
+        console.print(f"[green]Health:[/green] {health}")
+    else:
+        err = health.get("error") if isinstance(health, dict) else health
         console.print(
-            f"[yellow]Health check failed (server may be stopped): {exc}[/yellow]"
+            f"[yellow]Health check failed (server may be stopped): {err}[/yellow]"
         )
 
 
@@ -553,7 +620,7 @@ app.add_typer(plugin_app, name="plugin")
 
 
 def _plugin_manager():
-    from .extensions import ExtensionManager
+    from ..extensions import ExtensionManager
 
     return ExtensionManager().plugins
 
@@ -674,7 +741,7 @@ def run_doctor():
     ) as progress:
         progress.add_task("[yellow]Checking environment...", total=None)
         _bootstrap.generate_report()
-        from .hostcontrol import operations as ops
+        from ..hostcontrol import operations as ops
 
         installed = ops.list_tools(limit=5000)
 
