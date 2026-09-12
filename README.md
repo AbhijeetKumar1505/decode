@@ -48,6 +48,8 @@ consequential action is routed through `ExecutionCoordinator`, which applies:
 | Host control | Governed file read/write/edit/search, process inspection, service operations, and persistent command sessions |
 | Security scope | Authorized hosts, URLs, CIDRs, domains, and filesystem roots |
 | Execution providers | Local, Docker, WSL, SSH, and MCP provider integrations |
+| MCP server | Exposes the governed host capabilities to MCP-compatible and HTTP clients over a local port or stdio; also consumes external MCP servers |
+| Sessions | Automatic session creation on the first task, human-readable `dc_…` ids, resume/continue, and per-session transcripts |
 | Playbooks | Markdown procedures that provide reusable guidance without Python tool wrappers |
 | Persistence | SQLite by default, with optional MongoDB operational storage |
 | Evidence and audit | Protected evidence references, SHA-256 integrity checks, append-oriented audit records |
@@ -82,7 +84,8 @@ The source is organized under `src/decode/`:
 | `hostcontrol/` | Filesystem, command, process, service, and session operations |
 | `runtime/` | Agent loop, coordinator, and host controller |
 | `execution/` | Local, Docker, WSL, SSH, and MCP providers |
-| `persistence/` | SQLite/Mongo stores and protected evidence |
+| `mcp/` | Decode's own MCP/HTTP server: exposes the governed capabilities to MCP and HTTP clients |
+| `persistence/` | SQLite/Mongo stores, `SessionManager`, and protected evidence |
 | `observability/` | Audit, logging, feedback, and replay records |
 | `skills/` | Markdown playbook discovery and registration |
 | `models/`, `memory/`, `knowledge/` | Model routing, memory, and security knowledge |
@@ -134,6 +137,14 @@ For development and tests:
 
 ```bash
 python -m pip install ruff pytest mongomock
+```
+
+Optional extras enable the MCP/HTTP server transports (see
+[docs/MCP_SERVER.md](docs/MCP_SERVER.md)):
+
+```bash
+python -m pip install -e '.[server]'   # FastAPI + uvicorn — localhost HTTP transport
+python -m pip install -e '.[mcp]'      # MCP SDK — native MCP over stdio and HTTP
 ```
 
 The project uses `pyproject.toml` as its packaging and dependency definition.
@@ -239,7 +250,18 @@ Individual paths can also be configured with variables such as `LOGS_PATH`,
 decode
 ```
 
-You can also resume a session:
+A session is created automatically on your first task — there is no `/start`
+step. Sessions get a human-readable id such as `dc_20260911_8f31abcd`, and each
+one keeps its own conversation transcript. Inside the REPL:
+
+```text
+> /status      show the active session (id, goal, target, model, mode, findings)
+> /sessions    list recent sessions
+> /continue    resume the most recent session
+> /reset       close the session and start fresh
+```
+
+You can also resume from the shell:
 
 ```bash
 decode --resume SESSION_ID
@@ -341,15 +363,48 @@ redacted metadata rather than secrets.
 | `! <command>` | Run a command through governed shell mode |
 | `/providers` | Show execution providers and health |
 | `/knowledge <query>` | Search the local knowledge graph |
-| `/start`, `/session`, `/target` | Manage session and target context |
+| `/status` | Show the active session (id, goal, target, model, mode, findings) |
+| `/sessions` | List recent sessions |
+| `/continue` | Resume the most recent session |
+| `/resume <id>` | Resume a specific saved session |
+| `/reset` | Close the active session and clear context |
+| `/session`, `/target`, `/start` | Show session context, set the target, or start one explicitly (a session also starts automatically on the first task) |
 | `/findings`, `/evidence` | Review findings and evidence references |
 | `/model [id]` | List or select a configured model |
-| `/resume <id>` | Resume a saved session |
 | `/clear` | Clear the current interactive context |
+| `/version` | Show the installed Decode version |
 | `/help` | Show command help |
 | `/exit` | Exit the REPL |
 
 Use `/help <command>` for command-specific details.
+
+## MCP server
+
+Decode can expose its governed host capabilities to MCP-compatible clients and
+to plain HTTP clients, and can consume external MCP servers as tools. Every call
+still routes through `ExecutionCoordinator`, so scope, permission mode, approval,
+audit, and evidence are unchanged — the server is a transport, not a new
+execution path.
+
+Install the transport you need, then start the server (local bind, `ask` mode by
+default):
+
+```bash
+python -m pip install -e '.[server]'    # HTTP transport (FastAPI + uvicorn)
+python -m pip install -e '.[mcp]'       # native MCP (stdio + HTTP), via the MCP SDK
+
+decode mcp start                        # HTTP on http://127.0.0.1:8765
+decode mcp start --transport stdio      # native MCP over stdio
+decode mcp status                       # recorded endpoint + health
+decode mcp stop
+```
+
+With `decode[server]` the HTTP transport serves `GET /health`, `GET /tools`, and
+`POST /tools/{name}`. With `decode[mcp]` it additionally mounts a native MCP
+streamable-HTTP endpoint at `/mcp`, and `--transport stdio` speaks MCP over
+stdio for clients that launch a subprocess. Register external MCP servers with
+`decode mcp add`. See [docs/MCP_SERVER.md](docs/MCP_SERVER.md) for the full
+reference, transports, governance modes, and security notes.
 
 ## Usage examples
 
@@ -510,9 +565,10 @@ needed for an investigation.
 - [Execution pipeline](docs/EXECUTION_PIPELINE.md)
 - [Security model](docs/SECURITY_MODEL.md)
 - [Host control](docs/HOST_CONTROL.md)
+- [MCP server and HTTP endpoint](docs/MCP_SERVER.md)
 - [Development guide](docs/DEVELOPMENT_GUIDE.md)
 - [Plugin and extension manifest](docs/PLUGIN_MANIFEST.md)
-- [Roadmap](ROADMAP.md)
+- [Roadmap](ROADMAP.md) · [Pre-AWS engineering roadmap](docs/PRE_AWS_ROADMAP.md)
 
 ## Contributing
 

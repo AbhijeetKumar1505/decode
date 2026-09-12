@@ -26,7 +26,8 @@ final evidence of implementation.
 | [Execution pipeline](EXECUTION_PIPELINE.md) | The normative intent → govern → execute → evidence path |
 | [Security model](SECURITY_MODEL.md) | Trust boundaries, permission levels, scope, and confirmation policy |
 | [Host control](HOST_CONTROL.md) | The governed host capabilities and the `/agent` loop |
-| [Release roadmap](../ROADMAP.md) | Verified baseline, priorities, and release gates |
+| [MCP server](MCP_SERVER.md) | Expose the governed capabilities to MCP/HTTP clients, and consume external MCP servers |
+| [Release roadmap](../ROADMAP.md) · [Pre-AWS roadmap](PRE_AWS_ROADMAP.md) | Verified baseline, priorities, release gates, and the pre-AWS build sequence |
 | [Development guide](DEVELOPMENT_GUIDE.md) | Contribution and implementation workflow |
 
 ## Architecture and execution
@@ -72,8 +73,10 @@ filesystem scope, target scope, per-command risk classification, permission mode
 bound approval, audit trail, and hashed evidence. Persistence is SQLite (optional
 MongoDB); model selection is governed by data-locality-aware routing. Removed from
 earlier designs: the multi-agent roster, the tool/capability registry and Kali
-catalog, mission/workflow runners, the event bus, and the planned
-FastAPI/PostgreSQL/Redis/Qdrant service tier.
+catalog, mission/workflow runners, and the event bus. An optional, local
+FastAPI-based MCP/HTTP server now exposes the governed capabilities as a
+transport (see [MCP server](MCP_SERVER.md)); the broader
+PostgreSQL/Redis/Qdrant service tier remains out of scope.
 
 ## Documentation maintenance
 
