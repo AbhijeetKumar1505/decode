@@ -697,6 +697,24 @@ class MongoSessionStore:
         self._db.projects.delete_one({"_id": project_id})
         return artifacts
 
+    def save_task_state(self, session_id: str, state_json: str) -> None:
+        """Persist the serialized TaskState blob for a session (upsert)."""
+        self._db.task_state.update_one(
+            {"_id": session_id},
+            {
+                "$set": {
+                    "session_id": session_id,
+                    "state_json": state_json,
+                    "updated_at": self._now(),
+                }
+            },
+            upsert=True,
+        )
+
+    def load_task_state(self, session_id: str) -> str | None:
+        row = self._db.task_state.find_one({"_id": session_id})
+        return row["state_json"] if row else None
+
     def close(self) -> None:
         if self._client is not None:
             self._client.close()

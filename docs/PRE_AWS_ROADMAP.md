@@ -95,7 +95,7 @@ shippable and reuses existing seams.
   http --url …`), not just stdio. Both server and client verified end-to-end with real MCP
   sessions (initialize → list_tools → call_tool).
 
-**Phase 2 — Session core + command/UX parity** — *in progress*
+**Phase 2 — Session core + command/UX parity** — *complete*
 - Done: core `SessionManager` (`persistence/manager.py`) wrapping `SessionStore` — create /
   resolve / list / latest / status / close / reactivate + transcript save/load; the REPL now
   instantiates it (`self._sessions`) and the new commands use it.
@@ -105,9 +105,17 @@ shippable and reuses existing seams.
   seeded with the task as its goal and any detected target as scope (`_ensure_session`).
 - Done: slash commands **`/sessions` `/status` `/continue` `/reset`** (help + autocomplete +
   dispatch), alongside the existing `/mcp start|stop|status`.
-- Remaining: connect `TaskStateStore` checkpointing to the live session id (`/checkpoint`);
-  `--json` / non-interactive output for scriptable subcommands; migrate the legacy REPL
-  `_resume_session`/`_save_session` onto `SessionManager`.
+- Done: `/checkpoint` persists the transcript + a `TaskState` snapshot keyed to the live
+  session id via `TaskStateStore`; `run_tool_loop` now threads the session id and exposes the
+  live `TaskState`. Added the missing `save_task_state`/`load_task_state` to the **Mongo** store
+  (SQLite had them) so checkpointing works on either backend.
+- Done: `--json` / non-interactive output — `decode providers|tools|mcp status --json` and a new
+  `decode sessions [--json]` command (non-interactive equivalent of `/sessions`).
+- Done: migrated the legacy REPL `_resume_session`/`_save_session`/`_resume_latest` onto
+  `SessionManager` (transcript + lifecycle in the core).
+- Also fixed a batch of import bugs the src-layout move left in `app/cli.py` (sibling-package
+  imports `from .execution`/`.hostcontrol`/`.knowledge`/`.extensions` → `..`), which had broken
+  `decode providers/tools/knowledge/doctor/mcp` as non-interactive subcommands.
 
 **Phase 3 — Providers, classifier & usage metering**
 - `BedrockProvider` (and optionally `MistralProvider`) implementing `LLMProvider`; register in

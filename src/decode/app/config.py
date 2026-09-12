@@ -62,7 +62,9 @@ class Config:
         cls.EXECUTOR = os.getenv("DECODE_EXECUTOR", "local")
         cls.MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", 20))
         runtime_root = _runtime_root()
-        cls.MEMORY_PATH = Path(os.getenv("MEMORY_PATH", str(runtime_root / "data/models")))
+        cls.MEMORY_PATH = Path(
+            os.getenv("MEMORY_PATH", str(runtime_root / "data/models"))
+        )
         cls.LOGS_PATH = Path(os.getenv("LOGS_PATH", str(runtime_root / "logs")))
         cls.AUDIT_PATH = Path(os.getenv("AUDIT_PATH", str(runtime_root / "audit")))
         cls.FEEDBACK_PATH = Path(
