@@ -363,10 +363,12 @@ redacted metadata rather than secrets.
 | `! <command>` | Run a command through governed shell mode |
 | `/providers` | Show execution providers and health |
 | `/knowledge <query>` | Search the local knowledge graph |
-| `/status` | Show the active session (id, goal, target, model, mode, findings) |
+| `/status` | Show the active session (id, goal, target, model, mode, findings, token/cost usage) |
+| `/cost` | Show session token usage and estimated cost |
 | `/sessions` | List recent sessions |
 | `/continue` | Resume the most recent session |
 | `/resume <id>` | Resume a specific saved session |
+| `/checkpoint` | Save a manual checkpoint (transcript + TaskState) without closing |
 | `/reset` | Close the active session and clear context |
 | `/session`, `/target`, `/start` | Show session context, set the target, or start one explicitly (a session also starts automatically on the first task) |
 | `/findings`, `/evidence` | Review findings and evidence references |

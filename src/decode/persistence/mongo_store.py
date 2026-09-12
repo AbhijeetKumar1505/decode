@@ -715,6 +715,41 @@ class MongoSessionStore:
         row = self._db.task_state.find_one({"_id": session_id})
         return row["state_json"] if row else None
 
+    def record_usage(
+        self,
+        session_id: str,
+        *,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost_usd: float = 0.0,
+        model: str = "",
+    ) -> None:
+        """Accumulate token usage and estimated cost for a session (upsert-add)."""
+        self._db.usage.update_one(
+            {"_id": session_id},
+            {
+                "$inc": {
+                    "prompt_tokens": int(prompt_tokens),
+                    "completion_tokens": int(completion_tokens),
+                    "cost_usd": float(cost_usd),
+                },
+                "$set": {"model": model, "updated_at": self._now()},
+            },
+            upsert=True,
+        )
+
+    def get_usage(self, session_id: str) -> dict[str, Any]:
+        row = self._db.usage.find_one({"_id": session_id}, _NO_ID)
+        if not row:
+            return {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cost_usd": 0.0,
+                "model": "",
+                "updated_at": "",
+            }
+        return row
+
     def close(self) -> None:
         if self._client is not None:
             self._client.close()

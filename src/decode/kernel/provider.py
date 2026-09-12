@@ -11,12 +11,18 @@ class LLMProvider(ABC):
     last_prompt_tokens: int = 0
     last_completion_tokens: int = 0
     session_tokens: int = 0
+    # Cumulative split, so per-session cost can be estimated (input and output
+    # tokens are priced differently).
+    session_prompt_tokens: int = 0
+    session_completion_tokens: int = 0
 
     def __init__(self) -> None:
         # Token accounting surfaced to the TUI (top bar + streaming meter).
         self.last_prompt_tokens = 0
         self.last_completion_tokens = 0
         self.session_tokens = 0
+        self.session_prompt_tokens = 0
+        self.session_completion_tokens = 0
 
     @abstractmethod
     async def complete(self, prompt: str, system: str | None = None) -> str:
@@ -52,6 +58,8 @@ class LLMProvider(ABC):
         except (TypeError, ValueError):
             return  # non-numeric usage (e.g. a bare mock) — ignore rather than crash
         self.session_tokens += self.last_prompt_tokens + self.last_completion_tokens
+        self.session_prompt_tokens += self.last_prompt_tokens
+        self.session_completion_tokens += self.last_completion_tokens
 
 
 class OpenRouterProvider(LLMProvider):

@@ -52,6 +52,27 @@ class SessionManager:
     def close(self, session_id: str) -> None:
         self._store.close_session(session_id)
 
+    # ── usage / cost ──
+    def record_usage(
+        self,
+        session_id: str,
+        *,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost_usd: float = 0.0,
+        model: str = "",
+    ) -> None:
+        self._store.record_usage(
+            session_id,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=cost_usd,
+            model=model,
+        )
+
+    def usage(self, session_id: str) -> dict[str, Any]:
+        return self._store.get_usage(session_id)
+
     def reactivate(self, session_id: str) -> None:
         self._store.update_session(session_id, status="active")
 

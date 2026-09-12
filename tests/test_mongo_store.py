@@ -73,6 +73,20 @@ class TestMongoStoreContract(unittest.TestCase):
         self.store.save_task_state(sid, '{"v": 2}')  # upsert
         self.assertEqual(self.store.load_task_state(sid), '{"v": 2}')
 
+    def test_usage_accumulates(self):
+        sid = self.store.create_session(goal="probe")
+        self.assertEqual(self.store.get_usage(sid)["prompt_tokens"], 0)
+        self.store.record_usage(
+            sid, prompt_tokens=100, completion_tokens=40, cost_usd=0.01, model="m"
+        )
+        self.store.record_usage(
+            sid, prompt_tokens=50, completion_tokens=10, cost_usd=0.02, model="m"
+        )
+        usage = self.store.get_usage(sid)
+        self.assertEqual(usage["prompt_tokens"], 150)
+        self.assertEqual(usage["completion_tokens"], 50)
+        self.assertAlmostEqual(usage["cost_usd"], 0.03)
+
     def test_project_memory_lifecycle(self):
         pid = self.store.create_project(name="isolated")
         memory = MemoryManager(self.store, project_id=pid)

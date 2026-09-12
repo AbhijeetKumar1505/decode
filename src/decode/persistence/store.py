@@ -160,6 +160,15 @@ class SessionStore:
                 state_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS usage (
+                session_id TEXT PRIMARY KEY,
+                prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                completion_tokens INTEGER NOT NULL DEFAULT 0,
+                cost_usd REAL NOT NULL DEFAULT 0.0,
+                model TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_targets_session ON targets(session_id);
             CREATE INDEX IF NOT EXISTS idx_ports_target ON ports(target_id);
             CREATE INDEX IF NOT EXISTS idx_findings_session ON findings(session_id);
@@ -668,6 +677,52 @@ class SessionStore:
             "SELECT state_json FROM task_state WHERE session_id = ?", (session_id,)
         ).fetchone()
         return row["state_json"] if row else None
+
+    # ── Usage / cost metering ───────────────────────────────────────────
+    def record_usage(
+        self,
+        session_id: str,
+        *,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost_usd: float = 0.0,
+        model: str = "",
+    ) -> None:
+        """Accumulate token usage and estimated cost for a session (upsert-add)."""
+        self._conn.execute(
+            "INSERT INTO usage (session_id, prompt_tokens, completion_tokens, cost_usd, model, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(session_id) DO UPDATE SET "
+            "prompt_tokens = prompt_tokens + excluded.prompt_tokens, "
+            "completion_tokens = completion_tokens + excluded.completion_tokens, "
+            "cost_usd = cost_usd + excluded.cost_usd, "
+            "model = excluded.model, updated_at = excluded.updated_at",
+            (
+                session_id,
+                int(prompt_tokens),
+                int(completion_tokens),
+                float(cost_usd),
+                model,
+                self._now(),
+            ),
+        )
+        self._conn.commit()
+
+    def get_usage(self, session_id: str) -> dict[str, Any]:
+        row = self._conn.execute(
+            "SELECT prompt_tokens, completion_tokens, cost_usd, model, updated_at "
+            "FROM usage WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            return {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cost_usd": 0.0,
+                "model": "",
+                "updated_at": "",
+            }
+        return dict(row)
 
     # ── Project-isolated knowledge and memory lifecycle ─────────────────
 
