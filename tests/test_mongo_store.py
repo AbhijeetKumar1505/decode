@@ -87,6 +87,27 @@ class TestMongoStoreContract(unittest.TestCase):
         self.assertEqual(usage["completion_tokens"], 50)
         self.assertAlmostEqual(usage["cost_usd"], 0.03)
 
+    def test_run_trace(self):
+        sid = self.store.create_session(goal="probe")
+        self.assertEqual(self.store.list_runs(sid), [])
+        self.store.record_run(
+            "run000000001",
+            sid,
+            goal="scan",
+            model="m",
+            task_class="code",
+            status="ok",
+            steps=2,
+            prompt_tokens=10,
+            completion_tokens=5,
+            cost_usd=0.0,
+            duration=0.5,
+        )
+        runs = self.store.list_runs(sid)
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0]["task_class"], "code")
+        self.assertNotIn("_id", runs[0])
+
     def test_project_memory_lifecycle(self):
         pid = self.store.create_project(name="isolated")
         memory = MemoryManager(self.store, project_id=pid)

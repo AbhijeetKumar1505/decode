@@ -76,6 +76,27 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(usage["completion_tokens"], 50)
         self.assertAlmostEqual(usage["cost_usd"], 0.03)
 
+    def test_run_trace(self):
+        sid = self.mgr.create(goal="probe")
+        self.assertEqual(self.mgr.runs(sid), [])
+        self.mgr.record_run(
+            "run000000001",
+            sid,
+            goal="scan",
+            model="m",
+            task_class="analysis",
+            status="ok",
+            steps=3,
+            prompt_tokens=100,
+            completion_tokens=40,
+            cost_usd=0.0,
+            duration=1.2,
+        )
+        runs = self.mgr.runs(sid)
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0]["task_class"], "analysis")
+        self.assertEqual(runs[0]["steps"], 3)
+
     def test_status_and_lifecycle(self):
         sid = self.mgr.create(goal="probe", target_focus="host")
         status = self.mgr.status(sid)

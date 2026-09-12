@@ -33,6 +33,10 @@ class Config:
     OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+    MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+    # Bedrock uses the standard AWS credential chain; presence of an access key
+    # is a coarse "configured?" proxy for the startup check.
+    AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     MODEL = os.getenv("DECODE_MODEL", "z-ai/glm-5.2:free")
     EXECUTOR = os.getenv("DECODE_EXECUTOR", "local")
     MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", 20))
@@ -58,6 +62,8 @@ class Config:
         cls.OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
         cls.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         cls.ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+        cls.MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+        cls.AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
         cls.MODEL = os.getenv("DECODE_MODEL", "z-ai/glm-5.2:free")
         cls.EXECUTOR = os.getenv("DECODE_EXECUTOR", "local")
         cls.MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", 20))
@@ -91,6 +97,8 @@ class Config:
             "openrouter": "OPENROUTER_API_KEY",
             "openai": "OPENAI_API_KEY",
             "anthropic": "ANTHROPIC_API_KEY",
+            "mistral": "MISTRAL_API_KEY",
+            "bedrock": "AWS_ACCESS_KEY_ID",
         }
         selected = (provider or cls.PROVIDER).lower()
         if selected not in names:

@@ -169,6 +169,22 @@ class SessionStore:
                 model TEXT NOT NULL DEFAULT '',
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS runs (
+                run_id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                goal TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                task_class TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT '',
+                steps INTEGER NOT NULL DEFAULT 0,
+                prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                completion_tokens INTEGER NOT NULL DEFAULT 0,
+                cost_usd REAL NOT NULL DEFAULT 0.0,
+                duration REAL NOT NULL DEFAULT 0.0,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id);
             CREATE INDEX IF NOT EXISTS idx_targets_session ON targets(session_id);
             CREATE INDEX IF NOT EXISTS idx_ports_target ON ports(target_id);
             CREATE INDEX IF NOT EXISTS idx_findings_session ON findings(session_id);
@@ -723,6 +739,51 @@ class SessionStore:
                 "updated_at": "",
             }
         return dict(row)
+
+    # ── Run trace ───────────────────────────────────────────────────────
+    def record_run(
+        self,
+        run_id: str,
+        session_id: str,
+        *,
+        goal: str = "",
+        model: str = "",
+        task_class: str = "",
+        status: str = "",
+        steps: int = 0,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost_usd: float = 0.0,
+        duration: float = 0.0,
+    ) -> None:
+        """Persist one agent-run trace record, keyed by run_id under a session."""
+        self._conn.execute(
+            "INSERT OR REPLACE INTO runs (run_id, session_id, goal, model, task_class, "
+            "status, steps, prompt_tokens, completion_tokens, cost_usd, duration, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                run_id,
+                session_id,
+                goal,
+                model,
+                task_class,
+                status,
+                int(steps),
+                int(prompt_tokens),
+                int(completion_tokens),
+                float(cost_usd),
+                float(duration),
+                self._now(),
+            ),
+        )
+        self._conn.commit()
+
+    def list_runs(self, session_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT * FROM runs WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
+            (session_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # ── Project-isolated knowledge and memory lifecycle ─────────────────
 
