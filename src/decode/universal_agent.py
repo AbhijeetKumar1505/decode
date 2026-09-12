@@ -205,6 +205,7 @@ class UniversalAgent:
         max_steps: int = 8,
         on_step: Any = None,
         mcp_manager: Any = None,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         """Drive a bounded tool-use loop over host + playbook capabilities.
 
@@ -245,6 +246,11 @@ class UniversalAgent:
                 "executor": Config.EXECUTOR,
             },
         )
+        # Tie the task-state to the caller's session so checkpoints persist under
+        # the same id, and expose it so callers can checkpoint it after the run.
+        if session_id:
+            task_state.session_id = session_id
+        self._last_task_state = task_state
 
         from .capabilities.coding import (
             build_coding_command,

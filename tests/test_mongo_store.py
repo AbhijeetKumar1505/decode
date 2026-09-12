@@ -62,6 +62,17 @@ class TestMongoStoreContract(unittest.TestCase):
         # returned documents never leak the Mongo _id field
         self.assertNotIn("_id", self.store.get_session(sid))
 
+    def test_task_state_roundtrip(self):
+        # The Mongo store must mirror SessionStore's task_state API so /checkpoint
+        # works on either backend.
+        sid = self.store.create_session(goal="probe")
+        self.assertIsNone(self.store.load_task_state(sid))
+        blob = f'{{"session_id": "{sid}"}}'
+        self.store.save_task_state(sid, blob)
+        self.assertEqual(self.store.load_task_state(sid), blob)
+        self.store.save_task_state(sid, '{"v": 2}')  # upsert
+        self.assertEqual(self.store.load_task_state(sid), '{"v": 2}')
+
     def test_project_memory_lifecycle(self):
         pid = self.store.create_project(name="isolated")
         memory = MemoryManager(self.store, project_id=pid)

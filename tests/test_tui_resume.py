@@ -7,6 +7,7 @@ from pathlib import Path
 from decode.app.config import Config
 from decode.persistence import SessionStore
 from decode.persistence.evidence import EvidenceCollector
+from decode.persistence.manager import SessionManager
 from decode.skills.registry import SkillRegistry
 from decode.tui.app import AgentREPL
 
@@ -25,6 +26,7 @@ class _FakeAgent:
 def _bare_repl(store) -> AgentREPL:
     r = AgentREPL.__new__(AgentREPL)
     r._store = store
+    r._sessions = SessionManager(store)
     r._agent = _FakeAgent()
     r._registry = SkillRegistry()
     r._evidence = EvidenceCollector()

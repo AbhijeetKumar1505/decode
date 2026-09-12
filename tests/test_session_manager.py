@@ -75,5 +75,46 @@ class SessionManagerTest(unittest.TestCase):
         self.assertIsNone(self.mgr.status("dc_20000101_deadbeef"))
 
 
+class TaskStateStoreTest(unittest.TestCase):
+    """Checkpointing a TaskState keyed by the live session id round-trips."""
+
+    def setUp(self):
+        self._prev_home = os.environ.get("DECODE_HOME")
+        self._tmp = tempfile.TemporaryDirectory()
+        os.environ["DECODE_HOME"] = self._tmp.name
+        Config.reload()
+        self.store = SessionStore(db_path=Path(self._tmp.name) / "decode.db")
+
+    def tearDown(self):
+        if self._prev_home is None:
+            os.environ.pop("DECODE_HOME", None)
+        else:
+            os.environ["DECODE_HOME"] = self._prev_home
+        Config.reload()
+        self._tmp.cleanup()
+
+    def test_checkpoint_round_trip(self):
+        from decode.schema.store import TaskStateStore
+        from decode.schema.task_state import ScopeView, TaskState
+
+        sid = self.store.create_session(goal="probe", target_focus="10.0.0.5")
+        store = TaskStateStore(self.store)
+        self.assertIsNone(store.load(sid))  # nothing yet
+
+        state = TaskState(
+            session_id=sid,
+            objective="probe",
+            scope=ScopeView(targets=["10.0.0.5"]),
+        )
+        state.record_action("shell_command", {"command": "echo hi"})
+        store.save(state)
+
+        loaded = store.load(sid)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.session_id, sid)
+        self.assertEqual(loaded.objective, "probe")
+        self.assertEqual(len(loaded.actions), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
