@@ -117,17 +117,22 @@ shippable and reuses existing seams.
   imports `from .execution`/`.hostcontrol`/`.knowledge`/`.extensions` → `..`), which had broken
   `decode providers/tools/knowledge/doctor/mcp` as non-interactive subcommands.
 
-**Phase 3 — Providers, classifier & usage metering** — *in progress*
+**Phase 3 — Providers, classifier & usage metering** — *complete*
 - Done: **usage → cost metering.** `models/cost.py` estimates USD cost from a model's
   `ModelCost` (with a bare-slug↔`provider/slug` registry lookup; free/unknown → $0). The
-  provider now tracks cumulative prompt/completion splits; the REPL attributes each run's token
+  provider tracks cumulative prompt/completion splits; the REPL attributes each run's token
   delta and estimated cost to the session via `SessionManager.record_usage` → a per-session
-  `usage` table (SQLite + Mongo). Surfaced by a new `/cost` command and in `/status`.
-- Remaining: `BedrockProvider` (and optionally `MistralProvider`) implementing `LLMProvider`,
-  registered in `create_provider` + `_KNOWN_PROVIDERS` with registry `ModelSpec`s.
-- Remaining: a lightweight prompt task-classifier feeding `RoutingRequest.task_class`.
-- Remaining: a session-level `run_id`/trace joining model-selection + tool-calls into one
-  persisted record.
+  `usage` table (SQLite + Mongo). Surfaced by `/cost` and in `/status`.
+- Done: **provider adapters.** `BedrockProvider` (AWS Bedrock Converse API, optional `boto3`
+  via the `decode[bedrock]` extra) and an opt-in `MistralProvider`, registered in
+  `create_provider` + `_KNOWN_PROVIDERS`, with a Bedrock `ModelSpec` in the registry. Mistral
+  stays out of the default catalogue (retired as orchestrator) but is available as an adapter.
+- Done: **prompt task-classifier.** `models/classifier.py::classify_task` infers a
+  `task_class` (code/planning/analysis/extraction) from a goal; `ModelGateway.route_for_prompt`
+  feeds it into `RoutingRequest`, and the REPL tags each run's trace with it.
+- Done: **session-level run trace.** A per-run record (run_id, model, task_class, steps,
+  tokens, cost, duration) is persisted to a `runs` table (SQLite + Mongo) via
+  `SessionManager.record_run`, joining model-selection + tool-call counts; surfaced by `/trace`.
 
 **Phase 4 — Memory lifecycle & eval hardening**
 - User/global memory scope; artifact edit/version + optional expiry/confidence; wire

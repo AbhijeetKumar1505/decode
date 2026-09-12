@@ -204,6 +204,27 @@ def default_model_registry() -> ModelRegistry:
                 quality_scores={"planning": 0.91, "extraction": 0.88, "analysis": 0.92},
                 fallback_group="hosted-general",
             ),
+            ModelSpec(
+                id="bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0",
+                provider="bedrock",
+                capabilities=[
+                    "chat",
+                    "structured_output",
+                    "tools",
+                    "vision",
+                    "long_context",
+                ],
+                data_policy=DataPolicy(
+                    max_classification="internal", locality="hosted"
+                ),
+                context_limit=200_000,
+                cost=ModelCost(
+                    input_per_mtok=3.0, output_per_mtok=15.0, pricing_version="2025-06"
+                ),
+                latency_class="standard",
+                quality_scores={"planning": 0.9, "extraction": 0.88, "analysis": 0.9},
+                fallback_group="hosted-general",
+            ),
             # ── OpenRouter free models (all served via OPENROUTER_API_KEY) ──
             # Z.ai — strongest general model here; the default orchestrator.
             _openrouter(

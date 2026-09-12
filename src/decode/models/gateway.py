@@ -16,6 +16,7 @@ import os
 
 from ..config import Config
 from ..kernel.provider import LLMProvider, create_provider
+from .classifier import classify_task
 from .registry import ModelRegistry
 from .routing import ModelRouter, RoutingDecision, RoutingRequest
 
@@ -31,7 +32,7 @@ _ROLE_ENV: dict[str, str] = {
     "reviewer": "DECODE_REVIEWER_MODEL",
     "coder": "DECODE_CODER_MODEL",
 }
-_KNOWN_PROVIDERS = {"openrouter", "openai", "anthropic"}
+_KNOWN_PROVIDERS = {"openrouter", "openai", "anthropic", "mistral", "bedrock"}
 
 
 def _routing_default() -> bool:
@@ -62,6 +63,11 @@ class ModelGateway:
 
     def route_for_role(self, role: str, **constraints) -> RoutingDecision:
         task_class = _ROLE_TASK_CLASS.get(role, "analysis")
+        return self._router.route(RoutingRequest(task_class=task_class, **constraints))
+
+    def route_for_prompt(self, prompt: str, **constraints) -> RoutingDecision:
+        """Route by a task class inferred from the prompt (not the agent role)."""
+        task_class = classify_task(prompt)
         return self._router.route(RoutingRequest(task_class=task_class, **constraints))
 
     def resolve_spec(self, role: str) -> tuple[str, str]:

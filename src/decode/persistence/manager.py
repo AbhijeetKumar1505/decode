@@ -73,6 +73,13 @@ class SessionManager:
     def usage(self, session_id: str) -> dict[str, Any]:
         return self._store.get_usage(session_id)
 
+    # ── run trace ──
+    def record_run(self, run_id: str, session_id: str, **fields: Any) -> None:
+        self._store.record_run(run_id, session_id, **fields)
+
+    def runs(self, session_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        return self._store.list_runs(session_id, limit=limit)
+
     def reactivate(self, session_id: str) -> None:
         self._store.update_session(session_id, status="active")
 

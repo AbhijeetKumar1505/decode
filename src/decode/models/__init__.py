@@ -1,3 +1,4 @@
+from .classifier import DEFAULT_TASK_CLASS, TASK_CLASSES, classify_task
 from .cost import estimate_cost, estimate_cost_for, find_model_spec
 from .gateway import ModelGateway
 from .registry import (
@@ -19,6 +20,8 @@ from .routing import (
 
 __all__ = [
     "DEFAULT_RULES",
+    "DEFAULT_TASK_CLASS",
+    "TASK_CLASSES",
     "DataPolicy",
     "ModelCost",
     "ModelGateway",
@@ -30,6 +33,7 @@ __all__ = [
     "RoutingRequest",
     "RoutingRule",
     "classification_rank",
+    "classify_task",
     "default_model_registry",
     "estimate_cost",
     "estimate_cost_for",

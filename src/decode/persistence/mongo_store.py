@@ -750,6 +750,50 @@ class MongoSessionStore:
             }
         return row
 
+    def record_run(
+        self,
+        run_id: str,
+        session_id: str,
+        *,
+        goal: str = "",
+        model: str = "",
+        task_class: str = "",
+        status: str = "",
+        steps: int = 0,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost_usd: float = 0.0,
+        duration: float = 0.0,
+    ) -> None:
+        """Persist one agent-run trace record, keyed by run_id under a session."""
+        self._db.runs.replace_one(
+            {"_id": run_id},
+            {
+                "_id": run_id,
+                "run_id": run_id,
+                "session_id": session_id,
+                "goal": goal,
+                "model": model,
+                "task_class": task_class,
+                "status": status,
+                "steps": int(steps),
+                "prompt_tokens": int(prompt_tokens),
+                "completion_tokens": int(completion_tokens),
+                "cost_usd": float(cost_usd),
+                "duration": float(duration),
+                "created_at": self._now(),
+            },
+            upsert=True,
+        )
+
+    def list_runs(self, session_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        rows = (
+            self._db.runs.find({"session_id": session_id}, _NO_ID)
+            .sort("created_at", -1)
+            .limit(limit)
+        )
+        return list(rows)
+
     def close(self) -> None:
         if self._client is not None:
             self._client.close()

@@ -8,6 +8,7 @@ import json
 import re
 import shlex
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -31,7 +32,7 @@ from rich.text import Text
 
 from decode.app.config import Config
 from decode.hostcontrol import CommandPolicy, FilesystemScope, PermissionMode
-from decode.models import default_model_registry, estimate_cost_for
+from decode.models import classify_task, default_model_registry, estimate_cost_for
 from decode.observability.logging_service import LoggingService
 from decode.persistence import create_store
 from decode.persistence.evidence import EvidenceCollector
@@ -222,6 +223,12 @@ COMMAND_GROUPS: dict[str, list[tuple]] = {
             "",
             "Show session token usage and estimated cost",
             "Show cumulative prompt/completion tokens and the estimated USD cost for the active session (free models are $0).",
+        ),
+        (
+            "/trace",
+            "",
+            "Show the session's agent-run trace",
+            "List recent agent runs for the session: task class, tool steps, tokens, estimated cost, and time.",
         ),
         (
             "/checkpoint",
@@ -451,6 +458,9 @@ class AgentREPL:
                 continue
             if text == "/cost":
                 self._handle_cost()
+                continue
+            if text == "/trace":
+                self._handle_trace()
                 continue
             if text == "/continue":
                 self._handle_continue()
@@ -1175,6 +1185,33 @@ class AgentREPL:
             "[dim]Cost is estimated from published per-model pricing; free models are $0.[/dim]"
         )
 
+    def _handle_trace(self):
+        if not self._session_active or not self._tracker:
+            console.print("[dim]No active session. Run a task to record a trace.[/dim]")
+            return
+        runs = self._sessions.runs(self._tracker.session_id, limit=15)
+        if not runs:
+            console.print("[dim]No runs recorded for this session yet.[/dim]")
+            return
+        table = Table(title="Run trace", box=box.ROUNDED)
+        table.add_column("Run", style="cyan")
+        table.add_column("Task")
+        table.add_column("Steps", justify="right")
+        table.add_column("Tokens", justify="right")
+        table.add_column("Cost", justify="right")
+        table.add_column("When")
+        for r in runs:
+            tokens = r.get("prompt_tokens", 0) + r.get("completion_tokens", 0)
+            table.add_row(
+                r.get("run_id", ""),
+                r.get("task_class", ""),
+                str(r.get("steps", 0)),
+                str(tokens),
+                f"${r.get('cost_usd', 0.0):.4f}",
+                (r.get("created_at", "") or "")[:19],
+            )
+        console.print(table)
+
     def _handle_continue(self):
         if self._session_active:
             console.print(
@@ -1444,6 +1481,7 @@ class AgentREPL:
         llm = getattr(self._agent, "llm", None)
         p0 = getattr(llm, "session_prompt_tokens", 0)
         c0 = getattr(llm, "session_completion_tokens", 0)
+        started = time.time()
         result = await self._agent.run_tool_loop(
             goal,
             filesystem_scope=self._fs_scope,
@@ -1455,16 +1493,42 @@ class AgentREPL:
             session_id=self._tracker.session_id if self._tracker else None,
         )
         console.print(f"\n[bold]{result.get('final', '')}[/bold]\n")
-        self._meter_usage(llm, p0, c0)
+        d_prompt, d_completion, cost = self._meter_usage(llm, p0, c0)
+        self._record_run(
+            goal, result, d_prompt, d_completion, cost, time.time() - started
+        )
 
-    def _meter_usage(self, llm, prompt0: int, completion0: int) -> None:
-        """Attribute this run's token delta and estimated cost to the session."""
-        if llm is None or not self._session_active or not self._tracker:
+    def _record_run(self, goal, result, d_prompt, d_completion, cost, duration):
+        """Persist a per-run trace joining model, task class, tokens, cost, and steps."""
+        if not self._session_active or not self._tracker:
             return
+        self._sessions.record_run(
+            uuid.uuid4().hex[:12],
+            self._tracker.session_id,
+            goal=goal[:200],
+            model=Config.MODEL,
+            task_class=classify_task(goal),
+            status=str(result.get("status") or ("ok" if result.get("final") else "")),
+            steps=len(result.get("steps") or []),
+            prompt_tokens=d_prompt,
+            completion_tokens=d_completion,
+            cost_usd=cost,
+            duration=round(duration, 3),
+        )
+
+    def _meter_usage(
+        self, llm, prompt0: int, completion0: int
+    ) -> tuple[int, int, float]:
+        """Attribute this run's token delta and estimated cost to the session.
+
+        Returns ``(delta_prompt, delta_completion, cost)`` for the run trace.
+        """
+        if llm is None or not self._session_active or not self._tracker:
+            return 0, 0, 0.0
         d_prompt = getattr(llm, "session_prompt_tokens", 0) - prompt0
         d_completion = getattr(llm, "session_completion_tokens", 0) - completion0
         if d_prompt <= 0 and d_completion <= 0:
-            return
+            return 0, 0, 0.0
         cost = estimate_cost_for(
             self._model_registry, Config.MODEL, d_prompt, d_completion
         )
@@ -1475,6 +1539,7 @@ class AgentREPL:
             cost_usd=cost,
             model=Config.MODEL,
         )
+        return d_prompt, d_completion, cost
 
     def _mcp(self):
         """Lazily build the MCP manager so configured servers are usable in the REPL."""

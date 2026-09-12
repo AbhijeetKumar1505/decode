@@ -97,10 +97,12 @@ The source is organized under `src/decode/`:
 - Python 3.11 or newer.
 - Git.
 - Linux, macOS, Windows, or Windows with WSL.
-- An API key for one supported model provider:
+- Credentials for one supported model provider:
   - OpenRouter (default)
   - OpenAI
   - Anthropic
+  - Mistral (`MISTRAL_API_KEY`)
+  - AWS Bedrock (standard AWS credentials + region; needs the `decode[bedrock]` extra)
 - Any security tools you want Decode to drive, such as `nmap`, `nuclei`,
   `whatweb`, or `tshark`. These are optional and are not installed by Decode.
 
@@ -365,6 +367,7 @@ redacted metadata rather than secrets.
 | `/knowledge <query>` | Search the local knowledge graph |
 | `/status` | Show the active session (id, goal, target, model, mode, findings, token/cost usage) |
 | `/cost` | Show session token usage and estimated cost |
+| `/trace` | Show the session's agent-run trace (task class, steps, tokens, cost) |
 | `/sessions` | List recent sessions |
 | `/continue` | Resume the most recent session |
 | `/resume <id>` | Resume a specific saved session |
@@ -486,11 +489,13 @@ Common environment variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `DECODE_PROVIDER` | `openrouter`, `openai`, or `anthropic` |
+| `DECODE_PROVIDER` | `openrouter`, `openai`, `anthropic`, `mistral`, or `bedrock` |
 | `DECODE_MODEL` | Default model identifier |
 | `OPENROUTER_API_KEY` | OpenRouter credential |
 | `OPENAI_API_KEY` | OpenAI credential |
 | `ANTHROPIC_API_KEY` | Anthropic credential |
+| `MISTRAL_API_KEY` | Mistral credential |
+| `AWS_ACCESS_KEY_ID` / `AWS_REGION` | AWS Bedrock credentials/region (with the `decode[bedrock]` extra) |
 | `DECODE_EXECUTOR` | Default execution provider |
 | `DECODE_HOME` | Root directory for runtime state |
 | `MEMORY_PATH` | Memory/model state path |

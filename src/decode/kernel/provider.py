@@ -53,10 +53,14 @@ class LLMProvider(ABC):
         if completion is None:
             completion = getattr(usage, "output_tokens", 0)
         try:
-            self.last_prompt_tokens = int(prompt or 0)
-            self.last_completion_tokens = int(completion or 0)
+            self._record_usage_counts(int(prompt or 0), int(completion or 0))
         except (TypeError, ValueError):
             return  # non-numeric usage (e.g. a bare mock) — ignore rather than crash
+
+    def _record_usage_counts(self, prompt_tokens: int, completion_tokens: int) -> None:
+        """Accumulate explicit token counts (e.g. Bedrock's ``inputTokens``)."""
+        self.last_prompt_tokens = int(prompt_tokens or 0)
+        self.last_completion_tokens = int(completion_tokens or 0)
         self.session_tokens += self.last_prompt_tokens + self.last_completion_tokens
         self.session_prompt_tokens += self.last_prompt_tokens
         self.session_completion_tokens += self.last_completion_tokens
@@ -230,11 +234,128 @@ class AnthropicProvider(LLMProvider):
         return response.content[0].text
 
 
+class MistralProvider(LLMProvider):
+    """Mistral AI via the official ``mistralai`` SDK (OpenAI-shaped usage)."""
+
+    _UNCONFIGURED = (
+        "[Mistral not configured - install mistralai and set MISTRAL_API_KEY]"
+    )
+
+    def __init__(self, api_key: str | None = None, model: str | None = None):
+        super().__init__()
+        self._api_key = api_key or os.getenv("MISTRAL_API_KEY")
+        self._model = model or os.getenv("MISTRAL_MODEL", "mistral-large-latest")
+        self._client = None
+        if self._api_key:
+            try:
+                from mistralai import Mistral
+
+                self._client = Mistral(api_key=self._api_key)
+            except Exception:
+                self._client = None  # SDK missing or client init failed
+
+    @property
+    def name(self) -> str:
+        return f"mistral/{self._model}"
+
+    async def complete(self, prompt: str, system: str | None = None) -> str:
+        if not self._client:
+            return self._UNCONFIGURED
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        return await self._chat(messages)
+
+    async def chat(self, messages: list[dict[str, str]]) -> str:
+        if not self._client:
+            return self._UNCONFIGURED
+        return await self._chat(messages)
+
+    async def _chat(self, messages: list[dict[str, str]]) -> str:
+        response = self._client.chat.complete(
+            model=self._model, messages=messages, temperature=0.1
+        )
+        self._record_usage(getattr(response, "usage", None))
+        return response.choices[0].message.content
+
+
+class BedrockProvider(LLMProvider):
+    """AWS Bedrock via boto3's ``bedrock-runtime`` Converse API.
+
+    Auth is standard AWS credentials (env vars, shared config, or an instance
+    role) plus a region — there is no single API key. boto3 is an optional extra
+    (``pip install 'decode[bedrock]'``); without it, or without credentials, the
+    provider stays unconfigured and returns a clear message rather than crashing.
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,  # unused; AWS uses its own credential chain
+        model: str | None = None,
+        region: str | None = None,
+    ):
+        super().__init__()
+        self._model = model or os.getenv(
+            "BEDROCK_MODEL", "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        )
+        self._region = (
+            region
+            or os.getenv("AWS_REGION")
+            or os.getenv("AWS_DEFAULT_REGION")
+            or "us-east-1"
+        )
+        try:
+            import boto3
+
+            self._client = boto3.client("bedrock-runtime", region_name=self._region)
+        except Exception:
+            self._client = None  # boto3 missing or client init failed
+
+    @property
+    def name(self) -> str:
+        return f"bedrock/{self._model}"
+
+    async def complete(self, prompt: str, system: str | None = None) -> str:
+        return await self._converse([{"role": "user", "content": prompt}], system)
+
+    async def chat(self, messages: list[dict[str, str]]) -> str:
+        system_parts = [m["content"] for m in messages if m.get("role") == "system"]
+        convo = [m for m in messages if m.get("role") != "system"]
+        return await self._converse(convo, "\n\n".join(system_parts) or None)
+
+    async def _converse(self, convo: list[dict[str, str]], system: str | None) -> str:
+        if self._client is None:
+            return (
+                "[Bedrock not configured - install boto3 and set AWS credentials "
+                "and region]"
+            )
+        messages = [
+            {"role": m["role"], "content": [{"text": str(m.get("content", ""))}]}
+            for m in convo
+        ]
+        kwargs: dict = {
+            "modelId": self._model,
+            "messages": messages,
+            "inferenceConfig": {"maxTokens": 4096, "temperature": 0.1},
+        }
+        if system:
+            kwargs["system"] = [{"text": system}]
+        response = self._client.converse(**kwargs)
+        usage = response.get("usage", {}) or {}
+        self._record_usage_counts(
+            usage.get("inputTokens", 0), usage.get("outputTokens", 0)
+        )
+        return response["output"]["message"]["content"][0]["text"]
+
+
 def create_provider(provider_name: str = "openrouter", **kwargs) -> LLMProvider:
     providers = {
         "openrouter": OpenRouterProvider,
         "openai": OpenAIProvider,
         "anthropic": AnthropicProvider,
+        "mistral": MistralProvider,
+        "bedrock": BedrockProvider,
     }
     cls = providers.get(provider_name.lower())
     if not cls:
