@@ -62,6 +62,20 @@ class SessionManagerTest(unittest.TestCase):
         self.assertEqual(self.mgr.load_transcript(sid), convo)
         self.assertEqual(self.mgr.load_transcript("dc_20000101_deadbeef"), [])
 
+    def test_usage_accumulates(self):
+        sid = self.mgr.create(goal="probe")
+        self.assertEqual(self.mgr.usage(sid)["cost_usd"], 0.0)
+        self.mgr.record_usage(
+            sid, prompt_tokens=100, completion_tokens=40, cost_usd=0.01, model="m"
+        )
+        self.mgr.record_usage(
+            sid, prompt_tokens=50, completion_tokens=10, cost_usd=0.02, model="m"
+        )
+        usage = self.mgr.usage(sid)
+        self.assertEqual(usage["prompt_tokens"], 150)
+        self.assertEqual(usage["completion_tokens"], 50)
+        self.assertAlmostEqual(usage["cost_usd"], 0.03)
+
     def test_status_and_lifecycle(self):
         sid = self.mgr.create(goal="probe", target_focus="host")
         status = self.mgr.status(sid)

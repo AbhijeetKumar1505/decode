@@ -31,7 +31,7 @@ from rich.text import Text
 
 from decode.app.config import Config
 from decode.hostcontrol import CommandPolicy, FilesystemScope, PermissionMode
-from decode.models import default_model_registry
+from decode.models import default_model_registry, estimate_cost_for
 from decode.observability.logging_service import LoggingService
 from decode.persistence import create_store
 from decode.persistence.evidence import EvidenceCollector
@@ -215,7 +215,13 @@ COMMAND_GROUPS: dict[str, list[tuple]] = {
             "/status",
             "",
             "Show the active session status",
-            "Show the active session's id, goal, target, model, mode, findings, and message count.",
+            "Show the active session's id, goal, target, model, mode, findings, message count, and token/cost usage.",
+        ),
+        (
+            "/cost",
+            "",
+            "Show session token usage and estimated cost",
+            "Show cumulative prompt/completion tokens and the estimated USD cost for the active session (free models are $0).",
         ),
         (
             "/checkpoint",
@@ -442,6 +448,9 @@ class AgentREPL:
                 continue
             if text == "/status":
                 self._handle_status()
+                continue
+            if text == "/cost":
+                self._handle_cost()
                 continue
             if text == "/continue":
                 self._handle_continue()
@@ -1117,10 +1126,13 @@ class AgentREPL:
                 "[cyan]/continue[/cyan] to resume the most recent.[/dim]"
             )
             return
-        info = self._sessions.status(self._tracker.session_id)
+        sid = self._tracker.session_id
+        info = self._sessions.status(sid)
         if not info:
             console.print("[yellow]Active session not found in the store.[/yellow]")
             return
+        usage = self._sessions.usage(sid)
+        tokens = usage["prompt_tokens"] + usage["completion_tokens"]
         body = (
             f"ID:        [cyan]{info['id']}[/cyan]\n"
             f"Status:    {info['status']}\n"
@@ -1130,10 +1142,37 @@ class AgentREPL:
             f"Mode:      {self._perm_mode.value}\n"
             f"Findings:  {info['findings']}\n"
             f"Messages:  {len(self._conversation_history)}\n"
+            f"Usage:     {tokens} tokens  ·  est. ${usage['cost_usd']:.4f}\n"
             f"Created:   {info['created_at'][:19]}"
         )
         console.print(
             Panel(body, title="Session status", border_style="cyan", box=box.ROUNDED)
+        )
+
+    def _handle_cost(self):
+        if not self._session_active or not self._tracker:
+            console.print(
+                "[dim]No active session. Token/cost metering starts with your first task.[/dim]"
+            )
+            return
+        usage = self._sessions.usage(self._tracker.session_id)
+        body = (
+            f"Model:              {usage.get('model') or self._model}\n"
+            f"Prompt tokens:      {usage['prompt_tokens']}\n"
+            f"Completion tokens:  {usage['completion_tokens']}\n"
+            f"Total tokens:       {usage['prompt_tokens'] + usage['completion_tokens']}\n"
+            f"Estimated cost:     ${usage['cost_usd']:.4f} USD"
+        )
+        console.print(
+            Panel(
+                body,
+                title="Session usage & cost (estimated)",
+                border_style="cyan",
+                box=box.ROUNDED,
+            )
+        )
+        console.print(
+            "[dim]Cost is estimated from published per-model pricing; free models are $0.[/dim]"
         )
 
     def _handle_continue(self):
@@ -1402,6 +1441,9 @@ class AgentREPL:
                     event.get("tool"), event.get("observation", {})
                 )
 
+        llm = getattr(self._agent, "llm", None)
+        p0 = getattr(llm, "session_prompt_tokens", 0)
+        c0 = getattr(llm, "session_completion_tokens", 0)
         result = await self._agent.run_tool_loop(
             goal,
             filesystem_scope=self._fs_scope,
@@ -1413,6 +1455,26 @@ class AgentREPL:
             session_id=self._tracker.session_id if self._tracker else None,
         )
         console.print(f"\n[bold]{result.get('final', '')}[/bold]\n")
+        self._meter_usage(llm, p0, c0)
+
+    def _meter_usage(self, llm, prompt0: int, completion0: int) -> None:
+        """Attribute this run's token delta and estimated cost to the session."""
+        if llm is None or not self._session_active or not self._tracker:
+            return
+        d_prompt = getattr(llm, "session_prompt_tokens", 0) - prompt0
+        d_completion = getattr(llm, "session_completion_tokens", 0) - completion0
+        if d_prompt <= 0 and d_completion <= 0:
+            return
+        cost = estimate_cost_for(
+            self._model_registry, Config.MODEL, d_prompt, d_completion
+        )
+        self._sessions.record_usage(
+            self._tracker.session_id,
+            prompt_tokens=d_prompt,
+            completion_tokens=d_completion,
+            cost_usd=cost,
+            model=Config.MODEL,
+        )
 
     def _mcp(self):
         """Lazily build the MCP manager so configured servers are usable in the REPL."""

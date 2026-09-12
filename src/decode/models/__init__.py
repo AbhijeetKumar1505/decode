@@ -1,3 +1,4 @@
+from .cost import estimate_cost, estimate_cost_for, find_model_spec
 from .gateway import ModelGateway
 from .registry import (
     DataPolicy,
@@ -30,4 +31,7 @@ __all__ = [
     "RoutingRule",
     "classification_rank",
     "default_model_registry",
+    "estimate_cost",
+    "estimate_cost_for",
+    "find_model_spec",
 ]

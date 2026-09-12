@@ -117,12 +117,17 @@ shippable and reuses existing seams.
   imports `from .execution`/`.hostcontrol`/`.knowledge`/`.extensions` → `..`), which had broken
   `decode providers/tools/knowledge/doctor/mcp` as non-interactive subcommands.
 
-**Phase 3 — Providers, classifier & usage metering**
-- `BedrockProvider` (and optionally `MistralProvider`) implementing `LLMProvider`; register in
-  `create_provider` + `_KNOWN_PROVIDERS`; add registry `ModelSpec`s.
-- Lightweight prompt task-classifier feeding `RoutingRequest.task_class`.
-- Usage→cost metering (`session_tokens` × `ModelCost`) and a session-level `run_id`/trace
-  joining model-selection + tool-calls into one persisted record.
+**Phase 3 — Providers, classifier & usage metering** — *in progress*
+- Done: **usage → cost metering.** `models/cost.py` estimates USD cost from a model's
+  `ModelCost` (with a bare-slug↔`provider/slug` registry lookup; free/unknown → $0). The
+  provider now tracks cumulative prompt/completion splits; the REPL attributes each run's token
+  delta and estimated cost to the session via `SessionManager.record_usage` → a per-session
+  `usage` table (SQLite + Mongo). Surfaced by a new `/cost` command and in `/status`.
+- Remaining: `BedrockProvider` (and optionally `MistralProvider`) implementing `LLMProvider`,
+  registered in `create_provider` + `_KNOWN_PROVIDERS` with registry `ModelSpec`s.
+- Remaining: a lightweight prompt task-classifier feeding `RoutingRequest.task_class`.
+- Remaining: a session-level `run_id`/trace joining model-selection + tool-calls into one
+  persisted record.
 
 **Phase 4 — Memory lifecycle & eval hardening**
 - User/global memory scope; artifact edit/version + optional expiry/confidence; wire
