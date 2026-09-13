@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from decode.audit import AuditLayer
+from decode.audit import AuditEvent, AuditLayer
 from decode.feedback import FeedbackStore
 from decode.governance import Decision, GovernanceGate, ScopePolicy
 from decode.logging_service import LoggingService
@@ -727,3 +727,45 @@ class TestExecutionCoordinator(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAuditSink(unittest.TestCase):
+    def test_append_redact_filter_and_malformed_lines(self) -> None:
+        import json
+
+        with tempfile.TemporaryDirectory() as tmp:
+            audit = AuditLayer(Path(tmp))
+            first = audit.record_execution(
+                "file_read",
+                detail="password=synthetic-secret",
+                metadata={
+                    "token": "synthetic-token",
+                    "nested": {"authorization": "Bearer synthetic"},
+                },
+            )
+            audit.record(AuditEvent(timestamp="", event="rejection", approved=False))
+            text = audit._current_log.read_text()
+            self.assertNotIn("synthetic-secret", text)
+            self.assertNotIn("synthetic-token", text)
+            self.assertNotIn("Bearer synthetic", text)
+            self.assertEqual(len(text.splitlines()), 2)
+            self.assertEqual(json.loads(text.splitlines()[0])["id"], first)
+            with audit._current_log.open("a") as stream:
+                stream.write("\nnot json\n{}\n[]\n")
+            self.assertEqual(len(audit.query()), 2)
+            self.assertEqual(len(audit.query(event_type="rejection")), 1)
+            self.assertEqual(audit.query(date="2000-01-01"), [])
+            with self.assertRaises(ValueError):
+                audit.query(date="../../outside")
+
+    def test_rotation_and_sink_failure_are_visible(self) -> None:
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            audit = AuditLayer(Path(tmp))
+            audit._current_log = Path(tmp) / "2000-01-01.jsonl"
+            audit.record_execution("file_read")
+            self.assertNotEqual(audit._current_log.name, "2000-01-01.jsonl")
+            with patch("builtins.open", side_effect=OSError("disk unavailable")):
+                with self.assertRaises(OSError):
+                    audit.record_execution("file_read")

@@ -32,7 +32,18 @@ Stores project identity, name, scope, and creation time.
 
 ### `artifacts`
 
-Stores project/session-scoped typed key/value artifacts with a sensitive flag and creation time.
+Stores typed key/value artifacts with a sensitive flag, creation time, and explicit
+`scope` (`project`, `session`, `user`, `global`, or legacy `unscoped`). `user_id`
+identifies user memory; existing project/session references retain their behavior.
+Legacy records keep their original project/session isolation on upgrade.
+
+Phase 4 adds `version` (initially 1), `updated_at`, optional UTC `expires_at`,
+optional finite `confidence` (0–1), and a JSON `history` of prior revisions.
+Version-checked updates change the current content and append the previous record
+atomically. Deletion removes the history with its artifact. Normal reads exclude
+expired records; explicit history can include them. Sensitive history is redacted
+on export. SQLite adds columns idempotently; Mongo documents use the same public
+fields and defaults. Raw evidence is not editable through the artifact API.
 
 SQLite enables foreign keys and WAL mode. The source of truth is `decode/persistence/store.py`.
 

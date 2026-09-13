@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import date as calendar_date
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -32,14 +33,14 @@ class AuditEvent(BaseModel):
 
 
 class AuditLayer:
-    def __init__(self, base_path: Path = Path("audit")):
+    def __init__(self, base_path: Path = Path("audit")) -> None:
         self.base_path = base_path
         self.base_path.mkdir(parents=True, exist_ok=True)
         self._current_log = (
             self.base_path / f"{datetime.now().strftime('%Y-%m-%d')}.jsonl"
         )
 
-    def _rotate(self):
+    def _rotate(self) -> None:
         today = f"{datetime.now().strftime('%Y-%m-%d')}.jsonl"
         if self._current_log.name != today:
             self._current_log = self.base_path / today
@@ -50,7 +51,10 @@ class AuditLayer:
             event.id = str(uuid.uuid4())
         if not event.timestamp:
             event.timestamp = datetime.now().isoformat()
-        line = event.model_dump_json() + "\n"
+        from ..runtime import redact_sensitive
+
+        safe = AuditEvent.model_validate(redact_sensitive(event.model_dump()))
+        line = safe.model_dump_json() + "\n"
         with open(self._current_log, "a", encoding="utf-8") as f:
             f.write(line)
         return event.id
@@ -82,9 +86,10 @@ class AuditLayer:
     def query(
         self, date: str | None = None, event_type: str | None = None
     ) -> list[AuditEvent]:
-        log_file = (
-            self.base_path / f"{date or datetime.now().strftime('%Y-%m-%d')}.jsonl"
-        )
+        selected_date = date or datetime.now().strftime("%Y-%m-%d")
+        if calendar_date.fromisoformat(selected_date).isoformat() != selected_date:
+            raise ValueError("invalid audit date")
+        log_file = self.base_path / f"{selected_date}.jsonl"
         if not log_file.exists():
             return []
         results = []
@@ -98,6 +103,6 @@ class AuditLayer:
                     if event_type and ev.event != event_type:
                         continue
                     results.append(ev)
-                except (json.JSONDecodeError, Exception):
+                except (ValueError, TypeError):
                     continue
         return results

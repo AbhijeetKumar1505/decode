@@ -19,6 +19,12 @@ from typing import Any
 from urllib.parse import quote_plus
 
 from .evidence import ProtectedEvidenceStore
+from .store import (
+    artifact_revision,
+    artifact_scope,
+    render_artifact,
+    validate_artifact_content,
+)
 
 _DEFAULT_DB = "decode"
 _NO_ID = {"_id": 0}
@@ -399,19 +405,36 @@ class MongoSessionStore:
         session_id: str | None = None,
         project_id: str | None = None,
         sensitive: bool = False,
+        *,
+        scope: str | None = None,
+        user_id: str | None = None,
+        expires_at: datetime | str | None = None,
+        confidence: float | None = None,
     ) -> str:
+        owner = artifact_scope(scope, project_id, session_id, user_id)
+        content = validate_artifact_content(
+            {
+                "key": key,
+                "value": value,
+                "sensitive": sensitive,
+                "expires_at": expires_at,
+                "confidence": confidence,
+            }
+        )
         aid = self._new_id()
+        now = self._now()
         self._db.artifacts.insert_one(
             {
                 "_id": aid,
                 "id": aid,
-                "project_id": project_id,
-                "session_id": session_id,
+                **owner,
                 "type": type,
-                "key": key,
-                "value": value,
-                "sensitive": 1 if sensitive else 0,
-                "created_at": self._now(),
+                **content,
+                "sensitive": int(sensitive),
+                "created_at": now,
+                "updated_at": now,
+                "version": 1,
+                "history": "[]",
             }
         )
         return aid
@@ -421,15 +444,91 @@ class MongoSessionStore:
         session_id: str | None = None,
         project_id: str | None = None,
         type: str | None = None,
+        *,
+        scope: str | None = None,
+        user_id: str | None = None,
+        include_expired: bool = False,
+        artifact_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        query: dict[str, Any] = {}
-        if session_id:
-            query["session_id"] = session_id
-        if project_id:
-            query["project_id"] = project_id
-        if type:
-            query["type"] = type
-        return list(self._db.artifacts.find(query, _NO_ID).sort("created_at", 1))
+        query = {
+            key: value
+            for key, value in {
+                "session_id": session_id,
+                "project_id": project_id,
+                "type": type,
+                "user_id": user_id,
+                "id": artifact_id,
+            }.items()
+            if value is not None
+        }
+        records = []
+        for raw in self._db.artifacts.find(query, _NO_ID).sort("created_at", 1):
+            record = {
+                "version": 1,
+                "history": "[]",
+                "expires_at": None,
+                "confidence": None,
+                "user_id": None,
+                "updated_at": raw["created_at"],
+                "scope": "project"
+                if raw.get("project_id")
+                else "session"
+                if raw.get("session_id")
+                else "unscoped",
+                **raw,
+            }
+            if scope is not None and record["scope"] != scope:
+                continue
+            if not include_expired and record["expires_at"] is not None:
+                if datetime.fromisoformat(record["expires_at"]) <= datetime.now(UTC):
+                    continue
+            records.append(record)
+        return records
+
+    def update_artifact(
+        self,
+        artifact_id: str,
+        *,
+        expected_version: int,
+        scope: str,
+        project_id: str | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        **changes: Any,
+    ) -> int:
+        owner = artifact_scope(scope, project_id, session_id, user_id)
+        records = self.get_artifacts(
+            artifact_id=artifact_id, include_expired=True, **owner
+        )
+        if not records:
+            raise ValueError("artifact not found in memory scope")
+        record = records[0]
+        if type(expected_version) is not int or expected_version != record["version"]:
+            raise ValueError("artifact version conflict")
+        updated = artifact_revision(record, changes)
+        query = {"id": artifact_id, "$or": [{"version": expected_version}]}
+        if expected_version == 1:
+            query["$or"].append({"version": {"$exists": False}})
+        result = self._db.artifacts.update_one(query, {"$set": updated})
+        if result.modified_count != 1:
+            raise ValueError("artifact version conflict")
+        return updated["version"]
+
+    def delete_artifact(
+        self,
+        artifact_id: str,
+        *,
+        scope: str,
+        project_id: str | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+    ) -> bool:
+        owner = artifact_scope(scope, project_id, session_id, user_id)
+        if not self.get_artifacts(
+            artifact_id=artifact_id, include_expired=True, **owner
+        ):
+            return False
+        return self._db.artifacts.delete_one({"id": artifact_id}).deleted_count == 1
 
     # ── Durable plans and safe recovery ──
 
@@ -646,11 +745,7 @@ class MongoSessionStore:
         if project is None:
             raise ValueError("unknown project")
         artifacts = self.get_artifacts(project_id=project_id)
-        if not include_sensitive:
-            artifacts = [
-                {**item, "value": "[REDACTED]"} if item["sensitive"] else item
-                for item in artifacts
-            ]
+        artifacts = [render_artifact(item, include_sensitive) for item in artifacts]
         nodes = list(
             self._db.project_knowledge_nodes.find(
                 {"project_id": project_id}, _NO_ID
