@@ -211,6 +211,9 @@ class TestCliGovernedDomainEntryPoints(unittest.TestCase):
 
 
 class TestProviderConfiguration(unittest.TestCase):
+    def test_openrouter_free_router_is_the_default_model(self) -> None:
+        self.assertEqual(Config.DEFAULT_MODEL, "openrouter/free")
+
     def test_provider_key_names_are_provider_specific(self) -> None:
         self.assertEqual(Config.provider_key_name("openrouter"), "OPENROUTER_API_KEY")
         self.assertEqual(Config.provider_key_name("openai"), "OPENAI_API_KEY")
@@ -236,6 +239,7 @@ class TestOpenRouterRetry(unittest.TestCase):
         p = OpenRouterProvider.__new__(OpenRouterProvider)
         p._model = "z-ai/glm-5.2:free"
         p._client = client
+        p._last_assistant_message = None
         return p
 
     def _err(self, status):
@@ -283,6 +287,47 @@ class TestOpenRouterRetry(unittest.TestCase):
         provider = self._provider(_Client())
         with self.assertRaises(RuntimeError):
             asyncio.run(provider.chat([{"role": "user", "content": "hi"}]))
+
+    def test_enables_and_preserves_reasoning_details(self):
+        calls = []
+        reasoning_details = [
+            {
+                "type": "reasoning.encrypted",
+                "data": "opaque-provider-payload",
+                "format": "openai-responses-v1",
+                "index": 0,
+            }
+        ]
+
+        class _Message:
+            content = "first answer"
+
+        _Message.reasoning_details = reasoning_details
+
+        class _Client:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(**kwargs):
+                        calls.append(kwargs)
+                        return mock.Mock(choices=[mock.Mock(message=_Message())])
+
+        provider = self._provider(_Client())
+        first = asyncio.run(
+            provider.chat([{"role": "user", "content": "first question"}])
+        )
+        assistant = provider.assistant_message(first)
+        second_messages = [
+            {"role": "user", "content": "first question"},
+            assistant,
+            {"role": "user", "content": "follow-up"},
+        ]
+        asyncio.run(provider.chat(second_messages))
+
+        self.assertEqual(calls[0]["model"], "z-ai/glm-5.2:free")
+        self.assertEqual(calls[0]["extra_body"], {"reasoning": {"enabled": True}})
+        self.assertIs(assistant["reasoning_details"], reasoning_details)
+        self.assertIs(calls[1]["messages"][1]["reasoning_details"], reasoning_details)
 
     def test_retry_delay_prefers_retry_after_header(self):
         from decode.kernel.provider import OpenRouterProvider

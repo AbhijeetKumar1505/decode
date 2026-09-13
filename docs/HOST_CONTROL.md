@@ -80,7 +80,8 @@ REPL commands (`decode`):
 - `/read <path>`, `/ls [path]`, `/ps`, `/run <command>` — direct governed ops
 - `/fsscope <read_root> [write_root]` — authorize filesystem paths
 - `/mode plan|ask|auto` — set the permission mode
-- `/model [id]` — list models (with TPM/RPS) or switch the active one
+- `/model [id|refresh]` — fetch all OpenRouter catalogue models, switch the
+  active model, or refresh the live catalogue
 - `/agent <goal>` — bounded **tool-use loop**: the model plans, calls tools one at
   a time, observes each governed result, and iterates. Its first-person reasoning
   (`thought`) and each running step are streamed live

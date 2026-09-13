@@ -194,6 +194,56 @@ def providers(
 
 
 @app.command()
+def models(
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+) -> None:
+    """Fetch every model in the live OpenRouter catalogue."""
+    from ..models import OpenRouterCatalogError, fetch_openrouter_catalog
+
+    try:
+        result = fetch_openrouter_catalog(Config.OPENROUTER_API_KEY)
+    except (OpenRouterCatalogError, ValueError) as exc:
+        if json_output:
+            print(json.dumps({"error": str(exc), "models": []}, indent=2))
+        else:
+            console.print(f"[red]Could not fetch OpenRouter models: {exc}[/red]")
+        raise typer.Exit(1) from None
+
+    if json_output:
+        print(
+            json.dumps(
+                {
+                    "source": "openrouter-live",
+                    "total_count": result.total_count,
+                    "skipped": result.skipped,
+                    "models": [spec.model_dump(mode="json") for spec in result.models],
+                },
+                indent=2,
+            )
+        )
+        return
+
+    table = Table(title="OpenRouter Models", box=box.ROUNDED)
+    table.add_column("ID", style="bold cyan")
+    table.add_column("Context", justify="right")
+    table.add_column("Input $/M", justify="right")
+    table.add_column("Output $/M", justify="right")
+    table.add_column("Capabilities", style="dim")
+    for spec in result.models:
+        unavailable = spec.cost.pricing_version == "openrouter-live-unavailable"
+        table.add_row(
+            spec.model_name,
+            f"{spec.context_limit:,}",
+            "—" if unavailable else f"{spec.cost.input_per_mtok:g}",
+            "—" if unavailable else f"{spec.cost.output_per_mtok:g}",
+            ", ".join(spec.capabilities) or "—",
+        )
+    console.print(table)
+    suffix = f" ({result.skipped} invalid records skipped)" if result.skipped else ""
+    console.print(f"[dim]{len(result.models)} OpenRouter models{suffix}.[/dim]")
+
+
+@app.command()
 def tools(
     query: str = typer.Argument("", help="Filter installed tools by name substring"),
     limit: int = typer.Option(400, "--limit", "-n", help="Max tools to list"),
@@ -716,7 +766,7 @@ def run_setup() -> None:
     key_name = Config.provider_key_name(provider)
     api_key = Prompt.ask(f"Enter your {provider} API key", password=True)
     model_settings = {
-        "openrouter": ("DECODE_MODEL", "z-ai/glm-5.2:free"),
+        "openrouter": ("DECODE_MODEL", Config.DEFAULT_MODEL),
         "openai": ("OPENAI_MODEL", "gpt-4o"),
         "anthropic": ("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
     }

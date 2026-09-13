@@ -6,9 +6,13 @@ from .registry import (
     ModelCost,
     ModelRegistry,
     ModelSpec,
+    OpenRouterCatalogError,
+    OpenRouterCatalogResult,
     RateLimit,
     classification_rank,
     default_model_registry,
+    fetch_openrouter_catalog,
+    registry_with_openrouter_catalog,
 )
 from .routing import (
     DEFAULT_RULES,
@@ -28,6 +32,8 @@ __all__ = [
     "ModelRegistry",
     "ModelRouter",
     "ModelSpec",
+    "OpenRouterCatalogError",
+    "OpenRouterCatalogResult",
     "RateLimit",
     "RoutingDecision",
     "RoutingRequest",
@@ -37,5 +43,7 @@ __all__ = [
     "default_model_registry",
     "estimate_cost",
     "estimate_cost_for",
+    "fetch_openrouter_catalog",
     "find_model_spec",
+    "registry_with_openrouter_catalog",
 ]

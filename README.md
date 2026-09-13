@@ -185,7 +185,7 @@ Then set one provider and its API key. For example:
 ```dotenv
 DECODE_PROVIDER=openrouter
 OPENROUTER_API_KEY=your-key-here
-DECODE_MODEL=z-ai/glm-5.2:free
+DECODE_MODEL=openrouter/free
 ```
 
 Alternative providers use:
@@ -375,13 +375,17 @@ redacted metadata rather than secrets.
 | `/reset` | Close the active session and clear context |
 | `/session`, `/target`, `/start` | Show session context, set the target, or start one explicitly (a session also starts automatically on the first task) |
 | `/findings`, `/evidence` | Review findings and evidence references |
-| `/model [id]` | List or select a configured model |
+| `/model [id\|refresh]` | Fetch all OpenRouter catalogue models, select one, or refresh the catalogue |
 | `/clear` | Clear the current interactive context |
 | `/version` | Show the installed Decode version |
 | `/help` | Show command help |
 | `/exit` | Exit the REPL |
 
 Use `/help <command>` for command-specific details.
+For scripts, `decode models --json` returns the complete live OpenRouter
+catalogue with context, capability, and pricing metadata.
+OpenRouter defaults to `openrouter/free`, enables reasoning on chat requests, and
+preserves returned `reasoning_details` across follow-up and tool-use turns.
 
 ## MCP server
 

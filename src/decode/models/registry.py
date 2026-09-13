@@ -8,6 +8,10 @@ credentials and never performs inference.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 MODEL_SCHEMA_VERSION = 1
@@ -64,7 +68,7 @@ class RateLimit(BaseModel):
 class ModelSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(min_length=1, max_length=128)
+    id: str = Field(min_length=1, max_length=256)
     provider: str = Field(min_length=1, max_length=64)
     version: int = Field(default=MODEL_SCHEMA_VERSION, ge=1)
     capabilities: list[str] = Field(default_factory=list)
@@ -115,6 +119,209 @@ class ModelRegistry:
             for spec in self._models.values()
             if fallback_group and spec.fallback_group == fallback_group
         ]
+
+
+class OpenRouterCatalogError(RuntimeError):
+    """The live OpenRouter catalogue could not be fetched or validated."""
+
+
+class OpenRouterArchitecture(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    input_modalities: list[str] = Field(default_factory=list)
+    output_modalities: list[str] = Field(default_factory=list)
+
+
+class OpenRouterPricing(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    prompt: str | float = "0"
+    completion: str | float = "0"
+
+
+class OpenRouterCatalogModel(BaseModel):
+    """Fields consumed from one model returned by OpenRouter's Models API."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(min_length=1, max_length=240)
+    context_length: int | None = Field(default=None, ge=0)
+    architecture: OpenRouterArchitecture = Field(default_factory=OpenRouterArchitecture)
+    pricing: OpenRouterPricing = Field(default_factory=OpenRouterPricing)
+    supported_parameters: list[str] = Field(default_factory=list)
+
+
+class OpenRouterCatalogResult(BaseModel):
+    """Validated live catalogue plus its partial-parse status."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    models: list[ModelSpec]
+    total_count: int
+    skipped: int = 0
+
+
+def _per_million(value: str | float) -> float:
+    try:
+        per_token = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("invalid model pricing") from None
+    if per_token == -1:
+        return 0.0
+    if not math.isfinite(per_token) or per_token < 0:
+        raise ValueError("invalid model pricing")
+    return per_token * 1_000_000
+
+
+def _pricing_unavailable(pricing: OpenRouterPricing) -> bool:
+    try:
+        return float(pricing.prompt) == -1 or float(pricing.completion) == -1
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def _catalog_capabilities(model: OpenRouterCatalogModel) -> list[str]:
+    inputs = set(model.architecture.input_modalities)
+    outputs = set(model.architecture.output_modalities)
+    parameters = set(model.supported_parameters)
+    capabilities: set[str] = set()
+    if "text" in outputs:
+        capabilities.add("chat")
+    if "image" in inputs:
+        capabilities.add("vision")
+    if "image" in outputs:
+        capabilities.add("image_generation")
+    if "audio" in inputs or "audio" in outputs:
+        capabilities.add("audio")
+    if "file" in inputs:
+        capabilities.add("file")
+    if "embeddings" in outputs:
+        capabilities.add("embeddings")
+    if "tools" in parameters:
+        capabilities.add("tools")
+    if {"structured_outputs", "response_format"} & parameters:
+        capabilities.add("structured_output")
+    if {"reasoning", "include_reasoning"} & parameters:
+        capabilities.add("reasoning")
+    if (model.context_length or 0) >= 32_768:
+        capabilities.add("long_context")
+    return sorted(capabilities)
+
+
+def _catalog_fallback_group(capabilities: list[str]) -> str:
+    for capability in ("embeddings", "image_generation", "audio"):
+        if capability in capabilities:
+            return f"openrouter-{capability}"
+    return "openrouter-general"
+
+
+def _catalog_model_spec(
+    model: OpenRouterCatalogModel,
+    curated: ModelSpec | None = None,
+) -> ModelSpec:
+    capabilities = _catalog_capabilities(model)
+    if curated is not None and "code" in curated.capabilities:
+        capabilities = sorted({*capabilities, "code"})
+    return ModelSpec(
+        id=f"openrouter/{model.id}",
+        provider="openrouter",
+        capabilities=capabilities,
+        data_policy=DataPolicy(max_classification="internal", locality="hosted"),
+        context_limit=model.context_length or 8_192,
+        cost=ModelCost(
+            input_per_mtok=_per_million(model.pricing.prompt),
+            output_per_mtok=_per_million(model.pricing.completion),
+            pricing_version=(
+                "openrouter-live-unavailable"
+                if _pricing_unavailable(model.pricing)
+                else "openrouter-live"
+            ),
+        ),
+        rate_limit=curated.rate_limit if curated is not None else RateLimit(),
+        latency_class=curated.latency_class if curated is not None else "standard",
+        quality_scores=curated.quality_scores if curated is not None else {},
+        fallback_group=(
+            curated.fallback_group
+            if curated is not None
+            else _catalog_fallback_group(capabilities)
+        ),
+    )
+
+
+def fetch_openrouter_catalog(
+    api_key: str = "",
+    *,
+    timeout: float = 10.0,
+    http_get: Callable[..., Any] | None = None,
+) -> OpenRouterCatalogResult:
+    """Fetch every modality from OpenRouter's public model catalogue.
+
+    The endpoint is fixed to prevent a caller from turning catalogue refresh into
+    an arbitrary network request. Invalid individual records are counted and
+    skipped; a missing/empty catalogue fails rather than replacing the registry.
+    """
+    if isinstance(timeout, bool) or not math.isfinite(timeout) or not 0 < timeout <= 60:
+        raise ValueError("catalog timeout must be between 0 and 60 seconds")
+    if http_get is None:
+        import requests
+
+        http_get = requests.get
+    headers = {"Accept": "application/json", "User-Agent": "Decode"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    try:
+        response = http_get(
+            "https://openrouter.ai/api/v1/models",
+            params={"output_modalities": "all"},
+            headers=headers,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        raise OpenRouterCatalogError(
+            f"OpenRouter catalogue request failed ({type(exc).__name__})"
+        ) from None
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+        raise OpenRouterCatalogError(
+            "OpenRouter catalogue returned an invalid response"
+        )
+
+    curated_registry = default_model_registry()
+    curated = {
+        spec.model_name: spec
+        for spec in curated_registry.all()
+        if spec.provider == "openrouter"
+    }
+    models: dict[str, ModelSpec] = {}
+    skipped = 0
+    for raw in payload["data"]:
+        try:
+            entry = OpenRouterCatalogModel.model_validate(raw)
+            spec = _catalog_model_spec(entry, curated.get(entry.id))
+            if spec.id in models:
+                raise ValueError("duplicate model id")
+        except (TypeError, ValueError):
+            skipped += 1
+            continue
+        models[spec.id] = spec
+    if not models:
+        raise OpenRouterCatalogError("OpenRouter catalogue contained no valid models")
+    return OpenRouterCatalogResult(
+        models=sorted(models.values(), key=lambda spec: spec.id),
+        total_count=len(payload["data"]),
+        skipped=skipped,
+    )
+
+
+def registry_with_openrouter_catalog(
+    result: OpenRouterCatalogResult,
+    base: ModelRegistry | None = None,
+) -> ModelRegistry:
+    """Replace the static OpenRouter fallback set with a live catalogue."""
+    base = base or default_model_registry()
+    direct_models = [spec for spec in base.all() if spec.provider != "openrouter"]
+    return ModelRegistry([*direct_models, *result.models])
 
 
 def _openrouter(
@@ -226,7 +433,13 @@ def default_model_registry() -> ModelRegistry:
                 fallback_group="hosted-general",
             ),
             # ── OpenRouter free models (all served via OPENROUTER_API_KEY) ──
-            # Z.ai — strongest general model here; the default orchestrator.
+            # OpenRouter's free router is the default and selects a free model.
+            _openrouter(
+                "openrouter/free",
+                capabilities=[*_CHAT, "reasoning", "vision"],
+                context_limit=200_000,
+            ),
+            # Z.ai — strongest curated general model in the offline fallback.
             _openrouter(
                 "z-ai/glm-5.2:free",
                 capabilities=_CHAT,

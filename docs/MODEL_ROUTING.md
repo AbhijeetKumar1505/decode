@@ -10,7 +10,7 @@ Current providers implement:
 
 ```python
 async def complete(prompt: str, system: str | None = None) -> str: ...
-async def chat(messages: list[dict[str, str]]) -> str: ...
+async def chat(messages: list[dict[str, Any]]) -> str: ...
 @property
 def name() -> str: ...
 ```
@@ -41,20 +41,36 @@ Each model entry declares:
 | `availability` | Health and rate-limit state |
 | `fallback_group` | Compatible alternatives |
 
-### Registered models
+### Registered models and the live catalogue
 
-The default registry keeps two direct-API hosted models for provider
-flexibility (`openai/gpt-4o`, `anthropic/claude-sonnet-4-20250514`) and ships a
-catalog of **OpenRouter** models, all served through a single
-`OPENROUTER_API_KEY`. Each id has the form `openrouter/<vendor>/<model>:free`, so
-the part after the first `/` is the exact OpenRouter slug passed to the API.
-Free variants have zero listed cost and share a rate-limited upstream pool.
+The default registry is a deterministic offline fallback. It keeps the direct
+API models and a curated OpenRouter subset used by startup routing and tests.
+`decode models` and the interactive `/model` command fetch the complete live
+OpenRouter Models API with `output_modalities=all`, including text, image, audio,
+and embedding models. `/model refresh` fetches it again during the same REPL.
+
+Live records are validated at the API boundary and converted to `ModelSpec`:
+context length, input/output modalities, supported parameters, and prompt and
+completion prices are retained. OpenRouter publishes prices per token; Decode
+displays and meters them per million tokens. Invalid individual records are
+counted and omitted, so partial catalogue results are labeled. An invalid or
+empty response does not replace the working registry. The REPL reports the
+failure and keeps the built-in offline set; `decode models` exits nonzero.
+OpenRouter's `-1` sentinel is shown as unavailable pricing (`—`), not free, and
+models with no token context use Decode's minimum fallback context metadata.
+
+Each fetched id has the form `openrouter/<vendor>/<model>`, so the part after the
+first `/` is the exact OpenRouter slug passed to the API. The catalogue request
+uses a fixed HTTPS endpoint and a bounded timeout. It works without a key; when
+`OPENROUTER_API_KEY` is configured, Decode sends it as a bearer credential and
+never includes it in catalogue errors or output.
 
 Chat/planning-capable OpenRouter models (routable) include:
 
 | Model id | Notes |
 |---|---|
-| `openrouter/z-ai/glm-5.2:free` | Default orchestrator; strongest general model |
+| `openrouter/openrouter/free` | Default orchestrator; routes each request to an available free model |
+| `openrouter/z-ai/glm-5.2:free` | Strongest curated general model in the offline fallback |
 | `openrouter/nvidia/nemotron-3-ultra:free` | High-quality general chat |
 | `openrouter/minimax/minimax-m3:free` | General chat |
 | `openrouter/minimax/minimax-m2.7:free` | General chat |
@@ -73,12 +89,18 @@ so the router never selects them for a chat/planning task: embeddings
 (`deepgram/flux-tts-20260812`, `fish-audio/s2.1-pro-free-20260729`), and content
 safety (`nvidia/nemotron-3.5-content-safety-20260604`).
 
-Switch the active model at runtime with `/model <id>` (bare name or
-`provider/name`); `/model` with no argument lists the registry. The active model
+Switch the active model at runtime with `/model <id>` (bare OpenRouter slug or
+`openrouter/<slug>`); `/model` fetches and lists the live catalogue. Use
+`decode models --json` for the full machine-readable catalogue. The active model
 name is passed straight to the provider, so any model the key serves works.
 Free `:free` variants can return HTTP 429 under load; the OpenRouter adapter
 retries with the server's `Retry-After` hint, and adding your own provider key on
 OpenRouter grants dedicated limits.
+
+OpenRouter chat uses `POST /api/v1/chat/completions` with reasoning enabled. The
+adapter retains the complete `reasoning_details` array on each assistant history
+message and passes it back unchanged after tool observations and verification
+replans, preserving reasoning continuity across requests.
 
 ## Routing inputs
 
