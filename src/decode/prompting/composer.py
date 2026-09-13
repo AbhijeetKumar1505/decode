@@ -16,6 +16,9 @@ Respond with a single JSON object and nothing else, either:
   {"thought": "<first-person approach>", "tool": "<tool_name>", "params": {...}}   to call a tool, or
   {"thought": "<first-person approach>", "message": "<final answer>"}              when the goal is complete.
 
+Use literal JSON only. Do not emit XML `<tool_call>` blocks, special control
+tokens, Markdown fences, or more than one tool request in a response.
+
 Core rules:
 - Always include a short first-person `thought` (one or two sentences) saying what
   you are about to do and why. It is shown to the user as running commentary.

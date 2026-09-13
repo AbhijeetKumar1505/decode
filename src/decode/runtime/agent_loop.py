@@ -178,10 +178,20 @@ class ToolUseLoop:
                 }
             )
             messages.append(self._assistant_message(raw))
+            deferred_calls = int(decision.get("additional_tool_calls") or 0)
+            one_call_note = (
+                " Only the first requested tool was executed; request each remaining "
+                "tool one at a time."
+                if deferred_calls
+                else ""
+            )
             messages.append(
                 {
                     "role": "user",
-                    "content": f"Observation from {tool}: {json.dumps(observation, default=str)[:1500]}",
+                    "content": (
+                        f"Observation from {tool}: "
+                        f"{json.dumps(observation, default=str)[:1500]}{one_call_note}"
+                    ),
                 }
             )
         return {
