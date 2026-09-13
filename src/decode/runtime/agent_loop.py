@@ -75,7 +75,7 @@ class ToolUseLoop:
         )
 
     async def run(self, goal: str) -> dict[str, Any]:
-        messages: list[dict[str, str]] = [
+        messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt()},
             {"role": "user", "content": f"Goal: {goal}"},
         ]
@@ -116,7 +116,7 @@ class ToolUseLoop:
                                 "replans": self._replans,
                             }
                         )
-                        messages.append({"role": "assistant", "content": raw})
+                        messages.append(self._assistant_message(raw))
                         messages.append(
                             {
                                 "role": "user",
@@ -177,7 +177,7 @@ class ToolUseLoop:
                     "observation": observation,
                 }
             )
-            messages.append({"role": "assistant", "content": raw})
+            messages.append(self._assistant_message(raw))
             messages.append(
                 {
                     "role": "user",
@@ -198,6 +198,12 @@ class ToolUseLoop:
             "role": "system",
             "content": "Current task state:\n" + self._task_state.render_compact(),
         }
+
+    def _assistant_message(self, content: str) -> dict[str, Any]:
+        builder = getattr(self._provider, "assistant_message", None)
+        if callable(builder):
+            return builder(content)
+        return {"role": "assistant", "content": content}
 
     def _state_summary(self) -> str:
         return self._task_state.render_compact() if self._task_state is not None else ""

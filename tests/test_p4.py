@@ -111,6 +111,12 @@ class TestModelRegistryAndRouting(unittest.TestCase):
         self.assertEqual(glm.provider, "openrouter")
         self.assertEqual(glm.cost.input_per_mtok, 0.0)  # free variant
 
+        free_router = self.registry.get("openrouter/openrouter/free")
+        self.assertEqual(free_router.model_name, "openrouter/free")
+        self.assertIn("reasoning", free_router.capabilities)
+        self.assertIn("vision", free_router.capabilities)
+        self.assertEqual(free_router.context_limit, 200_000)
+
     def test_planning_picks_highest_quality_structured_model(self):
         decision = self.router.route(RoutingRequest(task_class="planning"))
         self.assertTrue(decision.selected)

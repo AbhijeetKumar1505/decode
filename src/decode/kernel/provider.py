@@ -1,6 +1,7 @@
 import asyncio
 import os
 from abc import ABC, abstractmethod
+from typing import Any
 
 from ..config import Config
 
@@ -29,13 +30,17 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def chat(self, messages: list[dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, Any]]) -> str:
         pass
 
     @property
     @abstractmethod
     def name(self) -> str:
         pass
+
+    def assistant_message(self, content: str) -> dict[str, Any]:
+        """Build the assistant history entry for a completed model response."""
+        return {"role": "assistant", "content": content}
 
     def _record_usage(self, usage) -> None:
         """Accumulate token usage from a provider response's ``usage`` object.
@@ -86,6 +91,7 @@ class OpenRouterProvider(LLMProvider):
 
         self._api_key = api_key or Config.OPENROUTER_API_KEY
         self._model = model or Config.MODEL
+        self._last_assistant_message: dict[str, Any] | None = None
         default_headers = {
             "HTTP-Referer": os.getenv(
                 "OPENROUTER_SITE_URL", "https://github.com/decode"
@@ -115,23 +121,41 @@ class OpenRouterProvider(LLMProvider):
         messages.append({"role": "user", "content": prompt})
         return await self._chat(messages)
 
-    async def chat(self, messages: list[dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, Any]]) -> str:
         if not self._client:
             return "[OpenRouter not configured - set OPENROUTER_API_KEY]"
         return await self._chat(messages)
 
-    async def _chat(self, messages: list[dict[str, str]]) -> str:
+    async def _chat(self, messages: list[dict[str, Any]]) -> str:
         # Free OpenRouter variants share a rate-limited upstream pool, so a
         # transient 429 (or 5xx) is expected under load. Retry with the server's
         # Retry-After hint before giving up, so a momentary limit does not abort
         # the whole agent loop.
+        self._last_assistant_message = None
         for attempt in range(self.MAX_RETRIES):
             try:
                 response = self._client.chat.completions.create(
-                    model=self._model, messages=messages, temperature=0.1
+                    model=self._model,
+                    messages=messages,
+                    temperature=0.1,
+                    extra_body={"reasoning": {"enabled": True}},
                 )
                 self._record_usage(getattr(response, "usage", None))
-                return response.choices[0].message.content
+                message = response.choices[0].message
+                content = message.content or ""
+                history: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": content,
+                }
+                reasoning_details = getattr(message, "reasoning_details", None)
+                if reasoning_details is None:
+                    model_extra = getattr(message, "model_extra", None)
+                    if isinstance(model_extra, dict):
+                        reasoning_details = model_extra.get("reasoning_details")
+                if reasoning_details is not None:
+                    history["reasoning_details"] = reasoning_details
+                self._last_assistant_message = history
+                return content
             except Exception as exc:  # narrowed to retryable statuses below
                 status = getattr(exc, "status_code", None)
                 if (
@@ -142,6 +166,12 @@ class OpenRouterProvider(LLMProvider):
                 await asyncio.sleep(self._retry_delay(exc, attempt))
         # Unreachable: the loop either returns or re-raises on the final attempt.
         raise RuntimeError("OpenRouter retry loop exited unexpectedly")
+
+    def assistant_message(self, content: str) -> dict[str, Any]:
+        history = getattr(self, "_last_assistant_message", None)
+        if history is not None and history.get("content") == content:
+            return dict(history)
+        return super().assistant_message(content)
 
     @staticmethod
     def _retry_delay(exc: Exception, attempt: int) -> float:
@@ -180,10 +210,10 @@ class OpenAIProvider(LLMProvider):
         messages.append({"role": "user", "content": prompt})
         return await self._chat(messages)
 
-    async def chat(self, messages: list[dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, Any]]) -> str:
         return await self._chat(messages)
 
-    async def _chat(self, messages: list[dict[str, str]]) -> str:
+    async def _chat(self, messages: list[dict[str, Any]]) -> str:
         response = self._client.chat.completions.create(
             model=self._model, messages=messages, temperature=0.1
         )
@@ -217,7 +247,7 @@ class AnthropicProvider(LLMProvider):
         self._record_usage(getattr(response, "usage", None))
         return response.content[0].text
 
-    async def chat(self, messages: list[dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, Any]]) -> str:
         if not self._client:
             return "[Anthropic not configured - set ANTHROPIC_API_KEY]"
         # Anthropic requires system prompts as a top-level param, not inline messages.
@@ -267,12 +297,12 @@ class MistralProvider(LLMProvider):
         messages.append({"role": "user", "content": prompt})
         return await self._chat(messages)
 
-    async def chat(self, messages: list[dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, Any]]) -> str:
         if not self._client:
             return self._UNCONFIGURED
         return await self._chat(messages)
 
-    async def _chat(self, messages: list[dict[str, str]]) -> str:
+    async def _chat(self, messages: list[dict[str, Any]]) -> str:
         response = self._client.chat.complete(
             model=self._model, messages=messages, temperature=0.1
         )
@@ -319,12 +349,12 @@ class BedrockProvider(LLMProvider):
     async def complete(self, prompt: str, system: str | None = None) -> str:
         return await self._converse([{"role": "user", "content": prompt}], system)
 
-    async def chat(self, messages: list[dict[str, str]]) -> str:
+    async def chat(self, messages: list[dict[str, Any]]) -> str:
         system_parts = [m["content"] for m in messages if m.get("role") == "system"]
         convo = [m for m in messages if m.get("role") != "system"]
         return await self._converse(convo, "\n\n".join(system_parts) or None)
 
-    async def _converse(self, convo: list[dict[str, str]], system: str | None) -> str:
+    async def _converse(self, convo: list[dict[str, Any]], system: str | None) -> str:
         if self._client is None:
             return (
                 "[Bedrock not configured - install boto3 and set AWS credentials "

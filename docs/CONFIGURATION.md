@@ -27,7 +27,7 @@ Security policy may impose a non-overridable ceiling.
 |---|---|---|
 | `DECODE_PROVIDER` | Selected provider: `openrouter`, `openai`, or `anthropic` | `openrouter` |
 | `OPENROUTER_API_KEY` | OpenRouter provider credential (unlocks every `openrouter/*` model) | None |
-| `DECODE_MODEL` | Active model slug (OpenRouter slug when the provider is `openrouter`) | `z-ai/glm-5.2:free` |
+| `DECODE_MODEL` | Active model slug (OpenRouter slug when the provider is `openrouter`) | `openrouter/free` |
 | `OPENROUTER_EMBED_MODEL` | Model used for semantic-memory embeddings | `nvidia/nemotron-3-embed-1b-20260716:free` |
 | `DECODE_EXECUTOR` | Default execution provider | `local` |
 | `MAX_ITERATIONS` | Agent iteration limit | `20` |
@@ -57,7 +57,7 @@ The operational store defaults to local SQLite (`data/decode.db`). Setting `MONG
 
 ## LLMs and providers
 
-Current provider selection supports OpenRouter (the default orchestrator), OpenAI, and Anthropic. OpenRouter is an OpenAI-compatible gateway, so a single `OPENROUTER_API_KEY` unlocks every `openrouter/*` model in the registry. A provider configuration includes provider ID, model, endpoint where applicable, credential reference, timeout, retry limit, and data policy. The OpenRouter adapter retries transient upstream failures (HTTP 429/5xx, common on shared free-tier pools) with the server's `Retry-After` hint before surfacing an error.
+Current provider selection supports OpenRouter (the default orchestrator), OpenAI, and Anthropic. OpenRouter is an OpenAI-compatible gateway, so a single `OPENROUTER_API_KEY` can serve models returned by its live catalogue. `openrouter/free` is the default model slug and lets OpenRouter choose an available free model. `decode models` and `/model` fetch every output modality from that catalogue; the public listing works without a key, while a configured key is sent as a bearer credential. OpenRouter chat requests enable reasoning, and Decode returns each assistant message's `reasoning_details` unchanged on follow-up turns. A provider configuration includes provider ID, model, endpoint where applicable, credential reference, timeout, retry limit, and data policy. The OpenRouter adapter retries transient upstream failures (HTTP 429/5xx, common on shared free-tier pools) with the server's `Retry-After` hint before surfacing an error.
 
 Future routing rules are documented in [MODEL_ROUTING.md](MODEL_ROUTING.md).
 

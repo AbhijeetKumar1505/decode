@@ -158,9 +158,9 @@ COMMAND_GROUPS: dict[str, list[tuple]] = {
     "Model": [
         (
             "/model",
-            "[id]",
+            "[id|refresh]",
             "Show or switch the active model",
-            "With no argument, list available models with their TPM/RPS limits. With an id (bare name or provider/name, e.g. z-ai/glm-5.2:free), switch the active model.",
+            "With no argument, fetch and list every OpenRouter catalogue model. With an id (bare name or provider/name), switch the active model. Use `refresh` to fetch again.",
         ),
     ],
     "Session": [
@@ -316,6 +316,8 @@ class AgentREPL:
         self._evidence = EvidenceCollector(Config.EVIDENCE_PATH)
         self._registry = SkillRegistry()
         self._model_registry = default_model_registry()
+        self._openrouter_catalog_loaded = False
+        self._openrouter_catalog_skipped = 0
         self._session_active = False
         self._current_target: str = ""
         self._scope_entries: list[str] = []
@@ -651,7 +653,7 @@ class AgentREPL:
                 "Type a request in natural language, a [cyan]/command[/cyan], or "
                 "[cyan]![/cyan] to run a shell command directly ([cyan]Tab[/cyan] to autocomplete).\n"
                 "Examples:  [dim]scan 10.0.0.5 for open ports[/dim]   [dim]! nmap -sV 10.0.0.5[/dim]   "
-                "[dim]! sudo apt update[/dim]   [dim]/mode auto[/dim]   [dim]/model glm-5.2:free[/dim]\n"
+                "[dim]! sudo apt update[/dim]   [dim]/mode auto[/dim]   [dim]/model openrouter/free[/dim]\n"
                 f"[cyan]/help[/cyan] lists everything · [cyan]Ctrl+C[/cyan] cancels "
                 f"(twice to quit) · [cyan]Ctrl+D[/cyan] quits    {status}",
                 border_style="cyan",
@@ -1353,34 +1355,89 @@ class AgentREPL:
         except (KeyboardInterrupt, EOFError):
             return None
 
-    def _handle_model(self, arg):
-        from decode.models import default_model_registry
+    def _refresh_openrouter_catalog(self, *, force: bool = False) -> bool:
+        from decode.models import (
+            OpenRouterCatalogError,
+            fetch_openrouter_catalog,
+            registry_with_openrouter_catalog,
+        )
 
-        registry = default_model_registry()
+        if self._openrouter_catalog_loaded and not force:
+            return True
+        try:
+            with self._thinking("Fetching OpenRouter catalogue…"):
+                result = fetch_openrouter_catalog(Config.OPENROUTER_API_KEY)
+        except (OpenRouterCatalogError, ValueError) as exc:
+            console.print(
+                f"[yellow]OpenRouter catalogue unavailable: {exc}. "
+                "Showing the built-in offline models.[/yellow]"
+            )
+            return False
+        self._model_registry = registry_with_openrouter_catalog(
+            result, self._model_registry
+        )
+        self._openrouter_catalog_loaded = True
+        self._openrouter_catalog_skipped = result.skipped
+        return True
+
+    def _handle_model(self, arg):
         arg = arg.strip()
+        refresh = arg.casefold() == "refresh"
+        if refresh:
+            arg = ""
+        if not arg or refresh:
+            self._refresh_openrouter_catalog(force=refresh)
+        registry = self._model_registry
         current = getattr(getattr(self._agent, "llm", None), "_model", Config.MODEL)
         if not arg:
-            table = Table(title="Models", box=box.ROUNDED)
+            source = (
+                "OpenRouter live catalogue"
+                if self._openrouter_catalog_loaded
+                else "built-in offline catalogue"
+            )
+            table = Table(title=f"Models · {source}", box=box.ROUNDED)
             table.add_column("ID", style="bold cyan")
             table.add_column("Provider")
-            table.add_column("TPM", justify="right")
-            table.add_column("RPS", justify="right")
+            table.add_column("Context", justify="right")
+            table.add_column("Input $/M", justify="right")
+            table.add_column("Output $/M", justify="right")
+            table.add_column("Capabilities", style="dim")
             table.add_column("", style="green")
             for spec in registry.all():
-                rl = spec.rate_limit
-                tpm = f"{rl.tokens_per_minute:,}" if rl.tokens_per_minute else "—"
-                rps = f"{rl.requests_per_second}" if rl.requests_per_second else "—"
                 active = "● active" if current in (spec.model_name, spec.id) else ""
-                table.add_row(spec.id, spec.provider, tpm, rps, active)
+                unavailable = spec.cost.pricing_version == "openrouter-live-unavailable"
+                table.add_row(
+                    spec.id,
+                    spec.provider,
+                    f"{spec.context_limit:,}",
+                    "—" if unavailable else f"{spec.cost.input_per_mtok:g}",
+                    "—" if unavailable else f"{spec.cost.output_per_mtok:g}",
+                    ", ".join(spec.capabilities) or "—",
+                    active,
+                )
             console.print(table)
+            openrouter_count = sum(
+                spec.provider == "openrouter" for spec in registry.all()
+            )
+            partial = (
+                f"; {self._openrouter_catalog_skipped} invalid records skipped"
+                if self._openrouter_catalog_skipped
+                else ""
+            )
             console.print(
-                f"[dim]Active model: [bold]{current}[/bold]. Switch with "
-                f"[cyan]/model <id>[/cyan] (bare name or provider/name).[/dim]"
+                f"[dim]{openrouter_count} OpenRouter models{partial}. Active model: "
+                f"[bold]{current}[/bold]. Switch with [cyan]/model <id>[/cyan]; "
+                "refresh with [cyan]/model refresh[/cyan].[/dim]"
             )
             return
         spec = registry.get(arg) or next(
             (s for s in registry.all() if s.model_name == arg), None
         )
+        if spec is None and self._refresh_openrouter_catalog():
+            registry = self._model_registry
+            spec = registry.get(arg) or next(
+                (s for s in registry.all() if s.model_name == arg), None
+            )
         model_name = spec.model_name if spec else arg
         llm = getattr(self._agent, "llm", None)
         if llm is None or not hasattr(llm, "_model"):

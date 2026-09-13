@@ -128,6 +128,39 @@ class TestToolUseLoop(unittest.TestCase):
         self.assertEqual(result["stopped"], "final")
         self.assertIn("could not decide", result["final"])
 
+    def test_uses_provider_assistant_history_message(self):
+        seen = []
+        details = [{"type": "reasoning.encrypted", "data": "opaque"}]
+
+        class _ReasoningProvider(_ScriptedProvider):
+            async def chat(self, messages):
+                seen.append(list(messages))
+                return await super().chat(messages)
+
+            def assistant_message(self, content):
+                return {
+                    "role": "assistant",
+                    "content": content,
+                    "reasoning_details": details,
+                }
+
+        provider = _ReasoningProvider(
+            [
+                json.dumps({"tool": "process_list", "params": {}}),
+                json.dumps({"message": "done"}),
+            ]
+        )
+
+        async def invoke(name, params):
+            return {"success": True, "summary": "ok"}
+
+        self._run(ToolUseLoop(provider, TOOLS, invoke), "list processes")
+
+        prior_assistant = next(
+            message for message in seen[1] if message["role"] == "assistant"
+        )
+        self.assertIs(prior_assistant["reasoning_details"], details)
+
 
 class TestToolUseLoopTaskState(unittest.TestCase):
     """The loop reads and writes the live task-state across steps."""
