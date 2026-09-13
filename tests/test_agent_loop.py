@@ -128,6 +128,36 @@ class TestToolUseLoop(unittest.TestCase):
         self.assertEqual(result["stopped"], "final")
         self.assertIn("could not decide", result["final"])
 
+    def test_xml_tool_call_reaches_governed_invoke_one_at_a_time(self):
+        seen = []
+
+        class _Recorder(_ScriptedProvider):
+            async def chat(self, messages):
+                seen.append(list(messages))
+                return await super().chat(messages)
+
+        provider = _Recorder(
+            [
+                """I'll inspect processes.
+<tool_call>process_list</tool_call>
+<tool_call>file_read
+<arg_key>path</arg_key><arg_value>/etc/os-release</arg_value>
+</tool_call>""",
+                json.dumps({"message": "done"}),
+            ]
+        )
+        calls = []
+
+        async def invoke(name, params):
+            calls.append((name, params))
+            return {"success": True, "summary": "ok"}
+
+        result = self._run(ToolUseLoop(provider, TOOLS, invoke), "inspect")
+
+        self.assertEqual(result["stopped"], "final")
+        self.assertEqual(calls, [("process_list", {})])
+        self.assertIn("Only the first requested tool was executed", seen[1][-1]["content"])
+
     def test_uses_provider_assistant_history_message(self):
         seen = []
         details = [{"type": "reasoning.encrypted", "data": "opaque"}]

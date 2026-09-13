@@ -17,6 +17,7 @@ class TestPromptComposer(unittest.TestCase):
             # response contract
             self.assertIn('"tool"', prompt)
             self.assertIn('"message"', prompt)
+            self.assertIn("Do not emit XML `<tool_call>` blocks", prompt)
             # capabilities injected
             self.assertIn("git_diff", prompt)
             self.assertIn("shell_command", prompt)

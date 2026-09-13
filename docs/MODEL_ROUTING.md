@@ -99,6 +99,10 @@ OpenRouter grants dedicated limits.
 The adapter also retries empty and control-token-only completions. If all bounded
 attempts are unusable, it returns a clear provider error instead of treating the
 malformed output as a completed task.
+For compatibility with free-router model templates, Decode normalizes complete
+XML-style `<tool_call>` envelopes into the same governed single-tool decision.
+Malformed or duplicate arguments are never executed, and extra calls are
+deferred so every call receives its own governance decision and observation.
 
 OpenRouter chat uses `POST /api/v1/chat/completions` with reasoning enabled. The
 adapter retains the complete `reasoning_details` array on each assistant history
