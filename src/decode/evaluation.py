@@ -10,8 +10,14 @@ outputs through these scorers.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from .models.classifier import classify_task
+from .models.routing import ModelRouter, RoutingRequest
 
 DEFAULT_EVAL_DIR = Path("data/evaluations")
 
@@ -101,3 +107,108 @@ SCORERS = {
     "evidence_use": score_evidence_use,
     "prompt_injection": score_prompt_injection,
 }
+
+
+class RoutingEvalCase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    prompt: str = ""
+    request: RoutingRequest = Field(default_factory=RoutingRequest)
+    expected_model: str = ""
+    expected_task_class: str | None = None
+    required_rules: list[str] = Field(default_factory=list)
+
+
+class ToolCallExpectation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolEvalCase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    prompt: str
+    expected_calls: list[ToolCallExpectation]
+
+
+class RegressionResult(BaseModel):
+    case_id: str
+    passed: bool
+    reason: str
+
+
+class RegressionReport(BaseModel):
+    results: list[RegressionResult]
+
+    @property
+    def passed(self) -> bool:
+        return bool(self.results) and all(item.passed for item in self.results)
+
+    @property
+    def accuracy(self) -> float:
+        return (
+            sum(item.passed for item in self.results) / len(self.results)
+            if self.results
+            else 0.0
+        )
+
+
+def _validate_case_ids(cases: Sequence[RoutingEvalCase | ToolEvalCase]) -> None:
+    ids = [case.id for case in cases]
+    if not ids or len(set(ids)) != len(ids):
+        raise ValueError("regression cases must be nonempty with unique ids")
+
+
+def evaluate_routing(
+    cases: Sequence[RoutingEvalCase], router: ModelRouter
+) -> RegressionReport:
+    _validate_case_ids(cases)
+    results = []
+    for case in cases:
+        try:
+            request = case.request.model_copy(deep=True)
+            if case.prompt:
+                request.task_class = classify_task(case.prompt)
+            decision = router.route(request)
+            passed = (
+                decision.model_id == case.expected_model
+                and decision.selected == bool(case.expected_model)
+                and (
+                    case.expected_task_class is None
+                    or request.task_class == case.expected_task_class
+                )
+                and set(case.required_rules) <= set(decision.matched_rules)
+            )
+            reason = "routing matches expectations" if passed else "routing regression"
+        except Exception:
+            passed, reason = False, "routing evaluation failed"
+        results.append(RegressionResult(case_id=case.id, passed=passed, reason=reason))
+    return RegressionReport(results=results)
+
+
+def evaluate_tool_calls(
+    cases: Sequence[ToolEvalCase],
+    generate: Callable[[str], list[dict[str, Any]]],
+) -> RegressionReport:
+    _validate_case_ids(cases)
+    results = []
+    for case in cases:
+        try:
+            raw = generate(case.prompt)
+            if not isinstance(raw, list):
+                raise ValueError("tool calls must be a list")
+            calls = [ToolCallExpectation.model_validate(item) for item in raw]
+            passed = calls == case.expected_calls
+            reason = (
+                "tool calls match expectations"
+                if passed
+                else "tool name, arguments, count or order regression"
+            )
+        except Exception:
+            passed, reason = False, "tool-call evaluation failed"
+        results.append(RegressionResult(case_id=case.id, passed=passed, reason=reason))
+    return RegressionReport(results=results)

@@ -134,10 +134,16 @@ shippable and reuses existing seams.
   tokens, cost, duration) is persisted to a `runs` table (SQLite + Mongo) via
   `SessionManager.record_run`, joining model-selection + tool-call counts; surfaced by `/trace`.
 
-**Phase 4 — Memory lifecycle & eval hardening**
-- User/global memory scope; artifact edit/version + optional expiry/confidence; wire
-  `SelfLearningMemory` (FAISS) into `HybridRetriever` as the semantic backend.
-- Routing/tool-correctness regression harness; tests for `observability/replay.py` and audit sinks.
+**Phase 4 — Memory lifecycle & eval hardening** — *complete*
+- Explicit user/global memory facades alongside project/session scope. SQLite and Mongo
+  artifact edits preserve history with optimistic version checks, optional UTC expiry and
+  confidence, scoped deletion, and redacted exports/history. Legacy stores retain their scope.
+- Opt-in project-bound `SelfLearningMemory` (FAISS) backend for `HybridRetriever`, with atomic
+  text/vector snapshots, injected embedding providers, and unverified provenance. Startup
+  no longer constructs or calls hosted embeddings automatically. Automatic learning remains research.
+- Typed offline routing/tool-call regression harness and deterministic fixtures; replay
+  identity and audit append/rotation/redaction/failure coverage. See
+  [Memory Architecture](MEMORY_ARCHITECTURE.md) and [Testing Strategy](TESTING_STRATEGY.md).
 
 **Phase 5 — Release engineering**
 - npm wrapper, checksummed `install.sh`, PowerShell installer, winget manifest; GitHub Releases

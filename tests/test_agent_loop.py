@@ -310,3 +310,36 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_offline_tool_regression_runs_the_real_loop() -> None:
+    from decode.evaluation import ToolEvalCase, evaluate_tool_calls
+
+    case = ToolEvalCase(
+        id="read",
+        prompt="read the lab description",
+        expected_calls=[
+            {"name": "file_read", "arguments": {"path": "/lab/description"}},
+        ],
+    )
+
+    def generate(prompt: str) -> list[dict]:
+        calls = []
+
+        async def observe(name: str, params: dict) -> dict:
+            calls.append({"name": name, "arguments": params})
+            return {"success": True, "summary": "synthetic lab data"}
+
+        provider = _ScriptedProvider(
+            [
+                json.dumps(
+                    {"tool": "file_read", "params": {"path": "/lab/description"}}
+                ),
+                json.dumps({"message": "done"}),
+            ]
+        )
+        result = asyncio.run(ToolUseLoop(provider, TOOLS, observe).run(prompt))
+        assert result["stopped"] == "final"
+        return calls
+
+    assert evaluate_tool_calls([case], generate).passed

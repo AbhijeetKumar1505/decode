@@ -135,3 +135,22 @@ Quarantine is temporary and tracked. Tests may not silently retry until passing.
 - Prompt/model benchmark safety does not regress.
 - Audit/log/feedback completeness passes.
 - Documentation status matches implementation.
+
+## Phase 4 offline regression gates
+
+`src/decode/evaluation.py` provides typed `RoutingEvalCase` and `ToolEvalCase`
+cases, `evaluate_routing`, and `evaluate_tool_calls`. Reports contain per-case
+pass/fail, sanitized reasons, and accuracy. Empty/duplicate case sets are rejected.
+Routing cases exercise prompt classification, exact model selection or denial,
+and required policy rules. Tool cases compare the complete ordered sequence of
+tool names and arguments, detecting missing, extra, reordered, and malformed calls.
+The tool generator is injected; the harness does not execute commands or call
+models itself. Tests use scripted providers and the real `ToolUseLoop`.
+
+`tests/test_p4.py` covers the regression harness and stable replay identity across
+command, adapter, parser, and environment changes. `tests/test_governance.py`
+covers audit append/rotation, filtering, malformed lines, redaction, sink errors,
+and fail-closed execution when mandatory audit fails. `tests/test_memory.py`
+checks both SQLite and mocked MongoDB against the lifecycle contract, legacy
+migration, and offline FAISS snapshot/retrieval behavior. No live database,
+embedding API, or security tool is required for these tests.

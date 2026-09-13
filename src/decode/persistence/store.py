@@ -4,9 +4,121 @@ import sqlite3
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .evidence import ProtectedEvidenceStore
+
+
+class ArtifactScope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scope: Literal["project", "session", "user", "global", "unscoped"]
+    project_id: str | None = None
+    session_id: str | None = None
+    user_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_owner(self) -> "ArtifactScope":
+        owners = {
+            "project": self.project_id,
+            "session": self.session_id,
+            "user": self.user_id,
+        }
+        if self.scope in owners and not (owners[self.scope] or "").strip():
+            raise ValueError("memory scope requires an owner")
+        if self.scope in {"user", "global", "unscoped"} and (
+            self.project_id is not None or self.session_id is not None
+        ):
+            raise ValueError("memory scope has incompatible owners")
+        if self.scope != "user" and self.user_id is not None:
+            raise ValueError("user_id requires user scope")
+        if self.scope == "session" and self.project_id is not None:
+            raise ValueError("session scope cannot own project memory")
+        return self
+
+
+class ArtifactContent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    value: str = ""
+    sensitive: bool = False
+    expires_at: datetime | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
+
+    @field_validator("expires_at")
+    @classmethod
+    def utc_expiry(cls, value: datetime | None) -> datetime | None:
+        if value is not None:
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError("expiry requires a timezone")
+            return value.astimezone(UTC)
+        return value
+
+
+def artifact_scope(
+    scope: str | None,
+    project_id: str | None,
+    session_id: str | None,
+    user_id: str | None,
+) -> dict[str, Any]:
+    resolved = scope or (
+        "project"
+        if project_id
+        else "session"
+        if session_id
+        else "user"
+        if user_id
+        else "unscoped"
+    )
+    return ArtifactScope(
+        scope=resolved, project_id=project_id, session_id=session_id, user_id=user_id
+    ).model_dump()
+
+
+def validate_artifact_content(fields: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return ArtifactContent.model_validate(fields).model_dump(mode="json")
+    except ValueError:
+        raise ValueError("invalid artifact content or retention metadata") from None
+
+
+def artifact_revision(
+    record: dict[str, Any], changes: dict[str, Any]
+) -> dict[str, Any]:
+    content = validate_artifact_content(
+        {
+            **{key: record.get(key) for key in ArtifactContent.model_fields},
+            **changes,
+        }
+    )
+    if record["sensitive"] and not content["sensitive"]:
+        raise ValueError("sensitive artifacts cannot be downgraded")
+    history = json.loads(record.get("history", "[]"))
+    history.append({key: value for key, value in record.items() if key != "history"})
+    return {
+        **content,
+        "sensitive": int(content["sensitive"]),
+        "version": record["version"] + 1,
+        "updated_at": datetime.now(UTC).isoformat(),
+        "history": json.dumps(history),
+    }
+
+
+def render_artifact(
+    record: dict[str, Any], include_sensitive: bool = False
+) -> dict[str, Any]:
+    result = dict(record)
+    history = json.loads(result.pop("history", "[]"))
+    if not include_sensitive and result["sensitive"]:
+        result.update(key="[REDACTED]", value="[REDACTED]")
+        history = [{**item, "sensitive": 1} for item in history]
+    result["history"] = json.dumps(
+        [render_artifact(item, include_sensitive) for item in history]
+    )
+    return result
 
 
 class SessionStore:
@@ -192,6 +304,28 @@ class SessionStore:
             CREATE INDEX IF NOT EXISTS idx_artifacts_project ON artifacts(project_id);
             CREATE INDEX IF NOT EXISTS idx_artifacts_session ON artifacts(session_id);
         """)
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(artifacts)")}
+        additions = {
+            "scope": "TEXT NOT NULL DEFAULT 'unscoped'",
+            "user_id": "TEXT",
+            "version": "INTEGER NOT NULL DEFAULT 1",
+            "updated_at": "TEXT",
+            "expires_at": "TEXT",
+            "confidence": "REAL",
+            "history": "TEXT NOT NULL DEFAULT '[]'",
+        }
+        for name, declaration in additions.items():
+            if name not in columns:
+                self._conn.execute(
+                    f"ALTER TABLE artifacts ADD COLUMN {name} {declaration}"
+                )
+        self._conn.execute("""UPDATE artifacts SET scope = CASE
+            WHEN project_id IS NOT NULL THEN 'project'
+            WHEN session_id IS NOT NULL THEN 'session' ELSE 'unscoped' END
+            WHERE scope = 'unscoped'""")
+        self._conn.execute(
+            "UPDATE artifacts SET updated_at = created_at WHERE updated_at IS NULL"
+        )
         self._conn.commit()
 
     def _now(self) -> str:
@@ -522,22 +656,40 @@ class SessionStore:
         session_id: str | None = None,
         project_id: str | None = None,
         sensitive: bool = False,
+        *,
+        scope: str | None = None,
+        user_id: str | None = None,
+        expires_at: datetime | str | None = None,
+        confidence: float | None = None,
     ) -> str:
-        aid = self._new_id()
-        self._conn.execute(
-            "INSERT INTO artifacts (id, project_id, session_id, type, key, value, sensitive, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                aid,
-                project_id,
-                session_id,
-                type,
-                key,
-                value,
-                1 if sensitive else 0,
-                self._now(),
-            ),
+        owner = artifact_scope(scope, project_id, session_id, user_id)
+        content = validate_artifact_content(
+            {
+                "key": key,
+                "value": value,
+                "sensitive": sensitive,
+                "expires_at": expires_at,
+                "confidence": confidence,
+            }
         )
-        self._conn.commit()
+        aid = self._new_id()
+        now = self._now()
+        record = {
+            "id": aid,
+            **owner,
+            "type": type,
+            **content,
+            "sensitive": int(sensitive),
+            "created_at": now,
+            "updated_at": now,
+        }
+        columns = ", ".join(record)
+        placeholders = ", ".join("?" for _ in record)
+        with self._conn:
+            self._conn.execute(
+                f"INSERT INTO artifacts ({columns}) VALUES ({placeholders})",
+                tuple(record.values()),
+            )
         return aid
 
     def get_artifacts(
@@ -545,24 +697,84 @@ class SessionStore:
         session_id: str | None = None,
         project_id: str | None = None,
         type: str | None = None,
+        *,
+        scope: str | None = None,
+        user_id: str | None = None,
+        include_expired: bool = False,
+        artifact_id: str | None = None,
     ) -> list[dict[str, Any]]:
         clauses, params = [], []
-        if session_id:
-            clauses.append("session_id = ?")
-            params.append(session_id)
-        if project_id:
-            clauses.append("project_id = ?")
-            params.append(project_id)
-        if type:
-            clauses.append("type = ?")
-            params.append(type)
+        for column, value in {
+            "session_id": session_id,
+            "project_id": project_id,
+            "type": type,
+            "scope": scope,
+            "user_id": user_id,
+            "id": artifact_id,
+        }.items():
+            if value is not None:
+                clauses.append(f"{column} = ?")
+                params.append(value)
+        if not include_expired:
+            clauses.append("(expires_at IS NULL OR expires_at > ?)")
+            params.append(self._now())
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-        # safe: column names are literals; only values are parameterized
         rows = self._conn.execute(
-            f"SELECT * FROM artifacts{where} ORDER BY created_at",  # nosec B608
+            f"SELECT * FROM artifacts{where} ORDER BY created_at",
             params,
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [dict(row) for row in rows]
+
+    def update_artifact(
+        self,
+        artifact_id: str,
+        *,
+        expected_version: int,
+        scope: str,
+        project_id: str | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        **changes: Any,
+    ) -> int:
+        owner = artifact_scope(scope, project_id, session_id, user_id)
+        records = self.get_artifacts(
+            artifact_id=artifact_id, include_expired=True, **owner
+        )
+        if not records:
+            raise ValueError("artifact not found in memory scope")
+        record = records[0]
+        if type(expected_version) is not int or expected_version != record["version"]:
+            raise ValueError("artifact version conflict")
+        updated = artifact_revision(record, changes)
+        assignments = ", ".join(f"{key} = ?" for key in updated)
+        with self._conn:
+            cursor = self._conn.execute(
+                f"UPDATE artifacts SET {assignments} WHERE id = ? AND version = ?",
+                (*updated.values(), artifact_id, expected_version),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("artifact version conflict")
+        return updated["version"]
+
+    def delete_artifact(
+        self,
+        artifact_id: str,
+        *,
+        scope: str,
+        project_id: str | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
+    ) -> bool:
+        owner = artifact_scope(scope, project_id, session_id, user_id)
+        if not self.get_artifacts(
+            artifact_id=artifact_id, include_expired=True, **owner
+        ):
+            return False
+        with self._conn:
+            cursor = self._conn.execute(
+                "DELETE FROM artifacts WHERE id = ?", (artifact_id,)
+            )
+        return cursor.rowcount == 1
 
     # ── Durable plans and safe recovery ─────────────────────────────────
 
@@ -864,11 +1076,7 @@ class SessionStore:
         if project is None:
             raise ValueError("unknown project")
         artifacts = self.get_artifacts(project_id=project_id)
-        if not include_sensitive:
-            artifacts = [
-                {**item, "value": "[REDACTED]"} if item["sensitive"] else item
-                for item in artifacts
-            ]
+        artifacts = [render_artifact(item, include_sensitive) for item in artifacts]
         nodes = self._conn.execute(
             "SELECT * FROM project_knowledge_nodes WHERE project_id = ? ORDER BY created_at",
             (project_id,),

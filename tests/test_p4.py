@@ -259,3 +259,173 @@ class TestEvaluationDatasets(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import pytest
+
+from decode.evaluation import (
+    RoutingEvalCase,
+    ToolEvalCase,
+    evaluate_routing,
+    evaluate_tool_calls,
+)
+from decode.observability.replay import ReplayRecord, build_replay_record
+
+
+def test_routing_regression_matrix() -> None:
+    router = ModelRouter(default_model_registry())
+    cases = [
+        RoutingEvalCase(
+            id="planning",
+            prompt="plan the review",
+            expected_task_class="planning",
+            expected_model="anthropic/claude-sonnet-4-20250514",
+            required_rules=["structured-planning"],
+        ),
+        RoutingEvalCase(
+            id="code",
+            prompt="fix the function",
+            expected_task_class="code",
+            request=RoutingRequest(allowlist=["openai"]),
+            expected_model="openai/gpt-4o",
+        ),
+        RoutingEvalCase(
+            id="extraction",
+            prompt="extract fields",
+            expected_task_class="extraction",
+            request=RoutingRequest(allowlist=["openai"]),
+            expected_model="openai/gpt-4o",
+        ),
+        RoutingEvalCase(id="local", request=RoutingRequest(local_only=True)),
+        RoutingEvalCase(
+            id="confidential",
+            request=RoutingRequest(data_classification="confidential"),
+            required_rules=["confidential-local"],
+        ),
+        RoutingEvalCase(
+            id="missing", request=RoutingRequest(pinned_model="missing/model")
+        ),
+        RoutingEvalCase(
+            id="capability",
+            request=RoutingRequest(required_capabilities=["nonexistent"]),
+        ),
+    ]
+    report = evaluate_routing(cases, router)
+    assert report.passed, report.model_dump()
+    assert report.accuracy == 1.0
+    assert evaluate_routing(cases, router) == report
+    changed = cases[0].model_copy(update={"expected_model": "wrong/model"})
+    assert not evaluate_routing([changed], router).passed
+    with patch.object(router, "route", side_effect=RuntimeError("synthetic-secret")):
+        failed = evaluate_routing([cases[0]], router)
+    assert not failed.passed
+    assert "synthetic-secret" not in failed.model_dump_json()
+    with pytest.raises(ValueError):
+        evaluate_routing([cases[0], cases[0]], router)
+    with pytest.raises(ValueError):
+        evaluate_routing([], router)
+
+
+@pytest.mark.parametrize(
+    "calls",
+    [
+        [],
+        [{"name": "file_write", "arguments": {"path": "/lab/info"}}],
+        [{"name": "file_read", "arguments": {"path": "/outside/info"}}],
+        [{"name": "file_read", "arguments": {"path": "/lab/info"}}] * 2,
+        [{"name": "file_read", "arguments": "bad"}],
+    ],
+)
+def test_tool_regression_detects_wrong_calls(calls: list) -> None:
+    case = ToolEvalCase(
+        id="read",
+        prompt="read lab info",
+        expected_calls=[
+            {"name": "file_read", "arguments": {"path": "/lab/info"}},
+        ],
+    )
+    report = evaluate_tool_calls([case], lambda _: calls)
+    assert not report.passed
+    assert report.accuracy == 0.0
+
+
+def test_tool_regression_order_and_error_redaction() -> None:
+    expected = [
+        {"name": "list_tools", "arguments": {}},
+        {"name": "shell_command", "arguments": {"argv": ["example-tool", "--version"]}},
+    ]
+    case = ToolEvalCase(
+        id="discover", prompt="inspect installed tools", expected_calls=expected
+    )
+    assert evaluate_tool_calls([case], lambda _: expected).passed
+    assert not evaluate_tool_calls([case], lambda _: list(reversed(expected))).passed
+
+    def broken(_: str) -> list[dict]:
+        raise RuntimeError("password=synthetic-secret")
+
+    report = evaluate_tool_calls([case], broken)
+    assert not report.passed
+    assert "synthetic-secret" not in report.model_dump_json()
+
+
+def _replay_invocation() -> SimpleNamespace:
+    return SimpleNamespace(
+        capability="shell_command",
+        tool="example-tool",
+        argv=["example-tool", "value with spaces"],
+        normalized_params={"argv": ["example-tool", "value with spaces"]},
+        adapter_id="host",
+        adapter_version="1",
+        parser_id="raw",
+        parser_version="1",
+    )
+
+
+def test_replay_identity_is_stable_and_roundtrips() -> None:
+    invocation = _replay_invocation()
+    first = build_replay_record(
+        invocation, evidence_id="first", evidence_sha256="a" * 64
+    )
+    second = build_replay_record(
+        invocation, evidence_id="second", evidence_sha256="b" * 64
+    )
+    assert first.replay_id == second.replay_id
+    assert first.evidence_sha256 != second.evidence_sha256
+    assert first.command == "example-tool 'value with spaces'"
+    assert ReplayRecord.model_validate_json(first.model_dump_json()) == first
+    invocation.argv.append("changed")
+    assert first.argv == ["example-tool", "value with spaces"]
+    assert build_replay_record(invocation).replay_id != first.replay_id
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["tool_version", "executor", "platform", "architecture", "environment_version"],
+)
+def test_replay_environment_changes_identity(field: str) -> None:
+    invocation = _replay_invocation()
+    assert (
+        build_replay_record(invocation).replay_id
+        != build_replay_record(invocation, **{field: "different"}).replay_id
+    )
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "capability",
+        "tool",
+        "adapter_id",
+        "adapter_version",
+        "parser_id",
+        "parser_version",
+    ],
+)
+def test_replay_adapter_changes_identity(field: str) -> None:
+    invocation = _replay_invocation()
+    baseline = build_replay_record(invocation)
+    setattr(invocation, field, "different")
+    assert build_replay_record(invocation).replay_id != baseline.replay_id

@@ -9,9 +9,11 @@ Decode memory supports continuity and correlation without turning untrusted tool
 | Layer | Implementation | Scope | Status |
 |---|---|---|---|
 | Session memory | In-process `SessionMemory` and context manager | One mission/session | Implemented |
-| Project memory | SQLite artifacts through `ProjectMemory` | One engagement across sessions | Implemented |
+| Project memory | SQLite/Mongo artifacts through `ProjectMemory` | One engagement across sessions | Implemented |
+| User memory | `UserMemory`, explicit `user_id` | One local user identity | Implemented |
+| Global memory | `GlobalMemory`, explicitly enabled | Shared within the configured store | Implemented |
 | Knowledge memory | In-memory knowledge graph | Cross-session facts | Partial |
-| Semantic retrieval | FAISS with OpenRouter embeddings prototype | Configured local index | Partial/research |
+| Semantic retrieval | Opt-in `SelfLearningMemory` backend for `HybridRetriever` | One project per local snapshot | Implemented (explicit embedding backend) |
 | Evidence store | SQLite metadata and evidence files/hashes | Project/session | Implemented |
 
 ## Memory classes
@@ -138,3 +140,57 @@ Planned PostgreSQL operational store, protected object storage, and optional Qdr
 ## Observability
 
 Record retrieval queries, selected memory IDs, filters, write decisions, compression operations, and deletion events without logging secret values.
+
+## Implemented lifecycle API (Phase 4)
+
+`MemoryManager(store, project_id=..., user_id=..., include_global=False)` exposes
+`project`, optional `user`, and optional `global_memory` facades. An absent project
+returns no project artifacts; it never broadens retrieval to all projects. Global
+retrieval requires `include_global=True`. These identities are caller-supplied
+local scope boundaries; authenticated accounts and roles remain Phase 6 work.
+Construct operational stores through `create_store()`.
+
+Each facade provides `remember`, `recall`, `edit`, `history`, `export`, and `forget`.
+`remember` accepts optional timezone-aware `expires_at` and finite `confidence`
+from 0 to 1. Expired artifacts are excluded from normal reads, search, and export;
+explicit history retains them until deletion. Clearing expiry with
+`edit(..., expires_at=None)` makes the current record readable again.
+
+`edit(id, expected_version=1, value="revised observation")` preserves the previous
+record and atomically increments its version. A stale version or different owner
+is rejected. Scope, type, IDs, and creation time cannot be edited. Sensitivity
+cannot be downgraded. `history` and `export` redact sensitive keys, values, and
+prior versions by default; trusted store reads and `recall` return raw values.
+Prompt-oriented exact retrieval excludes sensitive artifacts. `forget` removes
+an artifact and its history; raw evidence is unaffected.
+
+SQLite upgrades existing artifact rows on opening. Mongo reads older documents
+with equivalent defaults and versions them on first edit. Revisions live with
+the artifact, so Mongo edits need no multi-document transaction. No background
+expiry purge or database encryption is implemented. The broader provenance,
+policy-based promotion, and automatic retention policies above remain targets.
+
+## Opt-in semantic backend
+
+Pass `SelfLearningMemory(path, project_id=..., embeddings=backend)` as
+`MemoryManager(..., semantic_memory=...)`. The backend must provide
+`embed_query(text)` and `embed_documents(texts)`. It can run locally;
+`OpenRouterEmbeddings` is an explicit hosted choice. Callers must authorize the
+embedding provider and the data sent to it. No embedding provider is constructed
+or called by default, including during universal-agent startup.
+
+The local snapshot atomically stores text, vectors, project identity, and embedding
+model identity together. Reopening rejects another project's or model's snapshot.
+Retrieval labels semantic results unverified, limits results to existing vectors,
+and degrades to no semantic results on query/backend failure without logging
+exception payloads. Exact artifacts and graph results remain available.
+
+Only explicitly supplied observations are indexed; artifacts are not automatically
+copied into the index. Sensitive-flagged experiences and recognized secret patterns
+are rejected before embedding. This filter cannot identify every possible secret;
+callers must classify text before adding it. Artifact edit/expiry therefore applies
+to artifact records, not independently supplied semantic observations. Project
+memory deletion clears its attached semantic backend. Legacy prototype index files
+are not loaded or rewritten automatically. Concurrent writers to one semantic
+snapshot are unsupported; use one owner per index. Automatic learning and
+promotion of observations into verified knowledge remain research.
