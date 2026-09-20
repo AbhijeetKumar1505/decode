@@ -13,6 +13,9 @@ from .policy import (
     FilesystemScope,
     PermissionMode,
     ScopeViolation,
+    command_output_paths,
+    command_requires_target,
+    command_target,
     resolve_mode_decision,
 )
 from .session import HostSession
@@ -72,5 +75,8 @@ __all__ = [
     "HostSession",
     "PermissionMode",
     "ScopeViolation",
+    "command_output_paths",
+    "command_requires_target",
+    "command_target",
     "resolve_mode_decision",
 ]

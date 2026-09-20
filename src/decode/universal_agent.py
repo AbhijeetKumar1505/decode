@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .app.config import Config
-from .execution import ExecutionResult
+from .execution import ExecutionResult, create_executor
 from .governance import GovernanceGate, ScopePolicy
 from .kernel.context import ContextManager
 from .kernel.provider import create_provider
@@ -47,6 +47,7 @@ class UniversalAgent:
         self.provider_name = provider or Config.PROVIDER
         Config.validate(self.provider_name)
         self.llm = create_provider(self.provider_name)
+        self.execution_provider = create_executor(Config.EXECUTOR)
         self.memory = SelfLearningMemory(Config.MEMORY_PATH)
         self.skill_registry = SkillRegistry()
 
@@ -206,6 +207,8 @@ class UniversalAgent:
         on_step: Any = None,
         mcp_manager: Any = None,
         session_id: str | None = None,
+        task_mode: Any = None,
+        model_role: str = "worker",
     ) -> dict[str, Any]:
         """Drive a bounded tool-use loop over host + playbook capabilities.
 
@@ -222,18 +225,24 @@ class UniversalAgent:
         from .hostcontrol.mcp import host_capability_tools
         from .runtime import HostController, ToolUseLoop
         from .runtime.coordinator import ExecutionStatus
-        from .schema import ScopeView, TaskState
+        from .schema import ScopeView, TaskMode, TaskState
         from .verification import ModelVerifier, Verifier
 
         scope = filesystem_scope or FilesystemScope(read_roots=[Path.cwd()])
         policy = command_policy or CommandPolicy()
-        host = HostController(self._coordinator, scope, policy)
+        host = HostController(
+            self._coordinator,
+            scope,
+            policy,
+            executor=self.execution_provider,
+        )
         host_caps = set(HOST_CAPABILITIES)
 
         # Live task-state (Neural Schema, subsystem 04): structured world-state the
         # loop reads and writes each turn, seeded from the goal, scope, and env.
         task_state = TaskState(
             objective=goal,
+            mode=TaskMode(task_mode) if task_mode is not None else TaskMode.HYBRID,
             scope=ScopeView(
                 read_roots=list(getattr(scope, "read_roots", [])),
                 write_roots=list(getattr(scope, "write_roots", [])),
@@ -267,6 +276,36 @@ class UniversalAgent:
                 "description": skill.spec.description,
                 "risk": skill.spec.risk_level.value,
                 "category": skill.spec.category.value,
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        name: {
+                            "type": (
+                                field.type
+                                if field.type
+                                in {
+                                    "string",
+                                    "integer",
+                                    "number",
+                                    "boolean",
+                                    "array",
+                                    "object",
+                                }
+                                else "object"
+                                if field.type == "json"
+                                else "string"
+                            ),
+                            "description": field.description,
+                        }
+                        for name, field in skill.spec.input_schema.items()
+                    },
+                    "required": [
+                        name
+                        for name, field in skill.spec.input_schema.items()
+                        if field.required
+                    ],
+                    "additionalProperties": False,
+                },
             }
             for skill in self.skill_registry.get_all()
         ]
@@ -332,8 +371,26 @@ class UniversalAgent:
             from .runtime.coordinator import ExecutionRequest
 
             command = MCPExecutor.encode(cap.tool, params)
+            target = target_from_params(params)
+            required_fields = set((cap.input_schema or {}).get("required") or [])
+            target_required = bool(
+                required_fields
+                & {
+                    "target",
+                    "url",
+                    "domain",
+                    "host",
+                    "hostname",
+                    "ip",
+                    "address",
+                    "cidr",
+                    "network",
+                }
+            )
             request = ExecutionRequest(
                 action=cap.name,
+                target=target,
+                target_required=target_required,
                 risk=_mcp_risk.get(cap.risk, RiskLevel.WRITE),
                 executor=f"mcp/{cap.server}",
                 command=command,
@@ -392,7 +449,7 @@ class UniversalAgent:
             else:
                 verifier = Verifier()
             loop = ToolUseLoop(
-                self.provider_for_role("worker"),
+                self.provider_for_role(model_role),
                 tools,
                 invoke,
                 max_steps=max_steps,

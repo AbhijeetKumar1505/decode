@@ -1,13 +1,14 @@
 import asyncio
 import json
 import sys
+from typing import Any
 
 import typer
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from ..bootstrap.engine import BootstrapEngine
@@ -663,6 +664,243 @@ def mcp_config():
     for tool in server.list_tools():
         table.add_row(tool["name"], tool["risk"], tool["description"])
     console.print(table)
+
+
+workflow_app = typer.Typer(
+    help="Run durable, evidence-gated engineering and security workflows"
+)
+app.add_typer(workflow_app, name="workflow")
+
+
+def _workflow_runner() -> Any:
+    from ..persistence.manager import SessionManager
+    from ..workflows import WorkflowRunner
+
+    _apply_plugin_playbook_dirs()
+    return WorkflowRunner(sessions=SessionManager(_store))
+
+
+def _print_workflow_report(report: Any, *, json_output: bool = False) -> None:
+    if json_output:
+        print(report.model_dump_json(indent=2))
+        return
+    console.print(
+        f"[bold]{report.workflow}[/bold]  session=[cyan]{report.session_id}[/cyan]  "
+        f"status=[bold]{report.status}[/bold]"
+    )
+    if report.message:
+        console.print(report.message)
+    if report.completed:
+        console.print("[green]Completed:[/green] " + ", ".join(report.completed))
+    if report.ready:
+        console.print("[cyan]Ready:[/cyan] " + ", ".join(report.ready))
+    if report.needs_review:
+        console.print(
+            "[yellow]Needs approval/review:[/yellow] "
+            + ", ".join(report.needs_review)
+        )
+    if report.failed:
+        console.print("[red]Failed:[/red] " + ", ".join(report.failed))
+
+
+@workflow_app.command("list")
+def workflow_list(
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+) -> None:
+    """List declarative workflows discovered from markdown playbooks."""
+    specs = _workflow_runner().registry.all()
+    if json_output:
+        print(
+            json.dumps(
+                [
+                    {
+                        "name": spec.name,
+                        "version": spec.version,
+                        "mode": spec.mode.value,
+                        "target_required": spec.target_required,
+                        "stages": len(spec.stages),
+                        "description": spec.description,
+                    }
+                    for spec in specs
+                ],
+                indent=2,
+            )
+        )
+        return
+    table = Table(title="Workflows", box=box.ROUNDED)
+    table.add_column("Name", style="bold cyan")
+    table.add_column("Mode")
+    table.add_column("Stages", justify="right")
+    table.add_column("Target")
+    table.add_column("Description")
+    for spec in specs:
+        table.add_row(
+            spec.name,
+            spec.mode.value,
+            str(len(spec.stages)),
+            "required" if spec.target_required else "optional",
+            spec.description,
+        )
+    console.print(table)
+
+
+@workflow_app.command("show")
+def workflow_show(
+    name: str = typer.Argument(..., help="Workflow name"),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+) -> None:
+    """Show stage order, dependencies, gates, and declared risk."""
+    spec = _workflow_runner().registry.get(name)
+    if spec is None:
+        console.print(f"[red]Unknown workflow '{name}'.[/red]")
+        raise typer.Exit(1)
+    if json_output:
+        print(spec.model_dump_json(indent=2))
+        return
+    console.print(f"[bold]{spec.name}[/bold] v{spec.version} — {spec.description}")
+    table = Table(box=box.ROUNDED)
+    table.add_column("Stage", style="bold cyan")
+    table.add_column("Execution")
+    table.add_column("Role")
+    table.add_column("Risk")
+    table.add_column("Depends on")
+    table.add_column("Evidence gate")
+    for stage in spec.stages:
+        table.add_row(
+            stage.id,
+            stage.execution.value,
+            stage.model_role,
+            stage.risk.value,
+            ", ".join(stage.depends_on) or "—",
+            "yes" if stage.gate.require_evidence else "no",
+        )
+    console.print(table)
+
+
+@workflow_app.command("start")
+def workflow_start(
+    name: str = typer.Argument(..., help="Workflow name"),
+    goal: str = typer.Option(..., "--goal", "-g", help="Concrete objective"),
+    target: str = typer.Option("", "--target", "-t", help="Authorized target"),
+    read_root: list[str] = typer.Option(
+        [], "--read-root", help="Filesystem root the workflow may read (repeatable)"
+    ),
+    write_root: list[str] = typer.Option(
+        [], "--write-root", help="Filesystem root the workflow may write (repeatable)"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+) -> None:
+    """Create and persist a workflow run without executing a stage."""
+    from pathlib import Path
+
+    runner = _workflow_runner()
+    roots = read_root or [str(Path.cwd())]
+    try:
+        report = runner.start(
+            name,
+            goal,
+            target=target,
+            read_roots=roots,
+            write_roots=write_root,
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from None
+    _print_workflow_report(report, json_output=json_output)
+
+
+def _workflow_executor(
+    runner: Any, session_id: str, provider: str | None, mode: str
+) -> Any:
+    from ..hostcontrol import PermissionMode
+    from ..workflows import GovernedAgentStageExecutor
+
+    try:
+        permission_mode = PermissionMode(mode)
+    except ValueError as exc:
+        raise ValueError("mode must be plan, ask, or auto") from exc
+    async def approve(request: Any) -> bool:
+        command = f" command={request.command}" if request.command else ""
+        return Confirm.ask(
+            f"Approve {request.action} ({request.risk.value}){command}?",
+            default=False,
+        )
+    return GovernedAgentStageExecutor(
+        runner.load_state(session_id),
+        provider=provider,
+        permission_mode=permission_mode,
+        approval_callback=approve,
+    )
+
+
+@workflow_app.command("run")
+def workflow_run(
+    name: str = typer.Argument(..., help="Workflow name"),
+    goal: str = typer.Option(..., "--goal", "-g", help="Concrete objective"),
+    target: str = typer.Option("", "--target", "-t", help="Authorized target"),
+    read_root: list[str] = typer.Option([], "--read-root", help="Repeatable read root"),
+    write_root: list[str] = typer.Option(
+        [], "--write-root", help="Repeatable write root"
+    ),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    mode: str = typer.Option("ask", "--mode", help="plan | ask | auto"),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+) -> None:
+    """Create a run and advance it until completion, failure, or a human gate."""
+    from pathlib import Path
+
+    runner = _workflow_runner()
+    try:
+        created = runner.start(
+            name,
+            goal,
+            target=target,
+            read_roots=read_root or [str(Path.cwd())],
+            write_roots=write_root,
+        )
+        executor = _workflow_executor(runner, created.session_id, provider, mode)
+        report = asyncio.run(runner.run(created.session_id, executor))
+    except (ImportError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from None
+    _print_workflow_report(report, json_output=json_output)
+
+
+@workflow_app.command("resume")
+def workflow_resume(
+    session_id: str = typer.Argument(..., help="Workflow session id"),
+    approve: str = typer.Option(
+        "", "--approve", help="Exact human-gate stage id to approve"
+    ),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    mode: str = typer.Option("ask", "--mode", help="plan | ask | auto"),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+) -> None:
+    """Resume a persisted run; optionally approve one waiting human gate."""
+    runner = _workflow_runner()
+    try:
+        executor = _workflow_executor(runner, session_id, provider, mode)
+        report = asyncio.run(
+            runner.run(session_id, executor, approve_stage=approve)
+        )
+    except (ImportError, ValueError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from None
+    _print_workflow_report(report, json_output=json_output)
+
+
+@workflow_app.command("status")
+def workflow_status(
+    session_id: str = typer.Argument(..., help="Workflow session id"),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON for scripting"),
+) -> None:
+    """Show durable workflow progress and the next runnable or gated stage."""
+    try:
+        report = _workflow_runner().status(session_id)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from None
+    _print_workflow_report(report, json_output=json_output)
 
 
 plugin_app = typer.Typer(help="Manage plugin packages (declarative capability bundles)")

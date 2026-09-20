@@ -1,17 +1,14 @@
-# ADR-018: Make Audit Logging Mandatory
+# ADR-018: Make Security Audit Events Mandatory
 
 **Status:** Accepted
 
-## Context
-
-Security work must preserve who authorized and performed which action against what target and with what outcome.
-
 ## Decision
 
-Every skill execution produces structured execution logging, a security audit event, and execution feedback. Consequential work fails closed if mandatory audit cannot be recorded.
+Record append-only versioned events for policy, approval, execution, finding,
+evidence, memory, extension, and state. Consequential work fails closed if audit
+cannot commit. Raw evidence is separate.
 
 ## Consequences
 
-- Investigations and failures become traceable.
-- Logs require integrity, retention, redaction, and access controls.
-- Audit data must not become a second secret store.
+Retention, integrity, redaction, access, export, and correlation are required.
+Audit is not secret storage or memory.

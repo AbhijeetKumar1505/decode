@@ -288,6 +288,52 @@ class TestOpenRouterRetry(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             asyncio.run(provider.chat([{"role": "user", "content": "hi"}]))
 
+    def test_retries_empty_and_control_token_only_responses(self):
+        calls = {"n": 0}
+
+        class _Client:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(**_kwargs):
+                        calls["n"] += 1
+                        content = {
+                            1: None,
+                            2: "<|tool_call_start|><|tool_call_end|>",
+                        }.get(calls["n"], '{"message": "ready"}')
+                        return mock.Mock(
+                            choices=[mock.Mock(message=mock.Mock(content=content))]
+                        )
+
+        provider = self._provider(_Client())
+        with mock.patch("asyncio.sleep", new=_async_noop):
+            result = asyncio.run(
+                provider.chat([{"role": "user", "content": "hi"}])
+            )
+        self.assertEqual(result, '{"message": "ready"}')
+        self.assertEqual(calls["n"], 3)
+
+    def test_repeated_empty_responses_raise_clear_error(self):
+        calls = {"n": 0}
+
+        class _Client:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(**_kwargs):
+                        calls["n"] += 1
+                        return mock.Mock(
+                            choices=[mock.Mock(message=mock.Mock(content="  "))]
+                        )
+
+        provider = self._provider(_Client())
+        with (
+            mock.patch("asyncio.sleep", new=_async_noop),
+            self.assertRaisesRegex(RuntimeError, "no usable response after 4 attempts"),
+        ):
+            asyncio.run(provider.chat([{"role": "user", "content": "hi"}]))
+        self.assertEqual(calls["n"], 4)
+
     def test_enables_and_preserves_reasoning_details(self):
         calls = []
         reasoning_details = [

@@ -27,13 +27,14 @@ _INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
     "service_status": {"name": "string"},
     "service_control": {"name": "string", "action": "enum[start,stop,restart]"},
     "shell_command": {
-        "command": "string (full command line, e.g. 'nmap -sV 10.0.0.5')",
+        "command": "string? (full command line, e.g. 'nmap -sV 10.0.0.5')",
         "argv": "string[]? (pre-split alternative to command)",
+        "target": "string? (authorized network target for network I/O)",
     },
-    "host_session": {"commands": "string[][]"},
+    "host_session": {"commands": "string (JSON list of argument vectors)"},
     "session_open": {"cwd": "string? (starting working directory)"},
     "session_exec": {
-        "command": "string (one command line)",
+        "command": "string? (one command line)",
         "argv": "string[]? (pre-split alternative)",
     },
     "session_close": {},
@@ -42,17 +43,25 @@ _INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
 
 def host_capability_tools() -> list[dict[str, Any]]:
     """Return MCP-style tool descriptors for every host capability."""
+    from ..mcp.schema import normalize_input_schema
+
     tools: list[dict[str, Any]] = []
     for name, (risk, description) in HOST_CAPABILITY_META.items():
+        raw_schema: dict[str, Any] = {
+            "type": "object",
+            "properties": _INPUT_SCHEMAS.get(name, {}),
+        }
+        if name in {"shell_command", "session_exec"}:
+            raw_schema["oneOf"] = [
+                {"required": ["command"]},
+                {"required": ["argv"]},
+            ]
         tools.append(
             {
                 "name": name,
                 "description": description,
                 "risk": risk.value,
-                "input_schema": {
-                    "type": "object",
-                    "properties": _INPUT_SCHEMAS.get(name, {}),
-                },
+                "input_schema": normalize_input_schema(raw_schema),
                 "governed": True,
             }
         )

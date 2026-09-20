@@ -1,8 +1,10 @@
 import json
+import os
 import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from decode.persistence.evidence import (
     Evidence,
@@ -36,6 +38,18 @@ class TestSessionStore(unittest.TestCase):
         self.store.create_session(goal="Goal 2")
         sessions = self.store.list_sessions()
         self.assertEqual(len(sessions), 2)
+
+    def test_list_sessions_breaks_timestamp_ties_by_creation_order(self):
+        with patch.object(
+            self.store, "_now", return_value="2026-09-18T00:00:00+00:00"
+        ):
+            first = self.store.create_session(goal="Goal 1")
+            second = self.store.create_session(goal="Goal 2")
+
+        self.assertEqual(
+            [session["id"] for session in self.store.list_sessions()],
+            [second, first],
+        )
 
     def test_close_session(self):
         sid = self.store.create_session()
@@ -222,8 +236,26 @@ class TestEvidenceCollector(unittest.TestCase):
         reference = store.capture({"raw": "first"}, evidence_id="fixed-id")
 
         self.assertTrue(store.verify(reference))
-        self.assertEqual(stat.S_IMODE(store.base_path.stat().st_mode), 0o700)
-        self.assertEqual(stat.S_IMODE(Path(reference.path).stat().st_mode), 0o600)
+        if os.name == "nt":
+            import win32api
+            import win32security
+
+            expected_sid, _domain, _account_type = win32security.LookupAccountName(
+                None, win32api.GetUserName()
+            )
+            for protected_path in (store.base_path, Path(reference.path)):
+                descriptor = win32security.GetFileSecurity(
+                    str(protected_path), win32security.DACL_SECURITY_INFORMATION
+                )
+                dacl = descriptor.GetSecurityDescriptorDacl()
+                self.assertEqual(dacl.GetAceCount(), 1)
+                self.assertEqual(
+                    win32security.ConvertSidToStringSid(dacl.GetAce(0)[2]),
+                    win32security.ConvertSidToStringSid(expected_sid),
+                )
+        else:
+            self.assertEqual(stat.S_IMODE(store.base_path.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(Path(reference.path).stat().st_mode), 0o600)
         with self.assertRaisesRegex(RuntimeError, "immutable evidence"):
             store.capture({"raw": "changed"}, evidence_id="fixed-id")
 

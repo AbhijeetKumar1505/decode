@@ -26,7 +26,19 @@ def available_provider_names() -> list:
 
 
 def create_executor(name: str = "local", **kwargs) -> ExecutionProvider:
-    cls = _ALL_PROVIDERS.get(name.lower())
+    normalized = name.strip()
+    provider_name, separator, qualifier = normalized.partition("/")
+    if not separator and ":" in normalized:
+        provider_name, _, qualifier = normalized.partition(":")
+    provider_name = provider_name.lower()
+    if provider_name == "wsl" and qualifier:
+        kwargs.setdefault("distro", qualifier)
+    elif qualifier:
+        raise ValueError(
+            f"Qualified execution provider is not supported: {name}. "
+            "Only wsl/<distribution> may be qualified."
+        )
+    cls = _ALL_PROVIDERS.get(provider_name)
     if not cls:
         raise ValueError(
             f"Unknown execution provider: {name}. Available: {list(_ALL_PROVIDERS.keys())}"

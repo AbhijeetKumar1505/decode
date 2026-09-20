@@ -44,13 +44,18 @@ class MCPServerCoreTest(unittest.TestCase):
         return DecodeMCPServer(config)
 
     def test_list_tools_exposes_governed_capabilities(self):
-        tools = self._server().list_tools()
+        server = self._server()
+        tools = server.list_tools()
         names = {t["name"] for t in tools}
         for expected in ("shell_command", "file_read", "file_write", "list_tools"):
             self.assertIn(expected, names)
         sample = next(t for t in tools if t["name"] == "file_read")
         self.assertTrue(sample["governed"])
         self.assertEqual(sample["input_schema"]["type"], "object")
+        self.assertEqual(
+            server._coordinator._evidence.base_path,
+            Config.EVIDENCE_PATH / "executions",
+        )
 
     def test_enabled_tools_filter(self):
         server = self._server(enabled=["file_read"])
@@ -206,7 +211,8 @@ class SchemaNormalizeTest(unittest.TestCase):
         }
         out = normalize_input_schema(raw)
         self.assertEqual(out["type"], "object")
-        self.assertNotIn("required", out)  # deliberately omitted
+        self.assertEqual(set(out["required"]), {"command", "action", "commands", "pid"})
+        self.assertFalse(out["additionalProperties"])
         props = out["properties"]
         self.assertEqual(props["command"]["type"], "string")
         self.assertEqual(props["command"]["description"], "full command line")

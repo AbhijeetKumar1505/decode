@@ -1,173 +1,57 @@
 # Development Guide
 
-## Repository layout
+## Start
 
-```text
-src/decode/
-  app/             CLI, configuration, and Rich + prompt_toolkit TUI
-  agents/          Agent base + HostAgent (governed host capabilities)
-  bootstrap/       Startup and host preparation
-  capabilities/    Host + coding capability specs, per-turn resolver
-  execution/       Local, Docker, WSL, SSH, and MCP providers
-  extensions/      Scoped config, MCP server manager, plugin packages (subsystems: extension layer)
-  governance/      Scope and pre-execution policy
-  hostcontrol/     Filesystem/command policy, operations, sessions, hooks
-  kernel/          Context, safety, model provider
-  knowledge/       Knowledge graph, retrieval, capability -> ATT&CK map
-  memory/          Session, project, and semantic memory
-  models/          Model registry, policy-aware router, role gateway (subsystem 01)
-  observability/   Audit, logging, feedback, and replay records
-  persistence/     SQLite/Mongo sessions, evidence, and artifacts
-  planner/         DAG data types (PlanNode, PlanGraph) — task-state primitives
-  prompting/       System-prompt composition from fragments (subsystem 02)
-  reports/         Report renderers
-  runtime/         ExecutionCoordinator, HostController, ToolUseLoop
-  schema/          TaskState — the live Neural Schema (subsystem 04)
-  skills/          SkillRegistry + markdown playbooks (SKILL.md)
-  tui/             Rich + prompt_toolkit REPL
-  verification/    Completion verifier + bounded replan (subsystem 10)
-  universal_agent.py  The universal agent (run_tool_loop)
-tests/             pytest suite
-docs/              Product and engineering documentation
-examples/          Legal, controlled usage examples
-prompts/           Versioned prompt definitions
+Read `AGENTS.md`, [BUILD_PLAN.md](BUILD_PLAN.md), and
+[CONTINUATION.md](CONTINUATION.md). Inspect the dirty tree and preserve unfinished
+work. Run native Windows portability checks in `wenv`, and run Linux-sensitive
+development/tests in Kali WSL from `/mnt/e/hackagent`. Current `pyproject.toml`
+is the dependency/runtime truth.
+
+For the current Windows checkout:
+
+```powershell
+py -3.12 -m venv wenv
+.\\wenv\\Scripts\\Activate.ps1
+python -m pip install -e .
+python -m pip install pytest mongomock ruff
+ruff check --no-cache .
+python -m pytest -p no:cacheprovider tests/
 ```
 
-Add new top-level folders only when an implemented subsystem needs them.
+Keep `wenv/` untracked. Re-run the full Kali WSL suite after changes that affect
+portable runtime behavior.
 
-## Environment
+## Rules
 
-- Python 3.11 or newer.
-- Create and activate a virtual environment.
-- Install project and development dependencies.
-- Copy `.env.example` to `.env` and add only required local secrets.
-- Runtime state defaults to `~/.decode/`; set `DECODE_HOME` or individual path
-  variables when a different location is required.
-- Run `python -m decode --doctor` or the relevant health command before tool-backed work.
+- Model proposes; runtime authorizes/executes.
+- Every external action crosses `ExecutionCoordinator`.
+- Discovery and execution share a provider.
+- Workflow procedure is declarative/versioned.
+- Core cannot execute; Active cannot expand authority.
+- Tools do not decide policy.
+- Non-zero exit/failed criteria cannot be success.
+- Evidence/events/audit/state are correctness.
+- Do not create target packages ahead of phase.
 
-## Coding standards
+## Change sequence
 
-- Add type hints to every function signature.
-- Follow neighboring import, logging, error, and formatting patterns.
-- Use relative imports inside `decode/`.
-- Prefer Pydantic models at trust and serialization boundaries.
-- Use `log_action()` from `decode.utils` where the established path requires it.
-- Keep new behavior behind the governed capabilities; never add a raw-shell path.
-- Do not add explanatory code comments unless needed to clarify a non-obvious invariant.
+Identify phase/invariant; write failing tests; evolve typed contracts; implement
+small vertical slice; migrate persisted state; verify failure/denial/timeout/
+cancel/resume; update docs/ADR/continuation; review bypass/secrets/maturity.
 
-## No hardcoded tools
+Capabilities declare typed I/O, side effects, scopes, provider requirements,
+risk, approval, timeout, idempotency, evidence, result. Resolve tools later; no
+per-tool model logic or direct subprocess.
 
-The agent runs installed tools through the governed `shell_command` capability
-after discovering them with `list_tools`. Do **not** add per-tool Python wrappers,
-a tool catalog, or tool-name branches. A missing tool is reported, never
-auto-installed. New host primitives (if genuinely needed) are added to
-`decode/hostcontrol/operations.py` and wired through `HostAgent`.
+Bridge workflows use tested frontmatter/DAG/gates/persistence/resume. Target YAML
+needs schema/version/migration tests and requests capabilities, not raw bypasses.
 
-## Adding a markdown playbook
+Model adapters normalize capabilities/usage/errors and support UTOS accounting.
+Fallback cannot cross data policy or repeat tools.
 
-Reusable procedures are authored as markdown, not Python:
+Use typed error categories. Preserve actionable public details without secrets.
+Use Current/Bridge/Target/Research/Deferred labels. Update continuation at pause.
 
-1. Create a `.md` file in `decode/skills/playbooks/` (or a dir on `DECODE_PLAYBOOKS_DIR`).
-2. Add YAML frontmatter: `name`, `description`, `category`, `risk`, `tags`, optional `inputs`/`target_required`.
-3. Write the body as step-by-step instructions the agent executes via `shell_command`.
-4. Add coverage in `tests/test_markdown_skills.py` if the playbook needs guaranteed discovery.
-
-Registration is automatic through `SkillRegistry` (see `decode/skills/markdown_skill.py`).
-
-Discovery is `rglob("*.md")` keyed by the frontmatter `name`, so **every** `.md`
-under `playbooks/` becomes a skill. When importing a multi-file skill (e.g. one
-with companion reference docs), consolidate it into a single `.md` — inline the
-companions under headings — or each loose file registers as its own playbook.
-
-The [mattpocock/skills](https://github.com/mattpocock/skills) engineering and
-productivity set is vendored this way (one consolidated playbook per upstream
-skill, companions inlined, `category: agent_core`, `risk: READ`). Guaranteed-
-discovery coverage lives in `tests/test_markdown_skills.py`.
-
-## Extensions
-
-There is no in-tree plugin system — `decode/tools.py` and `decode/plugins/` were
-removed. Extend Decode through:
-
-- **Markdown playbooks** (above) for repeatable procedures.
-- **Native capabilities** in `decode/hostcontrol/operations.py` (wired through
-  `HostAgent`) for genuinely new OS primitives.
-
-Optional connectors to *external* systems are a planned, isolated plugin surface,
-not an in-tree one. See [PLUGIN_MANIFEST.md](PLUGIN_MANIFEST.md).
-
-## Error handling
-
-- Use stable error categories at boundaries.
-- Preserve original exceptions for internal diagnostics without leaking secrets.
-- Distinguish invalid input, policy denial, missing dependency, timeout, parser failure, and provider failure.
-- Preserve raw output when normalization fails.
-- Never convert denial into retry.
-
-## Logging requirements
-
-Every governed execution records:
-
-- `LoggingService.log_execution()`.
-- `AuditLayer.record_execution()`.
-- `FeedbackStore.record_execution()`.
-
-Do not log raw credentials, API keys, session tokens, or unrestricted sensitive artifacts.
-
-## Testing
-
-Run after every change:
-
-```text
-ruff check .
-python -m pytest tests/
-```
-
-The `pytest tests/` launcher is also supported when the environment places the repository root on `sys.path`.
-
-Add focused tests before broad integration tests. External tools and model APIs use fixtures or controlled opt-in integration tests.
-
-## Documentation
-
-- Update the maturity label when a planned capability becomes implemented.
-- Link to source contracts rather than duplicating them.
-- Document safety and failure behavior.
-- Use non-routable, synthetic, or explicitly controlled example targets.
-- Add an ADR for durable architectural decisions.
-
-## Git strategy
-
-- Keep changes focused.
-- Preserve unrelated working-tree modifications.
-- Use branches prefixed with `codex/` for Codex-created branches unless instructed otherwise.
-- Do not commit generated runtime data, secrets, databases, logs, evidence, or model indexes.
-- Never commit on behalf of a user unless explicitly asked.
-
-## Code review
-
-Reviewers check:
-
-- Scope and permission invariants.
-- Dependency validation.
-- Command/path/input safety.
-- Secret handling.
-- Audit/log/feedback completeness.
-- Parser robustness and raw evidence preservation.
-- Backward compatibility and migrations.
-- Tests for failures and policy boundaries.
-- Documentation maturity claims.
-
-## Versioning
-
-Use semantic versioning for releases and explicit schema versions for events, plugins, prompts, APIs, registry entries, memory, and database migrations.
-
-## Release process
-
-1. Freeze scope and update changelog.
-2. Run lint, unit, integration, security, and migration tests.
-3. Verify documentation and examples.
-4. Generate dependency inventory/SBOM.
-5. Build artifacts in a clean environment.
-6. Scan and sign release artifacts.
-7. Publish checksums and upgrade notes.
-8. Monitor regressions and retain rollback artifacts.
+Never reset user work. Review boundaries, safety, migration, truth, provider
+identity, secrets, tests, docs, and rollback.

@@ -6,7 +6,17 @@ from datetime import datetime
 from typing import Any
 
 _FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
-_RESPONSE_KEYS = ("message", "action", "command", "decision_summary")
+_RESPONSE_KEYS = ("message", "tool", "action", "command", "decision_summary")
+_TOOL_CALL_RE = re.compile(
+    r"<tool_call>\s*(?P<tool>[A-Za-z_][\w.-]{0,127})\s*"
+    r"(?P<body>.*?)</tool_call>",
+    re.DOTALL | re.IGNORECASE,
+)
+_TOOL_ARG_RE = re.compile(
+    r"<arg_key>\s*(?P<key>[A-Za-z_][\w.-]{0,127})\s*</arg_key>\s*"
+    r"<arg_value>(?P<value>.*?)</arg_value>",
+    re.DOTALL | re.IGNORECASE,
+)
 
 
 def log_action(action: str, result: str, success: bool = False) -> dict:
@@ -60,6 +70,41 @@ def _iter_json_objects(text: str) -> Iterator[str]:
                 start = -1
 
 
+def _parse_tool_call_markup(text: str) -> dict[str, Any] | None:
+    """Normalize the XML-like tool envelope emitted by some hosted models."""
+    calls = list(_TOOL_CALL_RE.finditer(text))
+    if not calls:
+        return None
+    call = calls[0]
+    body = call.group("body")
+    pairs = list(_TOOL_ARG_RE.finditer(body))
+    lowered = body.lower()
+    if (
+        lowered.count("<arg_key>") != len(pairs)
+        or lowered.count("<arg_value>") != len(pairs)
+        or _TOOL_ARG_RE.sub("", body).strip()
+    ):
+        return None
+    params: dict[str, Any] = {}
+    for pair in pairs:
+        key = pair.group("key")
+        if key in params:
+            return None
+        raw_value = pair.group("value").strip()
+        try:
+            params[key] = json.loads(raw_value, strict=False)
+        except (json.JSONDecodeError, ValueError):
+            params[key] = raw_value
+    decision: dict[str, Any] = {
+        "thought": text[: call.start()].strip(),
+        "tool": call.group("tool"),
+        "params": params,
+    }
+    if len(calls) > 1:
+        decision["additional_tool_calls"] = len(calls) - 1
+    return decision
+
+
 def parse_llm_response(response: str) -> dict[str, Any]:
     """Extract a structured decision object from a model reply.
 
@@ -85,6 +130,9 @@ def parse_llm_response(response: str) -> dict[str, Any]:
             return obj
         if fallback is None:
             fallback = obj
+    markup_call = _parse_tool_call_markup(text)
+    if markup_call is not None:
+        return markup_call
     if fallback is not None:
         return fallback
 

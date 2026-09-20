@@ -4,7 +4,10 @@ These instructions apply to every coding agent working in this repository. Follo
 
 ## Project Identity
 
-Decode is a local-first, extensible cybersecurity operating system. The kernel translates explicitly authorized objectives into reviewable plans, routes capability-based work to agents and tools, enforces scope and permissions, and preserves evidence and audit history.
+De-code is a Linux-first, local-first engineering and authorized-security
+execution system. Models provide cognition; deterministic workflows, state,
+policy, capabilities, evidence, memory, verification, and resource controls
+provide operational competence.
 
 Decode is not a general-purpose assistant and is not an unrestricted autonomous exploitation system.
 
@@ -13,11 +16,16 @@ Decode is not a general-purpose assistant and is not an unrestricted autonomous 
 1. Read the relevant neighboring source and tests.
 2. Check [the documentation hub](docs/README.md) for the subsystem’s canonical contract.
 3. Inspect `git status --short` and preserve unrelated user changes.
-4. Identify whether the documented feature is **implemented**, **partial**, **planned**, or **research**.
+4. Identify whether the documented feature is **Current**, **Bridge**,
+   **Target**, **Research**, or **Deferred**.
 5. Make the smallest complete change that satisfies the request.
 6. Validate proportionally, then always run the repository lint and test suite.
 
-Do not present planned systems such as the event bus, FastAPI service, PostgreSQL, Redis Streams, Qdrant, distributed workers, or Neural Schema as implemented.
+Read [the build plan](docs/BUILD_PLAN.md) and
+[continuation ledger](docs/CONTINUATION.md) before starting a new phase. Do not
+present Target systems such as the Core/Active Brain split, workflow v2 YAML,
+runtime FSM, UTOS, FastAPI service, TypeScript CLI, PostgreSQL, Redis Streams,
+Qdrant, distributed workers, or AWS deployment as Current.
 
 ## Non-Negotiable Safety Invariants
 
@@ -39,36 +47,50 @@ The governance gate is the single pre-execution decision point. Do not introduce
 ## Architecture Boundaries
 
 ```text
-User
-  |
-CLI / Rich REPL
-  |
-Kernel: context, planning, routing, safety
-  |
-Agents -> Capabilities -> Skills
-  |
-Execution Providers
-  |
-Discovered Tools
-  |
-Persistence / Evidence / Logs / Audit / Feedback
+User / CLI / future API
+          |
+Core Brain: strategy, workflow, DAG, budget, stop
+          |
+Workflow Engine: phases, dependencies, gates, checkpoints
+          |
+Active Brain: one bounded operation, context, recovery
+          |
+Execution Kernel
+  capability -> environment -> policy/scope/risk -> approval
+          |
+Provider: local / WSL / Docker / SSH / MCP
+          |
+Verification -> Evidence -> Findings -> Memory / Audit / Usage
 ```
 
-### Kernel
+Core Brain, Active Brain, and workflow v2 are Target. The current universal loop
+is a Bridge that combines some of these responsibilities.
 
-The kernel owns orchestration and cross-cutting policy. Domain-specific security behavior does not belong in `decode/kernel/`.
+### Execution kernel
 
-### Agents
+The kernel owns capability resolution, exact-action validation, scope, risk,
+approval, provider binding, execution, result classification, evidence, and
+events. Domain-specific security procedure does not belong in the kernel.
 
-Agents own domains and declare capabilities. They request capabilities through `CapabilityRegistry`; they do not hardcode tool names or build raw commands.
+### Brains and agents
+
+Core owns intent, workflow and criteria selection, DAG, priority, budget,
+material replan, escalation, and stop. It cannot execute. Active owns one
+authorized node, bounded recovery, local verification, and escalation. It cannot
+expand authority. Current `Agent` and `UniversalAgent` code is Bridge behavior.
 
 ### Skills
 
-Skills expose typed security capabilities through `SkillSpec`. They validate inputs and dependencies, execute through providers where applicable, normalize outputs, and generate all required telemetry.
+Skills are markdown playbooks that provide reusable methodology. They do not
+execute, authorize, persist state, or confirm findings. Every proposed action is
+resolved as a capability and independently governed.
 
 ### Execution providers
 
-Providers handle platform-specific command transport. They do not decide scope or permission. Current implementations are local, Docker, WSL, SSH, and MCP.
+Providers handle environment-specific discovery and execution transport. They do
+not decide scope or permission. Discovery and execution must share the same
+provider identity. Current foundations cover local, Docker, WSL, SSH, and MCP;
+Phase 0 tracks remaining binding gaps.
 
 ### Persistence and memory
 
@@ -83,7 +105,7 @@ Providers handle platform-specific command transport. They do not decide scope o
 
 General OS operations (files, search, processes, services, ad-hoc commands,
 stateful sessions) are **first-class inbuilt capabilities**, owned by `HostAgent`
-and executed through `decode/hostcontrol/`. They are never plugins.
+and executed through `src/decode/hostcontrol/`. They are never plugins.
 
 - Every host op routes through `ExecutionCoordinator` — no alternate path.
 - `FilesystemScope` (path allowlist) and `CommandPolicy` (binary allow/deny +
@@ -114,32 +136,32 @@ wrappers. Everything still routes through `ExecutionCoordinator`.
 The old hardcoded capability-execution stack has been **removed**: the domain
 agents (`agents/recon.py`, `web.py`, …), tool adapters (`capabilities/commands.py`),
 tool catalog + discovery (`discovery/`), `env_scanner.py`, `dependency_manager.py`,
-named workflows (`workflows/`), the mission runner (`runtime/mission*`), and the
+old named imperative workflows, the mission runner (`runtime/mission*`), and the
 `kernel` skill router are gone, along with the CLI/TUI commands that drove them
 (`/assess /workflow /plan /capabilities /discover`). What remains in `agents/` is
 the `Agent` base and `HostAgent`; in `capabilities/`, the host-capability specs.
+The current `decode/workflows/` package is a declarative, tool-agnostic workflow
+spine: it compiles workflow metadata from markdown playbooks into persisted
+`PlanGraph` state and invokes stages only through the governed universal loop.
 
 ## Repository Map
 
 | Area | Source |
 |---|---|
-| CLI | `decode/cli.py` |
-| Inline REPL | `decode/tui/app.py` |
-| Kernel | `decode/kernel/` |
-| Agents | `decode/agents/` |
-| Host control (files, processes, services, commands, tool discovery) | `decode/hostcontrol/`, `decode/agents/host.py`, `decode/runtime/host_controller.py` |
-| Tool-use agent loop (the universal agent) | `decode/runtime/agent_loop.py`, `decode/universal_agent.py` |
-| Host capability specs | `decode/capabilities/models.py` |
-| Skill registry (markdown playbooks) | `decode/skills/registry.py`, `decode/skills/markdown_skill.py`, `decode/skills/playbooks/` |
-| Task-state / DAG primitives | `decode/planner/dag.py` (`PlanNode`, `PlanGraph`, `CompletionCriterion`) |
-| Execution providers | `decode/execution/` |
-| Governance | `decode/governance/` |
-| Persistence | `decode/persistence/` |
-| Memory | `decode/memory/` |
-| Knowledge graph | `decode/knowledge/` |
-| Structured logging | `decode/logging_service.py` |
-| Audit | `decode/audit.py` |
-| Execution feedback | `decode/feedback.py` |
+| CLI and inline REPL | `src/decode/app/` |
+| Kernel foundations | `src/decode/kernel/` |
+| Agents | `src/decode/agents/` |
+| Host control | `src/decode/hostcontrol/`, `src/decode/runtime/host_controller.py` |
+| Universal tool loop | `src/decode/runtime/agent_loop.py`, `src/decode/universal_agent.py` |
+| Capability contracts | `src/decode/capabilities/` |
+| Playbook registry | `src/decode/skills/`, `src/decode/skills/playbooks/` |
+| Task-state and DAG primitives | `src/decode/schema/`, `src/decode/planner/` |
+| Workflow Bridge | `src/decode/workflows/` |
+| Execution providers | `src/decode/execution/` |
+| Governance | `src/decode/governance/` |
+| Persistence/evidence | `src/decode/persistence/` |
+| Memory and knowledge | `src/decode/memory/`, `src/decode/knowledge/` |
+| Observability | `src/decode/observability/` and compatibility modules |
 | Tests | `tests/` |
 | Documentation | `docs/` |
 
@@ -169,18 +191,23 @@ the `Agent` base and `HostAgent`; in `capabilities/`, the host-capability specs.
 
 ## Capability-First Development
 
-Planning and agents operate on capabilities such as `port_scan`, not binaries such as `nmap`.
+Planning and workflows operate on capabilities such as `network.scan`, not
+binaries such as `nmap`. A capability may resolve to any compatible installed
+tool in the selected environment.
 
 When adding or changing tool support:
 
-1. Define or reuse a stable capability.
-2. Add discovery metadata with a safe version probe.
-3. Declare supported providers, platforms, versions, privileges, and dependencies.
-4. Build arguments from typed normalized parameters.
-5. Classify baseline and argument-dependent risk.
-6. Preserve raw output and normalize through a version-aware parser.
-7. Add fixtures for success, partial, malformed, timeout, and unsupported-version output.
-8. Report capability coverage rather than package count.
+1. Define or reuse a stable, typed capability contract.
+2. Resolve the exact provider, tool identity, version, and dependency state.
+3. Keep discovery and execution in that provider.
+4. Build arguments or payloads from strict normalized parameters.
+5. Declare inputs, outputs, side effects, scopes, privileges, and evidence policy.
+6. Classify baseline and argument-dependent risk after resolution.
+7. Bind approval to the material action digest.
+8. Preserve raw output and normalize through a version-aware parser.
+9. Add fixtures for success, non-zero exit, partial, malformed, timeout,
+   cancellation, and unsupported versions.
+10. Report capability coverage rather than package count.
 
 Never execute a skill whose required dependency is unavailable. Return actionable guidance:
 
@@ -201,15 +228,15 @@ must not be used to hardcode a tool's argv or parser.
 
 ### Markdown playbook skills (`SKILL.md`)
 
-A capability is authored as a **markdown playbook**: a `.md` file with YAML
+A repeatable procedure is authored as a **markdown playbook**: a `.md` file with YAML
 frontmatter (`name`, `description`, `risk`, `category`, `tags`, `inputs`) and a
 body of instructions
-(`decode/skills/markdown_skill.py`). Invoking a playbook executes nothing
+(`src/decode/skills/markdown_skill.py`). Invoking a playbook executes nothing
 itself — it returns its instructions as an observation, and the agent carries them
 out through the governed `shell_command` capability (each command separately gated).
 This lets new tool workflows be added as prose without a hardcoded adapter.
 
-- Drop `.md` files in `decode/skills/playbooks/`, or point
+- Drop `.md` files in `src/decode/skills/playbooks/`, or point
   `DECODE_PLAYBOOKS_DIR` (`os.pathsep`-separated) at your own directories.
 - Malformed files are skipped, never fatal to registry load.
 - Playbook risk defaults to `READ` (retrieving guidance); the commands it triggers
@@ -230,20 +257,20 @@ This lets new tool workflows be added as prose without a hardcoded adapter.
 ## Extension Rules
 
 Three tool sources sit behind one capability registry
-(`decode/capabilities/registry.py`): native built-ins, discovered system tools
+(`src/decode/capabilities/registry.py`): native built-ins, discovered system tools
 (shell-driven), and external providers (MCP servers + plugins). The old in-tree
-loader (`decode/tools.py`, `decode/plugins/`) was removed — **do not** reintroduce
+loader (`src/decode/tools.py`, `src/decode/plugins/`) was removed — **do not** reintroduce
 a tool catalog, an in-process plugin loader, or per-tool Python wrappers.
 
 Extend Decode through:
 
 - **Markdown playbooks** (`SKILL.md`, above) for repeatable procedures.
-- **Native capabilities** in `decode/hostcontrol/operations.py`, wired through
+- **Native capabilities** in `src/decode/hostcontrol/operations.py`, wired through
   `HostAgent`, for genuinely new OS primitives.
-- **MCP servers** — external tool providers (`decode/extensions/mcp_manager.py`,
+- **MCP servers** — external tool providers (`src/decode/extensions/mcp_manager.py`,
   `decode mcp add …`). Risk is **declared** per server (MCP payloads are opaque).
 - **Plugin packages** — declarative bundles only (manifest + markdown skills + MCP
-  configs + docs), never in-process code (`decode/extensions/plugin_manager.py`,
+  configs + docs), never in-process code (`src/decode/extensions/plugin_manager.py`,
   `decode plugin install …`).
 
 Rules: system tools and core OS operations are **never** packaged as plugins;
@@ -253,7 +280,8 @@ config is scoped (project > user > system). See
 
 ## Mandatory Execution Telemetry
 
-Every skill execution, including failures and denials where applicable, must produce:
+Every attempted governed action, including failures and denials where
+applicable, must produce:
 
 1. A structured execution record through `LoggingService.log_execution()`.
 2. An audit record through `AuditLayer.record_execution()` or the appropriate denial event.
@@ -264,11 +292,14 @@ Every skill execution, including failures and denials where applicable, must pro
 ```json
 {
   "timestamp": "ISO8601",
-  "tool": "skill_name",
+  "capability": "network.scan",
+  "provider": "wsl:kali-linux",
+  "tool": "nmap",
   "command": "redacted command",
   "status": "success",
   "duration": 12.4,
-  "output_file": "logs/skill_name/result.json"
+  "exit_code": 0,
+  "evidence_ref": "sha256:..."
 }
 ```
 
@@ -277,7 +308,8 @@ Every skill execution, including failures and denials where applicable, must pro
 ```json
 {
   "event": "tool_execution",
-  "tool": "skill_name",
+  "capability": "network.scan",
+  "provider": "wsl:kali-linux",
   "target": "authorized-target",
   "risk": "WRITE",
   "approved": true
@@ -286,7 +318,9 @@ Every skill execution, including failures and denials where applicable, must pro
 
 ### Execution feedback
 
-Record skill, success, execution time, dependency state, stable error, and non-sensitive metadata.
+Record capability, provider, tool identity, process result, parser state,
+completion result, execution time, dependency state, stable error, and
+non-sensitive evidence references. Launch is not success.
 
 Redact secrets and tokens. Record denial reasons without copying sensitive payloads.
 
@@ -312,7 +346,8 @@ Startup should report degraded optional capabilities. Missing safety, governance
 
 ## TUI Architecture
 
-The TUI in `decode/tui/` is a Rich + prompt_toolkit inline REPL, not a full-screen Textual application.
+The TUI in `src/decode/app/` is a Rich + prompt_toolkit inline REPL, not a
+full-screen Textual application.
 
 ```text
 AgentREPL
@@ -323,7 +358,7 @@ AgentREPL
         +-- asyncio.run() for async agent calls
 ```
 
-- `decode/cli.py` calls `AgentREPL.run()`.
+- The Python CLI starts `AgentREPL.run()`.
 - Commands execute sequentially.
 - There are no screens, widgets, custom messages, or implemented event bus.
 - Preserve this architecture unless the user explicitly requests a TUI redesign.
@@ -331,20 +366,25 @@ AgentREPL
 Supported REPL commands include:
 
 ```text
-/start
-/chain
-/session
+/mode plan|ask|auto
+/scope <targets>
+/fsscope <read-root> [write-root]
+/tools [query]
+/providers
+/status
+/sessions
+/continue
+/resume <id>
 /findings
 /evidence
-/plugins
-/resume <id>
 /clear
 /exit
 ```
 
 ## Testing
 
-run commands in wsl if testing in windows
+Run Linux-sensitive commands in the configured WSL distribution when testing
+from Windows.
 
 Tests live in `tests/` and use pytest.
 
@@ -361,20 +401,27 @@ Add tests for:
 
 - Normal behavior.
 - Invalid and boundary inputs.
+- Unknown tool arguments and shell metacharacters in vector mode.
+- Non-zero process exits and partial parser output.
 - Scope and permission denials.
+- Output-path scope and provider identity.
 - Missing dependencies.
 - Timeouts, cancellation, and retries.
-- Parser failures and partial output.
 - Secret redaction.
-- Mandatory log, audit, and feedback records.
+- Safe resume and approval invalidation.
+- Mandatory log, audit, evidence, and feedback records.
 
 Live model APIs and security tools must not be required by the unit suite. Use fixtures, fakes, or explicitly opt-in integration tests.
 
 ## Documentation
 
-- Start at `docs/README.md`.
-- Preserve the distinction between **implemented**, **partial**, **planned**, and **research**.
+- Start at `docs/README.md`, then read `docs/BUILD_PLAN.md` and
+  `docs/CONTINUATION.md`.
+- Preserve the distinction between **Current**, **Bridge**, **Target**,
+  **Research**, and **Deferred**.
 - Update the relevant canonical specification when a contract changes.
+- Update the continuation ledger when implementation state, validation, risk, or
+  the next action changes.
 - Add an ADR under `docs/adr/` for durable architecture decisions only when the user authorizes a new file.
 - Use legal synthetic, non-routable, or explicitly controlled targets in examples.
 - Do not duplicate the root security, contribution, license, or release-roadmap policies.
@@ -388,5 +435,10 @@ Keep user-facing responses concise. State:
 - Important safety or compatibility implications.
 - Validation performed and results.
 - Any remaining limitation or blocked check.
+
+If work pauses, record the exact phase, files, tests, decisions, risks,
+uncommitted work, next action, and required input in
+`docs/CONTINUATION.md`. AWS remains Deferred until the user creates the project
+and the local Linux, Kali WSL, and Docker release gates pass.
 
 Do not claim success when required validation did not run or failed.

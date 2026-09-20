@@ -9,9 +9,67 @@ evidence and audit history. Its capabilities happen to include software
 development and authorized security assessment; the runtime — not any tool set —
 is the architecture.
 
-The canonical architecture is [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md), which describes the ten De-code subsystems and their status. This file maps that design to release priorities and verified implementation state.
+The canonical sequence is [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md), the current
+handoff is [docs/CONTINUATION.md](docs/CONTINUATION.md), and the architecture is
+[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md). This root roadmap is
+the public summary; subsystem documents own detailed contracts.
 
-## De-code subsystem plan (current direction)
+## Active v2 sequence
+
+| Phase | Outcome | State |
+|---|---|---|
+| 0 | Execution truth and safety | **Current — gate passed 2026-09-18** |
+| 1 | Stable execution kernel | **Next** |
+| 2 | Active Brain | Target |
+| 3 | Core Brain | Target |
+| 4 | Workflow engine v2 | Bridge exists; Target pending |
+| 5 | DAG scheduler and runtime FSM | Target |
+| 6 | Evidence, findings, and memory | Foundations exist; Target pending |
+| 7 | UTOS accounting and intelligence | Target |
+| 8 | Local API and TypeScript CLI | Target |
+| 9 | Engineering and security workflow depth | Target |
+| 10 | Evaluation and Linux/WSL/Docker distribution | Target |
+| 11 | AWS mapping | Deferred |
+
+### Phase 0 release gate
+
+Before higher-layer work, De-code must:
+
+- Treat non-zero process exits as failure unless explicitly mapped.
+- Strictly validate tool arguments and reject unknown fields.
+- Reject shell metacharacters in argument-vector mode.
+- Classify and scope output-producing actions such as downloads.
+- Bind discovery and execution to the same provider environment.
+- Return exact, untruncated discovery matches.
+- Define governed HTTP, browser, and search capability contracts.
+
+The gate passes only when failure cannot render as success, writes cannot bypass
+scope or approval, and an executable discovered in one environment cannot be
+silently run in another.
+
+**Gate result:** passed on 2026-09-18 for the listed contracts. External-provider
+file outputs and stateful sessions deliberately fail closed pending Phase 1
+provider filesystem/session interfaces. No native semantic browser or search
+provider is claimed; configured providers must advertise those tools explicitly.
+
+### Completion gates
+
+Each phase must include versioned contracts and migrations, safety/truth/resume
+tests, provider-aware integration tests, evidence and audit behavior, rollback
+notes, and honest maturity labels. A phase is not complete because a model can
+demonstrate it once.
+
+AWS begins only after the local release and conformance gates pass and the user
+creates the project. Account, region, network, services, and budget will be
+chosen in a separate deployment RFC.
+
+## Historical roadmap material
+
+The sections below are retained as implementation history. Their older phase
+names and completion statements are not the active v2 sequence and must not be
+used to override the build plan or continuation ledger.
+
+### Previous subsystem plan
 
 The target is ten subsystems (see the table in
 [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)) with a hard split
@@ -36,6 +94,14 @@ and were not rewritten. The follow-on enhancements are also in place: a persiste
 governed session across turns (12, `session_open/exec/close`), task-state↔evidence
 artifact linking (09), and an opt-in reviewer-model verifier backend
 (10, `ModelVerifier` / `DECODE_MODEL_REVIEW=1`).
+
+The deterministic workflow spine is also implemented. Markdown playbooks may
+declare validated stage DAGs that persist through the existing plan/task-state
+stores, pause at exact human gates, require protected evidence, select bounded
+model roles per stage, and fence interrupted execution for review. This is a new
+generic orchestrator over the universal agent loop, not the removed imperative
+mission runner or a return to per-tool wrappers. See
+[docs/WORKFLOWS.md](docs/WORKFLOWS.md).
 
 ### Extension layer (implemented)
 

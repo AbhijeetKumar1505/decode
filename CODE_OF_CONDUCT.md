@@ -32,9 +32,17 @@ Community leaders are responsible for clarifying and enforcing our standards of 
 
 This Code of Conduct applies within all community spaces, and also applies when an individual is officially representing the community in public spaces.
 
+Security research does not relax these standards. Do not publish another
+person's identity, credentials, private engagement data, target details, or
+sensitive evidence without explicit authorization.
+
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at [INSERT EMAIL]. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior should be
+reported through the private maintainer contact channel published by the
+repository host or project metadata. Until a dedicated conduct address is
+published, do not post a sensitive report publicly. All complaints will be
+reviewed and investigated promptly and fairly.
 
 ## Attribution
 

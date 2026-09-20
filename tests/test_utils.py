@@ -36,6 +36,51 @@ class TestParseLLMResponse(unittest.TestCase):
         out = parse_llm_response('{"message": "line1\nline2", "action": null}')
         self.assertEqual(out["message"], "line1\nline2")
 
+    def test_xml_style_tool_call_is_normalized(self):
+        out = parse_llm_response(
+            "I'll inspect the directory.\n"
+            "<tool_call>file_list\n"
+            "<arg_key>path</arg_key>\n"
+            "<arg_value>/mnt/e/hackagent</arg_value>\n"
+            "</tool_call>"
+        )
+        self.assertEqual(out["thought"], "I'll inspect the directory.")
+        self.assertEqual(out["tool"], "file_list")
+        self.assertEqual(out["params"], {"path": "/mnt/e/hackagent"})
+
+    def test_multiple_xml_tool_calls_execute_only_the_first(self):
+        out = parse_llm_response(
+            "<tool_call>file_list"
+            "<arg_key>path</arg_key><arg_value>.</arg_value>"
+            "</tool_call>"
+            "<tool_call>list_tools</tool_call>"
+        )
+        self.assertEqual(out["tool"], "file_list")
+        self.assertEqual(out["params"], {"path": "."})
+        self.assertEqual(out["additional_tool_calls"], 1)
+
+    def test_xml_tool_arguments_retain_json_types(self):
+        out = parse_llm_response(
+            "<tool_call>process_wait"
+            "<arg_key>pid</arg_key><arg_value>42</arg_value>"
+            "<arg_key>terminate</arg_key><arg_value>true</arg_value>"
+            "</tool_call>"
+        )
+        self.assertEqual(out["params"], {"pid": 42, "terminate": True})
+
+    def test_malformed_or_duplicate_xml_arguments_are_not_executed(self):
+        malformed = parse_llm_response(
+            "<tool_call>file_list<arg_key>path</arg_key></tool_call>"
+        )
+        duplicate = parse_llm_response(
+            "<tool_call>file_list"
+            "<arg_key>path</arg_key><arg_value>.</arg_value>"
+            "<arg_key>path</arg_key><arg_value>/tmp</arg_value>"
+            "</tool_call>"
+        )
+        self.assertIsNone(malformed["action"])
+        self.assertIsNone(duplicate["action"])
+
     def test_non_json_preserves_raw_text(self):
         out = parse_llm_response("The host is Kali on WSL2 with kernel 6.18.")
         self.assertNotIn("message", {INVALID})  # sanity

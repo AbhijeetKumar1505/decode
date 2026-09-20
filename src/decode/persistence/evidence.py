@@ -9,6 +9,44 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict
 
 
+def _restrict_access(path: Path, *, directory: bool) -> None:
+    if os.name != "nt":
+        path.chmod(0o700 if directory else 0o600)
+        return
+    try:
+        import ntsecuritycon
+        import win32api
+        import win32security
+    except ImportError as exc:
+        raise RuntimeError(
+            "Windows evidence protection requires the pywin32 security APIs"
+        ) from exc
+
+    user_sid, _domain, _account_type = win32security.LookupAccountName(
+        None, win32api.GetUserName()
+    )
+    inheritance = 0
+    if directory:
+        inheritance = (
+            win32security.OBJECT_INHERIT_ACE
+            | win32security.CONTAINER_INHERIT_ACE
+        )
+    dacl = win32security.ACL()
+    dacl.AddAccessAllowedAceEx(
+        win32security.ACL_REVISION,
+        inheritance,
+        ntsecuritycon.FILE_ALL_ACCESS,
+        user_sid,
+    )
+    descriptor = win32security.SECURITY_DESCRIPTOR()
+    descriptor.SetSecurityDescriptorDacl(True, dacl, False)
+    security_information = (
+        win32security.DACL_SECURITY_INFORMATION
+        | win32security.PROTECTED_DACL_SECURITY_INFORMATION
+    )
+    win32security.SetFileSecurity(str(path), security_information, descriptor)
+
+
 class EvidenceReference(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -51,14 +89,14 @@ class ProtectedEvidenceStore:
                 raise RuntimeError(
                     "immutable evidence path already contains other data"
                 )
-            path.chmod(0o600)
+            _restrict_access(path, directory=False)
         else:
             try:
                 with os.fdopen(descriptor, "wb") as stream:
                     stream.write(payload)
                     stream.flush()
                     os.fsync(stream.fileno())
-                path.chmod(0o600)
+                _restrict_access(path, directory=False)
             except Exception:
                 path.unlink(missing_ok=True)
                 raise
@@ -92,7 +130,7 @@ class ProtectedEvidenceStore:
         if self.base_path.exists() and self.base_path.is_symlink():
             raise RuntimeError("protected evidence root cannot be a symbolic link")
         self.base_path.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.base_path.chmod(0o700)
+        _restrict_access(self.base_path, directory=True)
 
     @staticmethod
     def _serialize(data: Any) -> tuple[bytes, str]:

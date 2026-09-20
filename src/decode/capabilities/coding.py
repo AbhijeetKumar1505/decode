@@ -45,14 +45,42 @@ CODING_CAPABILITIES: dict[str, dict[str, str]] = {
     },
 }
 
+CODING_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "git_status": {},
+    "git_diff": {"path": "string", "staged": "boolean"},
+    "git_log": {"limit": "integer"},
+    "git_commit": {"message": "string", "all": "boolean"},
+    "test_run": {"command": "string"},
+    "build_run": {"command": "string"},
+    "patch_apply": {"diff": "string"},
+}
+
+CODING_REQUIRED_INPUTS: dict[str, list[str]] = {
+    "git_commit": ["message"],
+    "patch_apply": ["diff"],
+}
+
 
 def is_coding_capability(name: str) -> bool:
     return name in CODING_CAPABILITIES
 
 
-def coding_tool_list() -> list[dict[str, str]]:
+def coding_tool_list() -> list[dict[str, Any]]:
     return [
-        {"name": name, "description": meta["description"], "risk": meta["risk"]}
+        {
+            "name": name,
+            "description": meta["description"],
+            "risk": meta["risk"],
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    key: {"type": value}
+                    for key, value in CODING_INPUT_SCHEMAS[name].items()
+                },
+                "required": CODING_REQUIRED_INPUTS.get(name, []),
+                "additionalProperties": False,
+            },
+        }
         for name, meta in CODING_CAPABILITIES.items()
     ]
 
@@ -72,6 +100,10 @@ def build_coding_command(
     Raises ``ValueError`` on an unknown capability or invalid arguments.
     """
     params = params or {}
+    allowed = set(CODING_INPUT_SCHEMAS.get(name, {}))
+    unknown = sorted(set(params) - allowed)
+    if unknown:
+        raise ValueError(f"unsupported arguments: {', '.join(unknown)}")
     if name == "git_status":
         return ["git", "status", "--short"], None
     if name == "git_diff":

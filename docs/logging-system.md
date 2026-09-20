@@ -1,42 +1,18 @@
 # Structured Logging
 
-`LoggingService` in `decode/logging_service.py` writes structured execution records and output references under the configured logs directory.
+**Status:** Diagnostics distinct from audit/evidence/events
 
-## Current status
+Logs diagnose runtime behavior; they do not authorize, prove evidence, or replace
+audit.
 
-The service is implemented and mandatory across coordinator-backed public execution boundaries. Success, execution failure, pre-execution denial, approval failure, dependency block, timeout, cancellation, and mandatory telemetry failure produce a structured record. Boundary inventories prevent a new public execution method from silently bypassing this contract.
+Record timestamp, level, module, task/workflow/node/request ids, provider,
+capability, public code, duration, retries, and redacted error. Use structured
+fields.
 
-## Execution record
+Never log secrets/cookies/tokens/keys/sensitive stdin. Reference evidence for
+large/raw output. Preserve unknown/null. Correlate model/tool/policy/state/
+verification. Bound traces/payloads and treat sinks as failure surfaces.
 
-```json
-{
-  "timestamp": "2026-07-31T12:00:00+00:00",
-  "tool": "skill_name",
-  "command": "redacted command",
-  "status": "success",
-  "duration": 12.4,
-  "output_file": "logs/skill_name/result.json",
-  "error": "",
-  "metadata": {}
-}
-```
-
-Command and error fields are redacted by the coordinator. Large or sensitive raw output is captured in protected immutable evidence storage; `output_file` and metadata carry its reference rather than copying raw output into logs.
-
-```python
-from decode.logging_service import LoggingService
-
-logger = LoggingService()
-logger.log_execution(
-    tool="skill_name",
-    command="redacted command",
-    status="success",
-    duration=12.4,
-)
-```
-
-## Retention
-
-The service does not currently implement automatic rotation, compression, or deletion. Deployments must define those controls explicitly. Planned retention settings in configuration documents are target requirements, not current behavior.
-
-See [Audit Layer](audit-layer.md), [Execution Pipeline](EXECUTION_PIPELINE.md), and [Security Model](SECURITY_MODEL.md).
+Logs are diagnostics; audit is accountability; evidence is factual artifact;
+events are durable state; usage is UTOS accounting. Retention is conservative,
+project-scoped, rotated/exported/deleted under audit. Cloud logging is Deferred.

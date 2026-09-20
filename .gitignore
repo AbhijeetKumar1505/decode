@@ -1,6 +1,7 @@
 # Environment
 .env
 venv/
+wenv/
 .venv/
 .venv_linux/
 

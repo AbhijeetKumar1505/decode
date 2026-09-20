@@ -27,6 +27,7 @@ class SessionManagerTest(unittest.TestCase):
         )
 
     def tearDown(self):
+        self.mgr.store.close()
         if self._prev_home is None:
             os.environ.pop("DECODE_HOME", None)
         else:
@@ -121,6 +122,7 @@ class TaskStateStoreTest(unittest.TestCase):
         self.store = SessionStore(db_path=Path(self._tmp.name) / "decode.db")
 
     def tearDown(self):
+        self.store.close()
         if self._prev_home is None:
             os.environ.pop("DECODE_HOME", None)
         else:

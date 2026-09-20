@@ -1,7 +1,8 @@
 """Markdown-authored skills (``SKILL.md``): playbooks the agent reads as guidance.
 
 A markdown skill is a ``.md`` file with a YAML frontmatter block (name,
-description, risk, category, tags, inputs) followed by a body of instructions.
+description, risk, category, tags, inputs, and optional workflow metadata)
+followed by a body of instructions.
 Unlike the Python skills, a markdown skill executes *nothing itself*: invoking it
 returns its instructions as an observation, and the agent then carries them out
 through the governed ``shell_command`` capability (each command separately scoped,
@@ -27,7 +28,8 @@ _ENV_DIRS = "DECODE_PLAYBOOKS_DIR"
 _PACKAGE_PLAYBOOKS = Path(__file__).parent / "playbooks"
 
 
-def _package_dirs() -> list[Path]:
+def playbook_directories() -> list[Path]:
+    """Return packaged and configured playbook directories in precedence order."""
     dirs = [_PACKAGE_PLAYBOOKS]
     extra = os.environ.get(_ENV_DIRS, "")
     for part in extra.split(os.pathsep):
@@ -37,7 +39,7 @@ def _package_dirs() -> list[Path]:
     return dirs
 
 
-def _split_frontmatter(text: str) -> tuple[str, str]:
+def split_frontmatter(text: str) -> tuple[str, str]:
     """Return (frontmatter, body). No leading ``---`` means no frontmatter."""
     stripped = text.lstrip()
     if not stripped.startswith("---"):
@@ -107,7 +109,7 @@ def spec_from_meta(meta: dict[str, Any], *, fallback_name: str) -> SkillSpec:
 
 
 def parse_markdown_skill(text: str, *, fallback_name: str) -> MarkdownSkill:
-    frontmatter, body = _split_frontmatter(text)
+    frontmatter, body = split_frontmatter(text)
     meta = yaml.safe_load(frontmatter) if frontmatter.strip() else {}
     if not isinstance(meta, dict):
         meta = {}
@@ -128,7 +130,7 @@ def discover_markdown_skills() -> list[MarkdownSkill]:
     the packaged defaults).
     """
     skills: dict[str, MarkdownSkill] = {}
-    for directory in _package_dirs():
+    for directory in playbook_directories():
         if not directory.is_dir():
             continue
         for path in sorted(directory.rglob("*.md")):

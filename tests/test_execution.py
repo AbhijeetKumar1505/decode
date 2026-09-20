@@ -223,6 +223,10 @@ class TestFactory(unittest.TestCase):
             ["wsl.exe", "-d", "Lab", "--", "scanner", "target; harmless"],
         )
 
+    def test_factory_accepts_qualified_wsl_identity(self):
+        self.assertEqual(create_executor("wsl/kali-linux").name, "wsl/kali-linux")
+        self.assertEqual(create_executor("wsl:kali-linux").name, "wsl/kali-linux")
+
     def test_ssh_argument_vector_is_quoted_as_one_remote_command(self):
         argv = SSHExecutor(host="192.0.2.10")._ssh_argv(["scanner", "target; harmless"])
 
@@ -274,6 +278,10 @@ class TestPublicExecutionBoundaryInventory(unittest.TestCase):
         # runs only inside HostAgent's coordinator-governed execute_internal.
         ("runtime/host_controller.py", "HostController", "run"),
         ("runtime/agent_loop.py", "ToolUseLoop", "run"),
+        # WorkflowRunner only advances persisted state and calls an injected
+        # stage executor; the production adapter is UniversalAgent.run_tool_loop,
+        # whose concrete actions all cross ExecutionCoordinator.
+        ("workflows/runner.py", "WorkflowRunner", "run"),
         ("hostcontrol/session.py", "HostSession", "run"),
         ("universal_agent.py", "UniversalAgent", "execute_command"),
         (

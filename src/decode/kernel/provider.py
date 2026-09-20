@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -84,6 +85,7 @@ class OpenRouterProvider(LLMProvider):
     #: HTTP statuses worth retrying (transient upstream/shared-pool failures).
     RETRYABLE_STATUS = {429, 500, 502, 503, 529}
     MAX_RETRIES = 4
+    _SPECIAL_TOKEN_RE = re.compile(r"<\|[^<>|\r\n]{1,80}\|>")
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
         super().__init__()
@@ -143,6 +145,14 @@ class OpenRouterProvider(LLMProvider):
                 self._record_usage(getattr(response, "usage", None))
                 message = response.choices[0].message
                 content = message.content or ""
+                if not self._has_usable_content(content):
+                    if attempt == self.MAX_RETRIES - 1:
+                        raise RuntimeError(
+                            "OpenRouter returned no usable response after "
+                            f"{self.MAX_RETRIES} attempts"
+                        )
+                    await asyncio.sleep(min(0.25 * (2**attempt), 2.0))
+                    continue
                 history: dict[str, Any] = {
                     "role": "assistant",
                     "content": content,
@@ -166,6 +176,10 @@ class OpenRouterProvider(LLMProvider):
                 await asyncio.sleep(self._retry_delay(exc, attempt))
         # Unreachable: the loop either returns or re-raises on the final attempt.
         raise RuntimeError("OpenRouter retry loop exited unexpectedly")
+
+    @classmethod
+    def _has_usable_content(cls, content: str) -> bool:
+        return bool(cls._SPECIAL_TOKEN_RE.sub("", content).strip())
 
     def assistant_message(self, content: str) -> dict[str, Any]:
         history = getattr(self, "_last_assistant_message", None)

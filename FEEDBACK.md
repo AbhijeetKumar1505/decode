@@ -1,6 +1,8 @@
-# Feedback Handling for Coding Agents
+# Feedback and Observation Policy
 
-This file defines how AI coding agents should respond to user feedback during a session.
+This file defines how coding agents respond to people and how De-code records
+runtime feedback. Feedback improves decisions; it never grants authority,
+changes scope, confirms a finding, or overrides evidence.
 
 ## Types of Feedback
 
@@ -31,17 +33,26 @@ If the user asks "why did you do X" or "what does this do":
 
 ## Execution Feedback
 
-Record after every tool execution:
+Record a redacted observation after every attempted action, including policy
+denials, dependency failures, timeouts, cancellations, parse failures, and
+successful execution:
 
 ```json
 {
+  "capability": "network.scan",
+  "provider": "wsl:kali-linux",
   "tool": "nmap",
   "status": "success",
-  "runtime": 11.0,
+  "duration_seconds": 11.0,
+  "exit_code": 0,
   "dependency_missing": false,
-  "error": ""
+  "error_category": null,
+  "evidence_ref": "sha256:..."
 }
 ```
+
+The process exit, parser state, policy decision, and completion criteria must be
+reported separately. A launched process is not automatically successful.
 
 ## Dependency Feedback
 
@@ -50,36 +61,56 @@ Record when a dependency check runs:
 ```json
 {
   "tool": "nuclei",
+  "provider": "wsl:kali-linux",
   "missing": true,
   "install_command": "sudo apt install nuclei",
-  "attempt_install": false,
-  "install_success": false
+  "attempt_install": false
 }
 ```
+
+Dependency feedback is informational. Installation is a separate user-approved
+action and must never happen automatically.
 
 ## Agent Decision Feedback
 
-Record when the planner selects a skill:
+Record a public, concise reason when the runtime selects a workflow, capability,
+provider, or model role:
 
 ```json
 {
-  "planner": "selected_nmap",
-  "confidence": 0.91,
-  "alternatives": ["nuclei", "whatweb"],
-  "execution_time": 2.3,
-  "success": true
+  "decision": "selected_provider",
+  "selected": "wsl:kali-linux",
+  "reason": "authorized target tooling is available in the requested environment",
+  "alternatives": ["local", "docker:decode-tools"],
+  "policy_bound": true
 }
 ```
 
+Do not store private chain-of-thought. Store inputs, constraints, selected
+option, public reason, outcome, and evidence references.
+
 ## Runtime Feedback Collection
 
-Feedback is stored in `feedback/` as JSONL files:
+The current implementation stores feedback under the configured runtime root;
+the exact backend may evolve. Treat all feedback as potentially sensitive
+operational data and keep it out of source control.
 
 ```
-feedback/
-├── execution.jsonl
-├── dependencies.jsonl
-└── decisions.jsonl
+runtime feedback
+├── execution outcomes
+├── dependency observations
+├── decisions and interventions
+└── verification and recovery outcomes
 ```
 
-These are used as training data for future capability optimization.
+Feedback may support local evaluation and optimization only under explicit data
+policy. It is not automatically training data and must not be sent to a model or
+external service without authorization, classification checks, and redaction.
+
+## Workflow feedback
+
+For each workflow stage, record the workflow and graph version, stage and node,
+attempt, state transition, model/tool/provider identities, resource use,
+evidence references, completion result, recovery action, and human intervention.
+UTOS may use these records to optimize cost and context, but it cannot weaken
+policy, evidence requirements, or completion criteria.

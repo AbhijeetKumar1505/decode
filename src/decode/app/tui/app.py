@@ -1454,6 +1454,7 @@ class AgentREPL:
         console.print(f"[green]Model → [bold]{model_name}[/bold][/green]")
 
     def _host_controller(self):
+        from decode.execution import create_executor
         from decode.governance import GovernanceGate, ScopePolicy
         from decode.runtime import ExecutionCoordinator, HostController
 
@@ -1464,7 +1465,12 @@ class AgentREPL:
             coord = ExecutionCoordinator(
                 self._host_gate, approval_callback=self._host_approval
             )
-            self._host_ctl = HostController(coord, self._fs_scope, self._cmd_policy)
+            self._host_ctl = HostController(
+                coord,
+                self._fs_scope,
+                self._cmd_policy,
+                executor=create_executor(Config.EXECUTOR),
+            )
         else:
             self._host_gate.set_mode(self._perm_mode)
             self._host_ctl.set_scope(self._fs_scope, self._cmd_policy)

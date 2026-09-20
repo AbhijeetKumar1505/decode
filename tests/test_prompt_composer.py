@@ -17,9 +17,13 @@ class TestPromptComposer(unittest.TestCase):
             # response contract
             self.assertIn('"tool"', prompt)
             self.assertIn('"message"', prompt)
+            self.assertIn("Do not emit XML `<tool_call>` blocks", prompt)
             # capabilities injected
             self.assertIn("git_diff", prompt)
             self.assertIn("shell_command", prompt)
+            self.assertIn("selected execution environment", prompt)
+            self.assertIn("not a semantic browser", prompt)
+            self.assertIn("authorized write scope", prompt)
             # policy + task-state note injected
             self.assertIn("scope", prompt.lower())
             self.assertIn("task state", prompt.lower())

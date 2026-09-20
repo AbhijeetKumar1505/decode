@@ -1,107 +1,58 @@
-# Host Control
+# Host and Environment Control
 
-## Status
+**Status:** Current host operations and system-tool provider binding
 
-Implemented (foundation): general OS operations are first-class, governed
-capabilities. The agent can read/write/edit/search files, list/kill processes,
-query/control services, and run policy-checked commands — through the same
-scope, risk, approval, audit, and evidence backbone as every security
-capability. This makes Decode a general host agent with pentesting built in,
-rather than a wrapper around a fixed set of security tools.
+Host control exposes governed file, process, service, command, session, and
+discovery capabilities. It is kernel functionality, not a plugin.
 
-## Why it is inbuilt, not a plugin
+Current capabilities include file read/list/search/write/edit/fetch, process and
+service operations, `list_tools`, command, and sessions. Local discovery scans
+the Decode process PATH. With `DECODE_EXECUTOR=wsl/<distribution>`, discovery
+enumerates that distribution's PATH and `shell_command` uses the same provider
+instance. Command strings split to argv without a shell.
 
-General system operations already exist on the host; they are core to being a
-useful agent. So they ship as **inbuilt capabilities**, never as plugins. There
-is no in-tree plugin loader (it was removed); repeatable procedures are added as
-markdown playbooks, and *plugins* are reserved for a planned, isolated
-external-integration surface ([Extensions and Plugins](PLUGIN_MANIFEST.md)). Core
-host and security operations are never delivered as plugins.
+## Semantics
 
-## Capability family
+- Command is not a shell; reject pipes, redirects, `&&`, `||`, substitution.
+- Non-zero exit is failure unless declared.
+- Unknown params fail validation.
+- File-producing options require WRITE and output scope.
+- Recognizable network commands and URL-bearing argv bind a target into the
+  engagement allowlist before execution.
+- UI success reflects result, not process creation.
 
-| Capability | Risk | Notes |
-|---|---|---|
-| `file_read`, `file_list`, `file_search` | READ | Within the authorized filesystem scope |
-| `file_write`, `file_edit`, `file_fetch` | WRITE | Within the writable scope |
-| `process_list` | READ | via `psutil` |
-| `process_kill` | DESTRUCTIVE | Terminate by PID |
-| `service_status` | READ | `systemctl is-active` |
-| `service_control` | DESTRUCTIVE | start/stop/restart |
-| `shell_command` | WRITE (per-command risk resolved) | argv-only, no shell string |
-| `host_session` | WRITE | Stateful command sequence (shared cwd/env), recorded transcript |
+## EnvironmentProvider
 
-These are `kind="internal"` capabilities owned by `HostAgent`
-(`decode/agents/host.py`) and executed through the governed
-`decode/hostcontrol/` operations. They are **not** tool-discovery gated.
+```text
+identify()  discover()  execute(argv)  scoped read/write()  health()
+```
 
-## Governance
+Local Linux and explicit WSL distributions currently bind system-tool discovery
+and execution. Docker and SSH use the execution interface but still need Phase 1
+conformance for provider-scoped filesystem/session behavior. MCP remains an
+external semantic-tool provider, not a host PATH provider.
 
-Two policies bound host control, both **deny-by-default** and checked
-immediately before execution (`decode/hostcontrol/policy.py`):
+Inside Kali, local means Kali. From Windows, `wsl/kali-linux` must own both
+discovery and execution. Installed Kali does not expose its PATH to Windows.
 
-- **`FilesystemScope`** — separate read and write root allowlists. Paths are
-  resolved before the check, so `..` traversal and symlinks cannot escape.
-- **`CommandPolicy`** — binary allow/deny plus an argument-sensitive risk
-  classifier. For `shell_command`, the per-command risk (READ/WRITE/DESTRUCTIVE)
-  is resolved **before** the gate (`decode/runtime/host_controller.py`), so a
-  destructive command never runs under a WRITE approval.
+Chromium/Firefox executables are not semantic browser/search tools. Providers
+must expose navigation/rendered DOM/download scope/auth session references/
+sources/evidence. Cookies/secrets remain credential references.
 
-The offline credential audit and every host op preserve the standard invariants:
-governed coordinator, scope + risk gate, bound approval, audit event, and hashed
-evidence. Nothing bypasses `ExecutionCoordinator`.
+The current semantic boundary is strict: only an explicitly listed provider tool
+may be called. A required `url`, `target`, `domain`, `host`, `ip`, `cidr`, or
+`network` field makes target scope mandatory; any supplied target is checked.
+HTTP/browser downloads must declare WRITE risk and a scoped output before a
+future provider may enable them. Native semantic HTTP/browser/search providers
+are not yet implemented.
 
-## Permission modes
+For non-local providers, output-producing CLI commands and stateful host sessions
+are denied rather than silently using local paths or local session state. Phase 1
+adds the filesystem mapping and session transport needed to enable them safely.
+Local session lifecycle arguments are strict, starting cwd and explicit outputs
+cross filesystem scope, and network commands are denied inside sessions; use
+`shell_command` with an explicit target so the engagement allowlist is enforced.
 
-A Claude-Code-style autonomy dial (`PermissionMode`), layered on top of the risk
-gate — it can only lower autonomy or auto-allow in scope, **never** auto-allow
-DESTRUCTIVE:
-
-| Mode | READ | WRITE | DESTRUCTIVE |
-|---|---|---|---|
-| `plan` | denied (preview only) | denied | denied |
-| `ask` (default) | auto (in scope) | approval | override + approval |
-| `auto` | auto | auto (in scope) | override + approval |
-
-## Hooks
-
-`ExecutionCoordinator` accepts an optional `HookRegistry`
-(`decode/hostcontrol/hooks.py`). Pre-execution hooks may **veto** a call
-(fail-closed); post hooks observe. A hook can never grant permission.
-
-## Using it
-
-REPL commands (`decode`):
-
-- `! <command>` — **shell mode**: run a command directly through the governed
-  `shell_command` capability (e.g. `! nmap -sV 10.0.0.5`). Same gate as everything
-  else — scope, per-command risk, approval, audit. The running command is shown
-  with a live indicator.
-- `/read <path>`, `/ls [path]`, `/ps`, `/run <command>` — direct governed ops
-- `/fsscope <read_root> [write_root]` — authorize filesystem paths
-- `/mode plan|ask|auto` — set the permission mode
-- `/model [id|refresh]` — fetch all OpenRouter catalogue models, switch the
-  active model, or refresh the live catalogue
-- `/agent <goal>` — bounded **tool-use loop**: the model plans, calls tools one at
-  a time, observes each governed result, and iterates. Its first-person reasoning
-  (`thought`) and each running step are streamed live
-  (`decode/runtime/agent_loop.py`, `UniversalAgent.run_tool_loop`).
-
-Inside the loop, `shell_command` is the general path: the model runs **any**
-installed CLI by generating its command line (`{"command": "nmap -sV 10.0.0.5"}`
-or a pre-split `{"argv": [...]}`). A tool that is not installed is reported
-(`command not found`), never auto-installed.
-
-### sudo and privileged commands
-
-A leading `sudo` is privilege escalation: `CommandPolicy` classifies the *wrapped*
-command and never ranks a `sudo` command below WRITE (so `sudo apt install` needs
-approval and `sudo rm -rf` is DESTRUCTIVE and blocked via `shell_command`). In
-shell mode (`! sudo ...`) the CLI prompts for your sudo password with hidden
-input; it is fed to `sudo -S` over stdin and is **never** echoed, logged, stored
-as evidence, or sent to the model — it travels in the execution context, not in
-audited params.
-
-Programmatic: `HostController` (`decode/runtime/host_controller.py`) runs a
-single host capability through the coordinator; `ToolUseLoop`
-(`decode/runtime/agent_loop.py`) drives the multi-step loop over any tool set.
+Plan denies; Ask allows verified READ and prompts WRITE/DESTRUCTIVE; Auto may
+allow scoped WRITE but never bypass destructive control. Sessions retain cwd and
+allowlisted env, but every command is independently governed.

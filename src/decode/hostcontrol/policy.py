@@ -16,9 +16,12 @@ gate without ever weakening the DESTRUCTIVE control.
 
 from __future__ import annotations
 
+import ipaddress
+import re
 from collections.abc import Iterable, Sequence
 from enum import Enum
 from pathlib import Path
+from urllib.parse import urlparse
 
 from ..skills.base import RiskLevel
 
@@ -144,6 +147,52 @@ _WRITE_BINARIES = frozenset(
     }
 )
 _DESTRUCTIVE_TOKENS = ("--force", "-rf", "-fr", "--no-preserve-root")
+_SHELL_CONTROL_TOKENS = frozenset(
+    {"|", "||", "&&", ";", "&", "<", ">", ">>", "1>", "1>>", "2>", "2>>"}
+)
+_SHELL_INTERPRETERS = frozenset(
+    {"sh", "bash", "zsh", "fish", "cmd", "cmd.exe", "powershell", "pwsh"}
+)
+_NETWORK_BINARIES = frozenset(
+    {
+        "amass",
+        "chromium",
+        "chromium-browser",
+        "curl",
+        "dig",
+        "ffuf",
+        "firefox",
+        "gobuster",
+        "google-chrome",
+        "host",
+        "httpx",
+        "links",
+        "lynx",
+        "naabu",
+        "nc",
+        "ncat",
+        "netcat",
+        "nikto",
+        "nmap",
+        "nslookup",
+        "nuclei",
+        "rsync",
+        "scp",
+        "sftp",
+        "sqlmap",
+        "ssh",
+        "subfinder",
+        "telnet",
+        "w3m",
+        "wget",
+    }
+)
+_DIAGNOSTIC_FLAGS = frozenset({"--help", "--version"})
+_DOMAIN_PATTERN = re.compile(
+    r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"[a-z]{2,63}(?::\d{1,5})?$",
+    re.IGNORECASE,
+)
 
 # sudo flags that consume the following token as a value; used to find the real
 # command after a leading `sudo ...`.
@@ -193,6 +242,103 @@ def strip_sudo(argv: Sequence[str]) -> tuple[bool, list[str]]:
     return True, [str(a) for a in argv[i:]]
 
 
+def command_output_paths(
+    argv: Sequence[str], *, cwd: str | Path | None = None
+) -> list[Path]:
+    """Return explicit filesystem outputs declared by a command vector."""
+    _is_sudo, inner = strip_sudo(argv)
+    if not inner:
+        return []
+    binary = Path(str(inner[0])).name.lower()
+    args = [str(value) for value in inner[1:]]
+    raw_paths: list[str] = []
+    value_flags = {"--output", "--output-file"}
+    prefix_flags = ("--output=", "--output-file=")
+    if binary == "curl":
+        value_flags.update({"-o", "--output-dir"})
+        prefix_flags += ("--output-dir=",)
+    elif binary == "wget":
+        value_flags.update({"-O", "--output-document", "-P", "--directory-prefix"})
+        prefix_flags += ("--output-document=", "--directory-prefix=")
+    else:
+        value_flags.add("-o")
+
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token in value_flags and index + 1 < len(args):
+            raw_paths.append(args[index + 1])
+            index += 2
+            continue
+        matched = next((prefix for prefix in prefix_flags if token.startswith(prefix)), None)
+        if matched is not None and token[len(matched) :]:
+            raw_paths.append(token[len(matched) :])
+        if binary == "curl" and token == "-O":
+            raw_paths.append(str(cwd or Path.cwd()))
+        if binary == "curl" and token.startswith("-o") and token != "-o":
+            raw_paths.append(token[2:])
+        if binary == "nmap" and token[:3] in {"-oN", "-oX", "-oG", "-oA"}:
+            if len(token) > 3:
+                raw_paths.append(token[3:])
+            elif index + 1 < len(args):
+                raw_paths.append(args[index + 1])
+                index += 1
+        index += 1
+
+    positional = [value for value in args if value and not value.startswith("-")]
+    if binary in {"cp", "mv", "install"} and positional:
+        raw_paths.append(positional[-1])
+    elif binary in {"touch", "mkdir", "tee"}:
+        raw_paths.extend(positional)
+
+    base = Path(cwd or Path.cwd()).expanduser().resolve(strict=False)
+    resolved: list[Path] = []
+    for value in raw_paths:
+        candidate = Path(value).expanduser()
+        path = candidate if candidate.is_absolute() else base / candidate
+        normalized = path.resolve(strict=False)
+        if normalized not in resolved:
+            resolved.append(normalized)
+    return resolved
+
+
+def command_target(argv: Sequence[str]) -> str:
+    """Return a recognizable network target carried by an argument vector."""
+    _is_sudo, inner = strip_sudo(argv)
+    if not inner:
+        return ""
+    binary = Path(str(inner[0])).name.lower()
+    for raw in inner[1:]:
+        value = str(raw).strip().strip("'\"")
+        if not value or value.startswith("-"):
+            continue
+        if "://" in value:
+            parsed = urlparse(value)
+            if parsed.hostname:
+                return value
+        candidate = value.strip("[](),;")
+        try:
+            ipaddress.ip_network(candidate, strict=False)
+            return candidate
+        except ValueError:
+            pass
+        if binary in _NETWORK_BINARIES and _DOMAIN_PATTERN.fullmatch(candidate):
+            return candidate
+    return ""
+
+
+def command_requires_target(argv: Sequence[str]) -> bool:
+    """Whether this command may perform network I/O against a target."""
+    _is_sudo, inner = strip_sudo(argv)
+    if not inner:
+        return False
+    binary = Path(str(inner[0])).name.lower()
+    flags = {str(value) for value in inner[1:]}
+    if binary in _NETWORK_BINARIES and flags & _DIAGNOSTIC_FLAGS:
+        return False
+    return bool(command_target(inner)) or binary in _NETWORK_BINARIES
+
+
 class CommandPolicy:
     """Binary allow/deny plus argument-sensitive risk classification."""
 
@@ -218,6 +364,28 @@ class CommandPolicy:
     def check(self, argv: Sequence[str]) -> None:
         if not self.is_allowed(argv):
             raise ScopeViolation(f"command '{self._binary(argv)}' is not permitted")
+        _is_sudo, inner = strip_sudo(argv)
+        if not inner:
+            return
+        binary = Path(str(inner[0])).name.lower()
+        lowered = [str(value).lower() for value in inner[1:]]
+        if binary in _SHELL_INTERPRETERS and any(
+            value in {"-c", "/c", "-command", "-encodedcommand"}
+            for value in lowered
+        ):
+            raise ScopeViolation(
+                "shell interpreter command strings are not permitted; use an argument vector"
+            )
+        for token in (str(value) for value in inner):
+            if (
+                token in _SHELL_CONTROL_TOKENS
+                or token.startswith((">", "1>", "2>", "<(", ">("))
+                or "$(" in token
+                or "`" in token
+            ):
+                raise ScopeViolation(
+                    f"shell operator '{token}' is not permitted in argument-vector mode"
+                )
 
     def classify(self, argv: Sequence[str]) -> RiskLevel:
         # A leading `sudo` is privilege escalation: classify the wrapped command,
@@ -234,6 +402,8 @@ class CommandPolicy:
             return RiskLevel.DESTRUCTIVE
         if any(str(a).startswith(">") for a in target):  # output redirection
             return RiskLevel.DESTRUCTIVE
+        if command_output_paths(target):
+            return RiskLevel.WRITE
         base = RiskLevel.WRITE if binary in _WRITE_BINARIES else RiskLevel.READ
         if is_sudo and base is RiskLevel.READ:
             return RiskLevel.WRITE

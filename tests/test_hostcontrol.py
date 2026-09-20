@@ -10,6 +10,10 @@ from decode.hostcontrol import (
     HookRegistry,
     HostSession,
     PermissionMode,
+    ScopeViolation,
+    command_output_paths,
+    command_requires_target,
+    command_target,
     resolve_mode_decision,
 )
 from decode.hostcontrol import operations as ops
@@ -76,6 +80,34 @@ class TestCommandPolicy(unittest.TestCase):
         self.assertFalse(p.is_allowed(["curl", "x"]))  # not on allowlist
         self.assertFalse(p.is_allowed(["rm", "x"]))  # denied
 
+    def test_shell_operators_are_rejected_in_vector_mode(self):
+        policy = CommandPolicy()
+        for argv in (
+            ["echo", "hello", "|", "cat"],
+            ["echo", "$(whoami)"],
+            ["sh", "-c", "echo hello"],
+        ):
+            with self.subTest(argv=argv), self.assertRaises(ScopeViolation):
+                policy.check(argv)
+
+    def test_explicit_output_paths_raise_risk_and_are_resolved(self):
+        policy = CommandPolicy()
+        argv = ["curl", "https://example.test", "-o", "evidence/page.html"]
+        self.assertEqual(policy.classify(argv), RiskLevel.WRITE)
+        paths = command_output_paths(argv, cwd="C:/authorized")
+        self.assertEqual(len(paths), 1)
+        self.assertTrue(str(paths[0]).replace("\\", "/").endswith("evidence/page.html"))
+
+    def test_network_target_is_extracted_and_diagnostics_stay_local(self):
+        argv = ["curl", "https://api.example.test/v1"]
+
+        self.assertEqual(command_target(argv), "https://api.example.test/v1")
+        self.assertTrue(command_requires_target(argv))
+        self.assertTrue(
+            command_requires_target(["curl", "-v", "https://api.example.test/v1"])
+        )
+        self.assertFalse(command_requires_target(["curl", "--version"]))
+
 
 class TestFileOperations(unittest.TestCase):
     def setUp(self):
@@ -138,6 +170,15 @@ class TestCommandAndProcess(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertEqual(r["risk"], "READ")
         self.assertIn("hi", r["stdout"])
+
+    def test_run_command_nonzero_exit_is_failure(self):
+        r = ops.run_command(
+            [sys.executable, "-c", "raise SystemExit(7)"],
+            CommandPolicy(allowed_binaries={Path(sys.executable).name}),
+        )
+        self.assertFalse(r["ok"])
+        self.assertEqual(r["exit_code"], 7)
+        self.assertIn("status 7", r["error"])
 
     def test_process_list(self):
         r = ops.process_list(limit=5)

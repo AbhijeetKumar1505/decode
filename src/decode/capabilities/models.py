@@ -30,6 +30,7 @@ class ArgumentType(str, Enum):
     BOOLEAN = "boolean"
     ENUM = "enum"
     PATH = "path"
+    STRING_LIST = "string_list"
 
 
 class CapabilityArgument(BaseModel):
@@ -42,6 +43,9 @@ class CapabilityArgument(BaseModel):
     maximum: int | None = None
     max_length: int = Field(default=2048, ge=1, le=65536)
     sensitive: bool = False
+    allow_multiline: bool = False
+    min_items: int | None = Field(default=None, ge=0)
+    max_items: int | None = Field(default=None, ge=1, le=4096)
 
     @model_validator(mode="after")
     def validate_contract(self) -> "CapabilityArgument":
@@ -50,6 +54,9 @@ class CapabilityArgument(BaseModel):
         if self.minimum is not None and self.maximum is not None:
             if self.minimum > self.maximum:
                 raise ValueError("argument minimum cannot exceed maximum")
+        if self.min_items is not None and self.max_items is not None:
+            if self.min_items > self.max_items:
+                raise ValueError("argument min_items cannot exceed max_items")
         return self
 
 
@@ -175,16 +182,25 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, CapabilityArgument]] = {
     "file_write": {
         "path": CapabilityArgument(type=ArgumentType.PATH, required=True),
         "content": CapabilityArgument(
-            type=ArgumentType.STRING, required=True, max_length=65536
+            type=ArgumentType.STRING,
+            required=True,
+            max_length=65536,
+            allow_multiline=True,
         ),
     },
     "file_edit": {
         "path": CapabilityArgument(type=ArgumentType.PATH, required=True),
         "old": CapabilityArgument(
-            type=ArgumentType.STRING, required=True, max_length=65536
+            type=ArgumentType.STRING,
+            required=True,
+            max_length=65536,
+            allow_multiline=True,
         ),
         "new": CapabilityArgument(
-            type=ArgumentType.STRING, required=True, max_length=65536
+            type=ArgumentType.STRING,
+            required=True,
+            max_length=65536,
+            allow_multiline=True,
         ),
     },
     "file_fetch": {
@@ -204,16 +220,56 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, CapabilityArgument]] = {
             type=ArgumentType.ENUM, choices=["start", "stop", "restart"], required=True
         ),
     },
+    "list_tools": {
+        "query": CapabilityArgument(
+            type=ArgumentType.STRING, required=False, max_length=256
+        ),
+        "limit": CapabilityArgument(
+            type=ArgumentType.INTEGER,
+            required=False,
+            default=400,
+            minimum=1,
+            maximum=5000,
+        ),
+    },
     "shell_command": {
         "command": CapabilityArgument(
-            type=ArgumentType.STRING, required=True, max_length=8192
-        )
+            type=ArgumentType.STRING, required=False, max_length=8192
+        ),
+        "argv": CapabilityArgument(
+            type=ArgumentType.STRING_LIST,
+            required=False,
+            min_items=1,
+            max_items=512,
+            max_length=8192,
+        ),
+        "target": CapabilityArgument(
+            type=ArgumentType.TARGET,
+            description="Authorized network target when the command performs network I/O",
+            required=False,
+        ),
     },
     "host_session": {
         "commands": CapabilityArgument(
             type=ArgumentType.STRING, required=True, max_length=16384
         )
     },
+    "session_open": {
+        "cwd": CapabilityArgument(type=ArgumentType.PATH, required=False)
+    },
+    "session_exec": {
+        "command": CapabilityArgument(
+            type=ArgumentType.STRING, required=False, max_length=8192
+        ),
+        "argv": CapabilityArgument(
+            type=ArgumentType.STRING_LIST,
+            required=False,
+            min_items=1,
+            max_items=512,
+            max_length=8192,
+        ),
+    },
+    "session_close": {},
 }
 _RESULT_SCHEMA = {
     "normalized": CapabilityResultField(
@@ -306,6 +362,12 @@ class CapabilitySpec(BaseModel):
         ]
         if len(set(aliases)) > 1:
             raise ValueError("normalized target aliases conflict")
+        if self.name in {"shell_command", "session_exec"}:
+            supplied = [key for key in ("command", "argv") if key in normalized]
+            if len(supplied) != 1:
+                raise ValueError(
+                    f"{self.name} requires exactly one of command or argv"
+                )
         return normalized
 
     @staticmethod
@@ -326,10 +388,34 @@ class CapabilitySpec(BaseModel):
             if argument.maximum is not None and value > argument.maximum:
                 raise ValueError(f"normalized argument '{name}' exceeds its maximum")
             return value
+        if argument.type == ArgumentType.STRING_LIST:
+            if not isinstance(value, (list, tuple)) or isinstance(value, (str, bytes)):
+                raise ValueError(f"normalized argument '{name}' must be a string list")
+            if argument.min_items is not None and len(value) < argument.min_items:
+                raise ValueError(f"normalized argument '{name}' has too few items")
+            if argument.max_items is not None and len(value) > argument.max_items:
+                raise ValueError(f"normalized argument '{name}' has too many items")
+            normalized_items: list[str] = []
+            for item in value:
+                if not isinstance(item, str):
+                    raise ValueError(
+                        f"normalized argument '{name}' must contain only strings"
+                    )
+                if not item or "\x00" in item or "\n" in item or "\r" in item:
+                    raise ValueError(
+                        f"normalized argument '{name}' contains invalid text"
+                    )
+                if len(item) > argument.max_length:
+                    raise ValueError(
+                        f"normalized argument '{name}' item exceeds its maximum length"
+                    )
+                normalized_items.append(item)
+            return normalized_items
         if not isinstance(value, str):
             raise ValueError(f"normalized argument '{name}' must be a string")
-        text = value.strip()
-        if not text or "\x00" in text or "\n" in text or "\r" in text:
+        text = value if argument.allow_multiline else value.strip()
+        invalid_line = not argument.allow_multiline and ("\n" in text or "\r" in text)
+        if not text or "\x00" in text or invalid_line:
             raise ValueError(f"normalized argument '{name}' contains invalid text")
         if len(text) > argument.max_length:
             raise ValueError(f"normalized argument '{name}' exceeds its maximum length")
@@ -468,6 +554,30 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
         description="Run a sequence of commands in a stateful session",
         category="host",
         risk=RiskLevel.WRITE,
+        kind="internal",
+        target_required=False,
+    ),
+    "session_open": CapabilitySpec(
+        name="session_open",
+        description="Open a governed local stateful session",
+        category="host",
+        risk=RiskLevel.READ,
+        kind="internal",
+        target_required=False,
+    ),
+    "session_exec": CapabilitySpec(
+        name="session_exec",
+        description="Run one governed command in a local stateful session",
+        category="host",
+        risk=RiskLevel.WRITE,
+        kind="internal",
+        target_required=False,
+    ),
+    "session_close": CapabilitySpec(
+        name="session_close",
+        description="Close a governed local stateful session",
+        category="host",
+        risk=RiskLevel.READ,
         kind="internal",
         target_required=False,
     ),

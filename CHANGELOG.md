@@ -2,10 +2,51 @@
 
 ## Unreleased
 
+### Fixed
+
+- Completed the Phase 0 execution-truth gate: non-zero host commands now fail;
+  tool schemas are strict and visible; shell operators/interpreters are rejected
+  in vector mode; explicit command outputs are WRITE-classified and
+  filesystem-scoped; filtered discovery matches are no longer hidden by the old
+  1,500-character observation cutoff; and malformed tool parameters fail closed.
+- Bound `list_tools` and `shell_command` to the same selected execution provider,
+  including qualified `wsl/<distribution>` identities. Verified the real
+  `wsl/kali-linux` path by discovering and executing `uname` through Decode.
+- Bound recognizable network CLI targets and required target-bearing MCP schemas
+  to the engagement allowlist before provider execution. Browser executables
+  remain CLI tools, not implicit semantic browser/search capabilities.
+- Closed the legacy session branch around strict validation: session lifecycle
+  arguments now use typed schemas, cwd/output paths cross filesystem scope, and
+  network commands inside sessions fail closed in favor of target-aware
+  `shell_command`.
+- Hardened native Windows operation: protected evidence uses a current-user-only
+  DACL, MCP telemetry honors configured runtime paths, SQLite session ordering is
+  deterministic when timestamps tie, and test stores close before temporary
+  directory cleanup.
+
+### Documentation
+
+- Reconciled every root and `docs/` Markdown file with the De-code v2 thesis:
+  model as cognition; runtime as authority; workflow as procedure; evidence as
+  truth.
+- Added the canonical phased build plan, continuation ledger, repository
+  migration map, Core/Active Brain contract, workflow architecture, UTOS design,
+  and architecture decisions for the transition.
+- Standardized maturity labels as Current, Bridge, Target, Research, and
+  Deferred so planned systems are not presented as implemented.
+- Made Phase 0 execution truth and safety the next release gate, including
+  process-result correctness, strict schemas, output scope/risk, provider-bound
+  discovery/execution, exact discovery, and governed browser/search contracts.
+- Deferred AWS topology and service selection until local Linux, Kali WSL, and
+  Docker gates pass and the user creates the AWS project.
+
 ### Removed
 
 - Deleted the orphaned in-tree plugin/tools/planner layer: `decode/tools.py` (`PluginManager`/`ToolRegistry`), the `decode/plugins/` package (manifest, sandbox, lifecycle, and the bundled `recon`/`web`/`network`/`exploit` plugins), the legacy `decode/kernel/planner.py` (`Workflow`/`Planner`), and the test-only `decode/planner/planner.py` (`DAGPlanner`), with their tests. None were on the live agent-loop path. The `PlanGraph`/`PlanNode`/`CompletionCriterion` data types in `decode/planner/dag.py` are retained (used by `HostController`). Skill discovery no longer scans `decode.plugins`.
-- Documentation updated to the De-code ten-subsystem plan: extension is via markdown playbooks and native capabilities; an external-integration plugin surface is planned but unbuilt. ADR-004 marked Superseded.
+- Superseded the earlier ten-subsystem documentation with the v2 workflow-first
+  plan. Extension remains based on markdown playbooks, native capabilities,
+  declarative plugin packages, and governed MCP providers. ADR-004 remains
+  superseded.
 - Removed the dead `build_stdio_client` stub in `decode/execution/mcp.py` (it raised `NotImplementedError` and had no callers). The real MCP client is built by `decode.extensions.mcp_client.build_client`.
 - Deleted the leftover empty `decode/plugins/` directory (stale bytecode from the removed plugin layer; no tracked source).
 

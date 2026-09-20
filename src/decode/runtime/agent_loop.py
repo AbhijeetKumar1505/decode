@@ -26,6 +26,79 @@ InvokeTool = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 StepCallback = Callable[[dict[str, Any]], None]
 
 
+def _matches_json_type(value: Any, expected: str) -> bool:
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "object":
+        return isinstance(value, dict)
+    return True
+
+
+def _validate_tool_params(schema: dict[str, Any], params: Any) -> str:
+    if not schema:
+        return "" if isinstance(params, dict) else "tool parameters must be an object"
+    if not isinstance(params, dict):
+        return "tool parameters must be an object"
+    properties = schema.get("properties") or {}
+    if schema.get("additionalProperties") is False:
+        unknown = sorted(set(params) - set(properties))
+        if unknown:
+            return f"unsupported tool parameters: {', '.join(unknown)}"
+    missing = [name for name in schema.get("required", []) if name not in params]
+    if missing:
+        return f"missing required tool parameters: {', '.join(missing)}"
+    alternatives = schema.get("oneOf") or []
+    if alternatives:
+        matches = sum(
+            all(name in params for name in alternative.get("required", []))
+            for alternative in alternatives
+        )
+        if matches != 1:
+            return "tool parameters must satisfy exactly one allowed input form"
+    for name, value in params.items():
+        contract = properties.get(name) or {}
+        expected = contract.get("type")
+        if expected and not _matches_json_type(value, expected):
+            return f"tool parameter '{name}' must be {expected}"
+        choices = contract.get("enum")
+        if choices and value not in choices:
+            return f"tool parameter '{name}' must be one of: {', '.join(choices)}"
+        if expected == "array" and isinstance(value, list):
+            item_type = (contract.get("items") or {}).get("type")
+            if item_type and any(
+                not _matches_json_type(item, item_type) for item in value
+            ):
+                return f"tool parameter '{name}' contains an invalid item"
+    return ""
+
+
+def _observation_message(
+    tool: str, params: dict[str, Any], observation: dict[str, Any]
+) -> str:
+    serialized = json.dumps(observation, default=str)
+    limit = 64_000 if tool == "list_tools" and params.get("query") else 12_000
+    if len(serialized) <= limit:
+        return serialized
+    return json.dumps(
+        {
+            "success": observation.get("success", False),
+            "summary": observation.get("summary", ""),
+            "data_preview": serialized[: limit - 500],
+            "observation_truncated": True,
+            "original_characters": len(serialized),
+        },
+        default=str,
+    )
+
+
 class ToolUseLoop:
     def __init__(
         self,
@@ -45,6 +118,9 @@ class ToolUseLoop:
         self._invoke = invoke
         self._max_steps = max(1, max_steps)
         self._tool_names = {t["name"] for t in tools}
+        self._tool_schemas = {
+            tool["name"]: tool.get("input_schema") or {} for tool in tools
+        }
         self._on_step = on_step
         self._mode = mode
         self._project_rules = project_rules
@@ -149,8 +225,14 @@ class ToolUseLoop:
                     "state_summary": self._state_summary(),
                 }
             params = decision.get("params") or {}
+            validation_error = (
+                _validate_tool_params(self._tool_schemas.get(tool, {}), params)
+                if tool in self._tool_names
+                else ""
+            )
+            state_params = params if isinstance(params, dict) else {}
             if self._task_state is not None:
-                self._task_state.record_action(tool, params, thought)
+                self._task_state.record_action(tool, state_params, thought)
             self._emit(
                 {
                     "phase": "call",
@@ -163,6 +245,11 @@ class ToolUseLoop:
             )
             if tool not in self._tool_names:
                 observation = {"success": False, "summary": f"unknown tool '{tool}'"}
+            elif validation_error:
+                observation = {
+                    "success": False,
+                    "summary": f"invalid tool parameters: {validation_error}",
+                }
             else:
                 observation = await self._invoke(tool, params)
             last_observation = observation
@@ -178,10 +265,21 @@ class ToolUseLoop:
                 }
             )
             messages.append(self._assistant_message(raw))
+            deferred_calls = int(decision.get("additional_tool_calls") or 0)
+            one_call_note = (
+                " Only the first requested tool was executed; request each remaining "
+                "tool one at a time."
+                if deferred_calls
+                else ""
+            )
             messages.append(
                 {
                     "role": "user",
-                    "content": f"Observation from {tool}: {json.dumps(observation, default=str)[:1500]}",
+                    "content": (
+                        f"Observation from {tool}: "
+                        f"{_observation_message(tool, state_params, observation)}"
+                        f"{one_call_note}"
+                    ),
                 }
             )
         return {
