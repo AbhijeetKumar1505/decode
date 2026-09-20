@@ -1,142 +1,38 @@
-# Database Schema
+# Database and Event Schema
 
-## Status
+**Status:** Current SQLite stores are foundations; normalized v2 schema is Target
 
-The current local profile uses SQLite at `data/decode.db`. A PostgreSQL team profile is planned. This document distinguishes the implemented schema from the target service schema.
+SQLite is canonical local state. Truth-defining state/events are transactional.
+Large/raw evidence stays in protected artifact storage with hashes/metadata in
+SQLite. Version schemas and Alembic migrations before API/TypeScript separation.
 
-## Current SQLite tables
-
-### `sessions`
-
-Stores goal, target focus, status, and timestamps.
-
-### `targets`
-
-Stores session-scoped hostname, address, domain, operating system, first/last seen timestamps, and JSON metadata.
-
-### `ports`
-
-Stores target-scoped port, protocol, state, service, product, version, extra information, and observation timestamps.
-
-### `findings`
-
-Stores session/target relationships, title, description, severity, category, CVE, ATT&CK technique/tactic, confidence, evidence IDs, and creation time.
-
-### `evidence`
-
-Stores session/finding relationships, evidence type, label, JSON data, source, and creation time.
-
-### `projects`
-
-Stores project identity, name, scope, and creation time.
-
-### `artifacts`
-
-Stores typed key/value artifacts with a sensitive flag, creation time, and explicit
-`scope` (`project`, `session`, `user`, `global`, or legacy `unscoped`). `user_id`
-identifies user memory; existing project/session references retain their behavior.
-Legacy records keep their original project/session isolation on upgrade.
-
-Phase 4 adds `version` (initially 1), `updated_at`, optional UTC `expires_at`,
-optional finite `confidence` (0–1), and a JSON `history` of prior revisions.
-Version-checked updates change the current content and append the previous record
-atomically. Deletion removes the history with its artifact. Normal reads exclude
-expired records; explicit history can include them. Sensitive history is redacted
-on export. SQLite adds columns idempotently; Mongo documents use the same public
-fields and defaults. Raw evidence is not editable through the artifact API.
-
-SQLite enables foreign keys and WAL mode. The source of truth is `decode/persistence/store.py`.
-
-## Target logical schema
-
-| Table | Purpose |
+| Entity | Purpose |
 |---|---|
-| `projects` | Tenant/project boundary, policy, retention, and status |
-| `sessions` | User interaction and assessment-session lifecycle |
-| `tasks` | Planned work, dependencies, state, limits, and idempotency |
-| `events` | Versioned lifecycle event envelopes |
-| `executions` | Tool/model/executor attempts and outcomes |
-| `tool_calls` | Resolved tool, normalized arguments, risk, and command metadata |
-| `plugins` | Installed plugin identity, version, trust, and state |
-| `agents` | Registered agent version and capabilities |
-| `permissions` | Policy decisions, approvals, actors, and expiry |
-| `memories` | Scoped, classified, provenance-linked memory |
-| `knowledge_nodes` | Versioned graph entities |
-| `knowledge_edges` | Versioned graph relationships |
-| `embeddings` | Optional vector index references and source lineage |
-| `models` | Model registry and evaluation metadata |
-| `audit_logs` | Append-only security/audit events |
-| `findings` | Security findings with lifecycle and confidence |
-| `evidence` | Immutable evidence metadata and artifact references |
-| `artifacts` | Protected file/object metadata and hashes |
+| projects | isolation, workspace, policy, retention |
+| sessions/tasks | lifecycle, objective, status, mode, budgets |
+| workflow_runs | definition version/fingerprint/status |
+| task_graphs/nodes/edges | versioned DAG and attempts |
+| events | append-only lifecycle/security facts |
+| tool_calls | resolved action and normalized result |
+| approvals | digest, identity, decision, expiry |
+| evidence/artifacts | provenance, hash, protected location |
+| findings | candidate through validation/regression |
+| memory_entries | provenance-linked scoped memory |
+| usage_records/budgets | UTOS accounting/reservations |
+| schema_migrations | versions/checksums |
 
-## Common columns
+Common fields: stable ids, project/task keys, schema version, timestamps,
+provenance, classification, and optimistic version. Unknown usage remains null.
 
-Most target tables include:
+Events are append-only; materialized state records causative event and expected
+prior version. Evidence has hash, size/type, producer/provider, time,
+classification, storage ref. Findings reference validation evidence.
 
-- UUID primary key.
-- `project_id`.
-- UTC `created_at` and `updated_at`.
-- Schema/version field.
-- Actor or source reference.
-- Classification.
-- Optimistic concurrency version where mutable.
+Store credential references, not values. Encrypt where available, separate
+evidence access, redact exports, audit access. Backups inherit highest data class.
 
-## Relationships
+Index status/readiness/event sequence/evidence hash/finding state/memory
+project-kind-freshness/usage/model-time/approval digest-expiry.
 
-```text
-project
-  +-- sessions
-  |     +-- tasks
-  |     |     +-- executions
-  |     |     |     +-- tool_calls
-  |     |     +-- events
-  |     +-- findings
-  |           +-- evidence
-  +-- plugins
-  +-- agents
-  +-- permissions
-  +-- memories
-  +-- knowledge_nodes -- knowledge_edges
-  +-- artifacts
-  +-- audit_logs
-```
-
-## Evidence storage
-
-Large or binary evidence belongs in protected object/filesystem storage. The database stores digest, size, media type, source, custody history, encryption metadata, retention, and object reference.
-
-Evidence content is immutable. Corrections create new derived artifacts.
-
-## Secret data
-
-Raw credentials and API keys should live in a secret provider, not ordinary database columns. Records store opaque references, classification, owner, scope, and expiry. Current sensitive SQLite artifacts are a local prototype and must not be treated as an enterprise vault.
-
-## Multi-tenancy
-
-The planned PostgreSQL profile enforces project isolation in application policy and database row-level security. Service accounts receive only required table and project access.
-
-## Audit integrity
-
-Audit rows are append-only. Production deployments should add chained hashes or signed batches, restricted delete/update privileges, protected export, and independent retention monitoring.
-
-## Embeddings
-
-Embedding records retain source memory/evidence ID, model/version, dimensions, project, classification, digest, and deletion state. Vector deletion is part of source deletion.
-
-## Migrations
-
-- Use ordered, transactional migrations.
-- Back up and test restore before destructive changes.
-- Provide forward migration and documented rollback limits.
-- Never silently discard unknown fields or evidence.
-- Test migrations from every supported release.
-- Local SQLite and PostgreSQL schemas share logical models but may use different physical types.
-
-## Indexing
-
-Index task state/dependencies, event correlation/time, execution task/time, finding project/severity, evidence finding/hash, memory project/type/time, knowledge node type/name, and audit project/time/type.
-
-## Retention
-
-Retention is project-configurable by data class. Expiration jobs emit audit events, honor legal holds, and delete derived semantic indexes and replicas. Secret values are never copied into audit tombstones.
+Every change needs forward migration, rollback or explicit irreversibility,
+fixture tests, backup guidance, and continuation note. AWS databases are Deferred.

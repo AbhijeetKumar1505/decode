@@ -1,90 +1,70 @@
-# Decode Documentation
+# De-code Documentation
 
-Decode is an open, local-first cybersecurity agent. The bare `decode ❯`
-prompt is a single **governed universal tool-use loop**: it discovers the tools
-installed on the host, runs them (and your scripts) through the
-`ExecutionCoordinator`, and preserves scope, approval, evidence, and audit on
-every action. There is no hardcoded per-tool catalog and no separate skill stack.
+**Architecture generation:** v2 transition
+**Last reconciled:** 2026-09-17
 
-**Last reconciled with source:** 2026-08-25
+De-code is a governed engineering and authorized-security execution system. The
+model supplies cognition; deterministic workflows, state, policy, capabilities,
+evidence, memory, verification, and resource governance supply competence.
 
-## Documentation status
+## Read this first
 
-- **Implemented** — working source exists and is exercised by tests.
-- **Partial** — a foundation exists, but the documented contract is not uniformly enforced.
-- **Planned** — a target design, not a statement of current behavior.
+1. [Product Constitution](PRODUCT.md)
+2. [Canonical Build Plan](BUILD_PLAN.md)
+3. [Continuation Ledger](CONTINUATION.md)
+4. [System Architecture](SYSTEM_ARCHITECTURE.md)
+5. [Repository Migration Map](REPOSITORY_STRUCTURE.md)
 
-When documents disagree, repository policy (`AGENTS.md`) and source/tests are the
-final evidence of implementation.
+Source and tests define current behavior. The build plan defines sequence. The
+continuation ledger is the session handoff source.
 
-## Start here
+## Maturity labels
 
-| Document | Purpose |
-|---|---|
-| [Product](PRODUCT.md) | Vision, users, principles, constraints, and success metrics |
-| [System architecture](SYSTEM_ARCHITECTURE.md) | How the universal agent, coordinator, and host control fit together |
-| [Execution pipeline](EXECUTION_PIPELINE.md) | The normative intent → govern → execute → evidence path |
-| [Security model](SECURITY_MODEL.md) | Trust boundaries, permission levels, scope, and confirmation policy |
-| [Host control](HOST_CONTROL.md) | The governed host capabilities and the `/agent` loop |
-| [MCP server](MCP_SERVER.md) | Expose the governed capabilities to MCP/HTTP clients, and consume external MCP servers |
-| [Release roadmap](../ROADMAP.md) · [Pre-AWS roadmap](PRE_AWS_ROADMAP.md) | Verified baseline, priorities, release gates, and the pre-AWS build sequence |
-| [Development guide](DEVELOPMENT_GUIDE.md) | Contribution and implementation workflow |
+- **Current** — present in source and supported by tests.
+- **Bridge** — intentional temporary migration implementation.
+- **Target** — accepted v2 design, not yet implemented.
+- **Research** — hypothesis requiring evaluation.
+- **Deferred** — outside the current build phase.
 
-## Architecture and execution
+## Architecture
 
-- [Technology stack](TECH_STACK.md)
-- [Model routing](MODEL_ROUTING.md)
-- [Memory architecture](MEMORY_ARCHITECTURE.md)
-- [Database schema](DATABASE_SCHEMA.md)
+- [System Architecture](SYSTEM_ARCHITECTURE.md)
+- [Core Brain and Active Brain](BRAIN_ARCHITECTURE.md)
+- [Workflows](WORKFLOWS.md)
+- [Execution Pipeline](EXECUTION_PIPELINE.md)
+- [Host and Environment Control](HOST_CONTROL.md)
+- [UTOS](UTOS.md)
+- [Technology Stack](TECH_STACK.md)
+- [Database Schema](DATABASE_SCHEMA.md)
+- [Memory Architecture](MEMORY_ARCHITECTURE.md)
+- [Model Routing](MODEL_ROUTING.md)
 
-## Extensibility and configuration
+## Security and evidence
 
-- Markdown playbooks (`SKILL.md`) — the reusable-procedure extension path; see [AGENTS.md](../AGENTS.md) and `decode/skills/playbooks/`
-- [Extensions and plugins](PLUGIN_MANIFEST.md) — native capabilities now; a planned, isolated external-plugin surface (the in-tree plugin system was removed)
+- [Security Model](SECURITY_MODEL.md)
+- [Risk Engine](RISK_ENGINE.md)
+- [Threat Model](threat-model.md)
+- [Audit Layer](audit-layer.md)
+- [Structured Logging](logging-system.md)
+- [Testing Strategy](TESTING_STRATEGY.md)
+
+## Interfaces and engineering
+
 - [Configuration](CONFIGURATION.md)
-- [Prompt library](PROMPT_LIBRARY.md)
+- [MCP](MCP_SERVER.md)
+- [Extensions](PLUGIN_MANIFEST.md)
+- [Prompt Contracts](PROMPT_LIBRARY.md)
+- [Bootstrap](bootstrap-engine.md)
+- [Development Guide](DEVELOPMENT_GUIDE.md)
+- [Pre-AWS Roadmap](PRE_AWS_ROADMAP.md)
+- [Research](RESEARCH.md)
+- [Architecture Decisions](adr/README.md)
+- [Memory Implementation Note](memory-engine.md)
 
-## Safety, quality, and research
+## Authority and maintenance
 
-- [Risk engine](RISK_ENGINE.md)
-- [Testing strategy](TESTING_STRATEGY.md)
-- [Threat model](threat-model.md)
-- [Research specification](RESEARCH.md)
-- [Architecture decisions](adr/README.md)
+Use repository/user policy, source/tests, accepted ADRs, the build plan, then
+subsystem docs. Do not mark targets implemented without source/test evidence.
+Never place credentials, real target data, or private engagement details in docs.
 
-## Implementation notes
-
-- [Memory engine](memory-engine.md)
-- [Bootstrap engine](bootstrap-engine.md)
-- [Audit layer](audit-layer.md)
-- [Logging system](logging-system.md)
-
-## Current approach (one paragraph)
-
-Every action — whether typed at the bare prompt or via `/agent` — runs through
-`UniversalAgent.run_tool_loop`, a bounded plan → call tool → observe → iterate
-loop. The loop's tools are the governed **host capabilities** (`decode/hostcontrol/`,
-owned by `HostAgent`): file read/write/edit/search, process and service control,
-`list_tools` (a `$PATH` scan for tool discovery), `shell_command` (run any
-installed CLI or script as an argument vector), and `host_session` (stateful
-sequences). Reusable procedures are authored as **markdown playbooks**, not Python
-wrappers. Everything routes through `ExecutionCoordinator`, which applies the
-filesystem scope, target scope, per-command risk classification, permission mode,
-bound approval, audit trail, and hashed evidence. Persistence is SQLite (optional
-MongoDB); model selection is governed by data-locality-aware routing. Removed from
-earlier designs: the multi-agent roster, the tool/capability registry and Kali
-catalog, mission/workflow runners, and the event bus. An optional, local
-FastAPI-based MCP/HTTP server now exposes the governed capabilities as a
-transport (see [MCP server](MCP_SERVER.md)); the broader
-PostgreSQL/Redis/Qdrant service tier remains out of scope.
-
-## Documentation maintenance
-
-For behavior changes, update in this order: repository policy (`AGENTS.md`),
-applicable ADR (when the decision is durable), the affected subsystem doc, and the
-release roadmap. Verify relative Markdown links and referenced repository paths.
-Never use real target data, credentials, or operational registries in docs.
-
-Repository-level policies remain canonical in [AGENTS.md](../AGENTS.md), the
-[contributing guide](../CONTRIBUTING.md), [security policy](../SECURITY.md),
-[license](../LICENSE), and [release roadmap](../ROADMAP.md).
+AWS is Deferred until local Linux, Kali WSL, and Docker release gates pass.

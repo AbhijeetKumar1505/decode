@@ -1,156 +1,41 @@
 # Testing Strategy
 
-## Objectives
+Prove behavior, invariants, failure truth, portability, resume, workflow
+completion, evidence integrity, and accounting without live targets/models.
 
-Testing establishes correctness, policy enforcement, reproducibility, parser resilience, and safe failure. Passing a happy-path unit test is not sufficient for a cybersecurity orchestration system.
+Layers: unit contracts; components; coordinator/provider/storage integration;
+security/property/fuzz; Linux/WSL/Docker conformance; controlled labs;
+architecture evaluations; CLI/API end-to-end lifecycle.
 
-## Test pyramid
+## Phase 0 regressions
 
-```text
-          Controlled end-to-end labs
-       Integration and contract tests
-   Unit, schema, policy, and parser tests
-```
+- exit 1 is failed observation/UI;
+- unknown tool params rejected;
+- vector shell metacharacters rejected;
+- output flags are WRITE and destination-scoped;
+- discovery/execution provider matches;
+- exact discovery reaches model;
+- secrets absent from outputs/audit/log metadata;
+- denials do not auto-retry.
 
-Most tests remain deterministic, local, and offline.
+Workflow tests cover schema/cycles/dependencies, ready nodes, gates, human pause,
+persistence/resume fencing, graph version, approval invalidation, idempotency,
+conflicts, criteria.
 
-## Unit testing
+Brain/model tests use deterministic fakes for authority, escalation, malformed
+output, abstention, provenance, routing filters, fallback, no repeated action.
 
-Cover:
+Security tests use seeded positives/negatives and labs for candidate/confirmed
+precision/recall, coverage, validation, scope/rate, remediation/regression.
 
-- Pydantic models and validation.
-- Capability and agent selection.
-- Scope matching.
-- Permission and risk decisions.
-- Planner/DAG behavior.
-- Command argument construction.
-- Parsers and normalization.
-- Memory, persistence, logging, audit, and feedback.
+Migration tests cover clean install, upgrade, interruption, rollback, old resume,
+events, conflicts, backup/restore, retention/deletion.
 
-## Integration testing
+Release runs configured lint/type/test plus security, links, migrations,
+conformance. Default suite is deterministic/offline; labs are explicitly gated.
 
-Exercise boundaries between the agent loop, coordinator, host capabilities, executor, persistence, and observability. Use fake providers and subprocess fixtures. Docker/WSL/SSH/MCP integrations are opt-in when dependencies are available.
-
-## Security testing
-
-- Command injection and quoting across platforms.
-- Path traversal and symlink escapes.
-- Scope bypass through URLs, DNS, redirects, IPv6, and CIDRs.
-- Approval replay and changed-command detection.
-- Secret redaction and accidental persistence.
-- Prompt injection through tool output and memory.
-- Plugin privilege escalation.
-- Malformed event and API payloads.
-- Audit tampering and missing-audit failure.
-- Dependency and supply-chain checks.
-
-## Agent testing
-
-Each agent is tested for capability ownership, bounded memory access, missing tools, denied approval, timeout, cancellation, normalization, partial results, and stable errors.
-
-## LLM evaluation
-
-Model-dependent behavior uses versioned datasets and records provider/model, prompt version, parameters, and date. Metrics include task correctness, structured-output validity, evidence use, unsupported claims, scope adherence, unsafe action proposals, latency, and cost.
-
-Unit tests never require live paid model access.
-
-## Prompt regression
-
-- Golden schema fixtures.
-- Adversarial direct and indirect injections.
-- Long-context truncation.
-- Conflicting instructions.
-- Sensitive-data exfiltration.
-- Provider/model comparison.
-- Refusal and safe-degradation behavior.
-
-## Plugin testing
-
-Plugin conformance covers manifest/schema, compatibility, dependency failures, import side effects, permission bounds, sandbox/profile, lifecycle, event emission, and uninstall/disable behavior.
-
-## Tool and parser testing
-
-- Version probe fixtures.
-- Argument-vector snapshots.
-- Machine-output fixtures from supported versions.
-- Truncated, malformed, localized, and unexpected output.
-- Large-output bounds.
-- Non-zero exit with useful partial output.
-- Evidence hash and provenance.
-
-Fixtures come from legal controlled environments and contain no real credentials.
-
-## Persistence and migration testing
-
-- Fresh schema creation.
-- CRUD and foreign-key behavior.
-- Concurrent local access.
-- Backup/restore.
-- Migration from every supported release.
-- Failure rollback.
-- Project isolation.
-- Retention and deletion across semantic indexes.
-
-## Performance testing
-
-Measure planner latency, registry scan time, parser throughput, database queries, memory retrieval, event lag, and report generation. Define budgets before optimization.
-
-## Stress and resilience testing
-
-- High task/event counts.
-- Slow and unavailable providers.
-- Executor disconnect.
-- Process timeout and cancellation.
-- Disk full and read-only storage.
-- Corrupted registry/index.
-- Restart during workflow execution.
-- Duplicate event delivery.
-
-Consequential external actions use simulators or disposable labs.
-
-## End-to-end labs
-
-Use isolated, resettable environments with explicit scope. Validate full intent-to-evidence workflows and audit completeness. Never point CI security tools at public or production targets.
-
-## Required commands
-
-```text
-ruff check .
-python -m pytest tests/
-```
-
-## Coverage gates
-
-Prioritize branch coverage for governance, safety, scope, command construction, plugins, secrets, and migrations. New policy code requires positive, negative, and boundary cases.
-
-## Flaky tests
-
-Quarantine is temporary and tracked. Tests may not silently retry until passing. Record the suspected nondeterminism and owner.
-
-## Release criteria
-
-- Lint and required tests pass.
-- No unresolved critical/high security regressions.
-- Migrations and rollback limits are verified.
-- Prompt/model benchmark safety does not regress.
-- Audit/log/feedback completeness passes.
-- Documentation status matches implementation.
-
-## Phase 4 offline regression gates
-
-`src/decode/evaluation.py` provides typed `RoutingEvalCase` and `ToolEvalCase`
-cases, `evaluate_routing`, and `evaluate_tool_calls`. Reports contain per-case
-pass/fail, sanitized reasons, and accuracy. Empty/duplicate case sets are rejected.
-Routing cases exercise prompt classification, exact model selection or denial,
-and required policy rules. Tool cases compare the complete ordered sequence of
-tool names and arguments, detecting missing, extra, reordered, and malformed calls.
-The tool generator is injected; the harness does not execute commands or call
-models itself. Tests use scripted providers and the real `ToolUseLoop`.
-
-`tests/test_p4.py` covers the regression harness and stable replay identity across
-command, adapter, parser, and environment changes. `tests/test_governance.py`
-covers audit append/rotation, filtering, malformed lines, redaction, sink errors,
-and fail-closed execution when mandatory audit fails. `tests/test_memory.py`
-checks both SQLite and mocked MongoDB against the lifecycle contract, legacy
-migration, and offline FAISS snapshot/retrieval behavior. No live database,
-embedding API, or security tool is required for these tests.
+Native Windows is a required portability gate for filesystem permissions,
+SQLite lifecycle, runtime-path isolation, CLI output, and host behavior that does
+not require Linux tooling. The current checkout uses the ignored `wenv` virtual
+environment. Linux-sensitive behavior is independently rerun in Kali WSL; a
+native Windows pass does not replace that provider gate.

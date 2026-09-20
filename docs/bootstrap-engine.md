@@ -1,28 +1,22 @@
-# Bootstrap Engine
+# Bootstrap and Environment Discovery
 
-`BootstrapEngine` in `decode/bootstrap/engine.py` inspects the host environment, reports prerequisite state, invokes tool discovery, and writes `data/bootstrap_report.json`.
+**Status:** Current diagnostic bootstrap; provider-aware discovery is Target
 
-## Default workflow
+Bootstrap reports prerequisites, configured providers, PATH tools, versions,
+privileges, resources, and degraded capabilities. Detection is not authorization.
 
 ```text
-Detect OS and runtime
-  -> inspect prerequisite commands
-  -> discover configured tool providers
-  -> report available and degraded capabilities
-  -> write bootstrap report and tool registry
+load provider config -> identify environment -> health
+ -> discover inside provider -> validate adapter compatibility
+ -> publish provider-scoped report
 ```
 
-Bootstrap must not treat a detected tool as authorized execution and must not count unsupported versions as capability coverage.
+Distinguish installed, executable, supported, authorized, healthy. Reports may be
+sensitive and belong in local state.
 
-## CLI
+Current commands: `decode bootstrap` and mutating
+`decode bootstrap --update`, which requires explicit intent/policy. Missing
+tools are reported, not silently installed.
 
-```bash
-decode bootstrap
-decode bootstrap --update
-```
-
-The default command is diagnostic. `--update` may invoke a platform package-manager update and therefore mutates the host; use it only with an explicit user request and appropriate operating-system privileges. Missing individual tools are reported, not installed automatically.
-
-Generated reports can include host paths and environment details. Treat them as deployment data rather than source documentation.
-
-Runtime tool discovery is handled by the governed `list_tools` capability (a `$PATH` scan); see [System Architecture](SYSTEM_ARCHITECTURE.md).
+Runtime `list_tools` must use the same provider-aware discovery rather than an
+unrelated process PATH.

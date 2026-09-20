@@ -1,17 +1,19 @@
-# ADR-001: Use Python as the Primary Language
+# ADR-001: Python Runtime Core and TypeScript CLI
 
-**Status:** Accepted
+**Status:** Accepted; amended for v2
 
 ## Context
 
-Decode integrates security tools, model SDKs, data processing, CLI workflows, and research libraries. Rapid extension and broad ecosystem compatibility matter more than single-language purity.
+The security/execution/evidence/model/storage core is Python. The target terminal
+UX benefits from TypeScript.
 
 ## Decision
 
-Use Python 3.11+ for the kernel, agents, skills, adapters, and local CLI. Use typed boundaries and Pydantic models. Performance- or isolation-critical workers may use other languages behind versioned contracts.
+Use Python 3.12+ target with typing/Pydantic for runtime. Keep current Python CLI
+during migration. After stable local API contracts, build TypeScript/Node CLI as
+a client; it never imports Python internals.
 
 ## Consequences
 
-- Security and AI integrations are fast to develop.
-- Runtime packaging, dependency supply chain, blocking SDKs, and dynamic imports require discipline.
-- CPU-bound or high-assurance components may move behind service/plugin boundaries without changing platform contracts.
+Runtime stays cohesive and avoids rewrite. Two toolchains/shared schemas need CI.
+Python CLI removal requires parity, rollback, and compatibility releases.

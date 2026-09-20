@@ -1,36 +1,26 @@
 # Architecture Decision Records
 
-ADRs record durable Decode architecture choices. `Accepted` decisions govern current work; `Research` decisions define an experiment rather than a production commitment.
-
-Records for approaches that were later removed during the universal-agent pivot
-(event-driven kernel, universal tool registry, Kali integration, multi-agent
-design, dynamic plugin loading, tool-capability discovery) and for infrastructure
-that was never adopted (Redis Streams, PostgreSQL, Qdrant, FastAPI) have been
-deleted rather than kept as stale history; the current design is described in
-[../SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md).
-
-The **Neural Schema** (a live task-state graph, subsystem 04 in
-[../SYSTEM_ARCHITECTURE.md](../SYSTEM_ARCHITECTURE.md)) returns as a *planned*
-direction under the De-code plan; the `PlanGraph`/`CompletionCriterion` data
-types in `decode/planner/dag.py` are its starting primitives. An ADR will record
-that decision when the design is committed.
+Accepted ADRs govern implementation. Proposed need review. Research defines
+experiments. Superseded records remain history and link replacements.
 
 | ADR | Decision | Status |
 |---|---|---|
-| [001](ADR-001-why-python.md) | Python as the primary implementation language | Accepted |
-| [004](ADR-004-plugin-architecture.md) | Plugin architecture | Superseded |
-| [007](ADR-007-multi-model-routing.md) | Multi-model routing | Accepted |
-| [013](ADR-013-knowledge-graph-memory.md) | Knowledge graph memory | Accepted |
-| [014](ADR-014-permission-based-execution.md) | Permission-based execution | Accepted |
-| [015](ADR-015-safety-confirmation-layer.md) | Human safety confirmation | Accepted |
-| [018](ADR-018-audit-logging.md) | Mandatory audit logging | Accepted |
-| [019](ADR-019-local-first-execution.md) | Local-first execution | Accepted |
-| [020](ADR-020-explainable-decisions.md) | Explainable system decisions | Accepted |
+| [001](ADR-001-why-python.md) | Python core; TypeScript target CLI | Accepted, amended |
+| [004](ADR-004-plugin-architecture.md) | Extensions outside kernel | Accepted, amended |
+| [007](ADR-007-multi-model-routing.md) | Policy/UTOS routing | Accepted |
+| [013](ADR-013-knowledge-graph-memory.md) | Provenance memory/graph | Accepted, amended |
+| [014](ADR-014-permission-based-execution.md) | Resolved-action permission | Accepted, amended |
+| [015](ADR-015-safety-confirmation-layer.md) | Bound approval | Accepted |
+| [018](ADR-018-audit-logging.md) | Mandatory audit | Accepted |
+| [019](ADR-019-local-first-execution.md) | Local first | Accepted |
+| [020](ADR-020-explainable-decisions.md) | Public reasons | Accepted |
+| [021](ADR-021-runtime-authority-and-brains.md) | Runtime authority/brains | Accepted |
+| [022](ADR-022-workflow-first-procedure.md) | Workflow-first procedure | Accepted |
+| [023](ADR-023-provider-bound-environments.md) | Provider binding | Accepted |
+| [024](ADR-024-evidence-backed-findings.md) | Evidence/findings | Accepted |
+| [025](ADR-025-utos-separation.md) | UTOS separation | Accepted |
+| [026](ADR-026-defer-aws.md) | Defer AWS | Accepted |
 
-## Process
-
-1. Copy the structure of an existing ADR.
-2. Describe context, decision, and consequences.
-3. Link relevant product, security, and implementation documents.
-4. Review security, migration, and reversal implications.
-5. Update status rather than rewriting history; superseding ADRs link both records.
+Describe context, decision, alternatives, consequences, migration, security, and
+reversal. Update status rather than erase history. Link the build phase and
+update subsystem docs plus [CONTINUATION.md](../CONTINUATION.md).

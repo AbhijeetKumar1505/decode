@@ -1,17 +1,40 @@
-# Decode
+# De-code
 
-Decode is a local-first cybersecurity operating system and governed universal
-tool-use agent. You describe an authorized objective in natural language, and
-Decode plans the work, discovers tools installed on the host, executes one
-bounded action at a time, and explains the result.
+De-code is a Linux-first, local-first runtime for engineering work and
+explicitly authorized security operations. Models provide cognition; the
+runtime provides procedure, authority, state, evidence, verification, and
+resource control.
 
-Decode is designed for security researchers, defenders, penetration testers,
-students, and engineering teams. It is not an unrestricted exploitation
-system: scope, permissions, approvals, evidence capture, and audit logging are
-enforced by the runtime rather than delegated to a model.
+> Model = cognition. Runtime = authority. Workflow = procedure. Evidence = truth.
+
+De-code is designed for engineers, security researchers, incident responders,
+and authorized red, blue, and purple teams. It is not an unrestricted
+exploitation system: scope, permissions, approvals, evidence capture, and audit
+logging are enforced by the runtime rather than delegated to a model.
 
 > Only use Decode against systems, networks, files, and accounts that you own
 > or are explicitly authorized to test.
+
+## Project status
+
+De-code is moving from its governed Python universal-agent baseline to the v2
+workflow runtime. Documentation uses five maturity labels:
+
+- **Current** — present in source and supported by tests.
+- **Bridge** — a deliberate migration implementation.
+- **Target** — accepted v2 design that is not complete.
+- **Research** — a hypothesis that still needs evaluation.
+- **Deferred** — outside the active build phase.
+
+The current baseline includes the Python CLI/TUI, universal tool loop,
+coordinator and governance, host capabilities, execution providers, SQLite,
+evidence/audit foundations, task/DAG primitives, model adapters, and MCP.
+Markdown workflows and the combined universal loop are Bridge components. The
+Core/Active Brain split, workflow v2 schema, runtime FSM, UTOS, local API,
+TypeScript CLI, and AWS deployment are Target or Deferred work.
+
+Use the [canonical build plan](docs/BUILD_PLAN.md) for sequence and the
+[continuation ledger](docs/CONTINUATION.md) to resume implementation safely.
 
 ## What Decode does
 
@@ -58,20 +81,27 @@ consequential action is routed through `ExecutionCoordinator`, which applies:
 ## Architecture
 
 ```text
-CLI / Rich REPL
-       |
-UniversalAgent and ToolUseLoop
-       |
-ExecutionCoordinator
-       |
-Governance: scope, risk, permission, approval
-       |
-Host capabilities and markdown playbooks
-       |
-Execution providers and installed tools
-       |
-Persistence, evidence, audit, logging, and feedback
+User / CLI / future API
+          |
+Core Brain: strategy, workflow, DAG, budget, stop
+          |
+Workflow Engine: phases, dependencies, gates, checkpoints
+          |
+Active Brain: one bounded operation, context, recovery
+          |
+Execution Kernel
+  capability -> environment -> policy/scope/risk -> approval
+          |
+Provider: local / WSL / Docker / SSH / MCP
+          |
+Verification -> Evidence -> Findings -> Memory / Audit / Usage
 ```
+
+Core Brain and Active Brain are Target architecture. Today, the universal agent
+loop combines parts of those responsibilities and must remain bounded by the
+same execution coordinator. Workflows own procedure, capabilities describe
+stable operations, providers own environment-specific discovery and execution,
+and tools remain replaceable mechanisms.
 
 The source is organized under `src/decode/`:
 
@@ -456,6 +486,9 @@ Reusable procedures are authored as Markdown, not Python wrappers. A playbook
 contains YAML frontmatter and instructions that the agent follows. Each command
 from the procedure is still executed through the governed command capability.
 
+Playbooks guide method; they do not authorize targets, select providers,
+determine process success, persist state, or confirm findings.
+
 Playbooks are discovered from:
 
 ```text
@@ -487,6 +520,44 @@ target_required: true
 See [the bundled web reconnaissance playbook](src/decode/skills/playbooks/web_recon.md)
 and [the development guide](docs/DEVELOPMENT_GUIDE.md) for the complete format.
 
+## Workflow Bridge
+
+For work that needs enforced phase order, evidence gates, human checkpoints, and
+safe resume, a playbook can also declare a workflow DAG:
+
+```text
+decode workflow list
+decode workflow show engineering-delivery
+decode workflow run engineering-delivery --goal "Implement the approved change" --write-root .
+decode workflow resume <session-id> --approve approve_plan
+```
+
+Bundled workflows cover engineering delivery, source-first security audits,
+authorized red-team assessments, blue-team incident response, and purple-team
+control validation. This implementation is a **Bridge**: the Target is a
+versioned, validated YAML workflow schema with a DAG scheduler, runtime FSM,
+evidence gates, conflict-aware concurrency, and safe resume. Models remain
+bounded stage workers, and every action still crosses the normal scope,
+permission, evidence, and audit gate. See
+[workflow architecture](docs/WORKFLOWS.md).
+
+## Environment discovery and browsing
+
+De-code does not rely on a hardcoded Kali tool list. It discovers executables in
+the selected environment and must execute them through that same provider. A
+native Linux host, Kali WSL distribution, and Docker container may each have a
+different PATH and dependency set.
+
+An installed browser or `curl` is only a binary; it is not automatically a
+governed semantic browser or search provider. Browsing, search, authenticated
+sessions, downloads, output-path scope, and evidence capture require explicit
+capability contracts. Phase 0 now binds system-tool discovery and execution to
+one provider, rejects loose parameters and shell syntax, classifies explicit
+outputs, and scope-checks recognizable network targets. Semantic browsing/search
+appears only when a configured provider advertises it. External-provider file
+outputs and stateful sessions remain fail-closed until Phase 1 supplies those
+provider contracts.
+
 ## Configuration reference
 
 Common environment variables:
@@ -500,7 +571,7 @@ Common environment variables:
 | `ANTHROPIC_API_KEY` | Anthropic credential |
 | `MISTRAL_API_KEY` | Mistral credential |
 | `AWS_ACCESS_KEY_ID` / `AWS_REGION` | AWS Bedrock credentials/region (with the `decode[bedrock]` extra) |
-| `DECODE_EXECUTOR` | Default execution provider |
+| `DECODE_EXECUTOR` | Execution provider: `local`, `wsl/<distribution>`, or another configured provider |
 | `DECODE_HOME` | Root directory for runtime state |
 | `MEMORY_PATH` | Memory/model state path |
 | `LOGS_PATH` | Structured log path |
@@ -572,7 +643,14 @@ needed for an investigation.
 ## Documentation
 
 - [Documentation hub](docs/README.md)
+- [Product constitution](docs/PRODUCT.md)
+- [Canonical build plan](docs/BUILD_PLAN.md)
+- [Continuation ledger](docs/CONTINUATION.md)
 - [System architecture](docs/SYSTEM_ARCHITECTURE.md)
+- [Core Brain and Active Brain](docs/BRAIN_ARCHITECTURE.md)
+- [Repository migration map](docs/REPOSITORY_STRUCTURE.md)
+- [Workflow architecture](docs/WORKFLOWS.md)
+- [UTOS](docs/UTOS.md)
 - [Execution pipeline](docs/EXECUTION_PIPELINE.md)
 - [Security model](docs/SECURITY_MODEL.md)
 - [Host control](docs/HOST_CONTROL.md)
@@ -580,6 +658,14 @@ needed for an investigation.
 - [Development guide](docs/DEVELOPMENT_GUIDE.md)
 - [Plugin and extension manifest](docs/PLUGIN_MANIFEST.md)
 - [Roadmap](ROADMAP.md) · [Pre-AWS engineering roadmap](docs/PRE_AWS_ROADMAP.md)
+
+Source and tests define current behavior. Accepted ADRs define durable
+decisions. The build plan defines implementation order. The continuation ledger
+defines the exact resumption point.
+
+AWS is **Deferred** until local Linux, Kali WSL, and Docker gates pass and the
+user creates the AWS project. Cloud deployment will map stable local contracts;
+it will not create a second policy or execution path.
 
 ## Contributing
 

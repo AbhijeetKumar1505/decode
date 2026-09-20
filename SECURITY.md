@@ -2,7 +2,9 @@
 
 ## Intended use
 
-Decode is for education, defensive analysis, research, and security testing of systems the operator owns or has explicit written authorization to assess. It is not an unrestricted exploitation system.
+De-code is for engineering, education, defensive analysis, research, and
+security testing of systems the operator owns or has explicit written
+authorization to assess. It is not an unrestricted exploitation system.
 
 ## Prohibited use
 
@@ -22,21 +24,46 @@ Include the affected version, reproduction steps, impact, relevant logs with sec
 
 | Control | Current state |
 |---|---|
-| Risk classification | Skills declare `READ`, `WRITE`, or `DESTRUCTIVE` risk |
+| Risk classification | Exact resolved actions are classified as `READ`, `WRITE`, or `DESTRUCTIVE` |
 | Scope policy | Allowlist; empty scope denies target execution |
 | Human approval | `WRITE` requires approval; `DESTRUCTIVE` also requires an explicit engagement override |
-| Mission governance | `MissionRunner` uses the governance gate before execution |
-| Raw model commands | Blocked in the conversational REPL |
-| Execution providers | Local, Docker, WSL, configured SSH, and MCP |
+| Execution governance | `ExecutionCoordinator` is the single pre-execution decision point |
+| Model authority | Models, prompts, playbooks, plugins, and tool output cannot grant permission |
+| Execution providers | Local, Docker, WSL, configured SSH, and MCP foundations |
 | Evidence integrity | SHA-256 and chain-of-custody foundations |
 | Observability | Structured log, audit, and feedback services exist |
 | Provider keys | Loaded from environment configuration and must never be logged |
 
 ## Known limitations
 
-Mission CLI/workflows, registered conversational skills, and the legacy attack chain now share a governed coordinator; direct low-level skill/executor APIs and some domain CLI modules are not yet migrated. Local, WSL, SSH, and MCP execution are not inherently isolated. Plugins are trusted Python code imported in-process. Storage encryption, multi-user authorization, and a network-facing control plane are not implemented.
+The current Python baseline is not the completed v2 security architecture.
+Phase 0 still has known process-result, strict-schema, shell-metacharacter,
+output-path, provider-binding, discovery-result, and governed browsing/search
+gaps. Local, WSL, Docker, SSH, and MCP execution are not inherently isolated.
+Storage encryption, multi-user authorization, a stable network control plane,
+and cloud deployment are not complete.
 
-The P0 work in the [release roadmap](ROADMAP.md) is required before Decode can claim universal pre-execution governance or complete audit coverage. See the canonical [security model](docs/SECURITY_MODEL.md) and [threat model](docs/threat-model.md).
+Markdown playbooks and declarative plugin packages are untrusted guidance and
+configuration, never executable authority. Raw model-generated shell is blocked;
+the governed command capability is the only sanctioned general CLI path.
+
+Do not claim complete enforcement until the applicable gates in the
+[build plan](docs/BUILD_PLAN.md) pass. See the canonical
+[security model](docs/SECURITY_MODEL.md), [risk engine](docs/RISK_ENGINE.md),
+and [threat model](docs/threat-model.md).
+
+## Security architecture rules
+
+- Scope covers network targets, filesystem reads, outputs, credentials, and
+  provider identity.
+- Scope and risk are re-evaluated immediately before execution.
+- A material change invalidates prior approval.
+- Discovery and execution must occur in the same selected environment.
+- Launch is not success; exit status, parsing, and completion criteria decide.
+- Findings remain candidates until supported by validation evidence.
+- Consequential execution fails closed when policy, audit, or mandatory evidence
+  services are unavailable.
+- AWS or another remote environment cannot introduce a second policy path.
 
 ## Coordinated disclosure
 

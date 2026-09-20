@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -76,7 +77,13 @@ class TestPersistentSession(unittest.TestCase):
                 json.dumps(
                     {
                         "tool": "session_exec",
-                        "params": {"command": "echo session-works"},
+                        "params": {
+                            "argv": [
+                                sys.executable,
+                                "-c",
+                                "print('session-works')",
+                            ]
+                        },
                     }
                 ),
                 json.dumps({"message": "done"}),

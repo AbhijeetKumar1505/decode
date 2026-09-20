@@ -1,9 +1,11 @@
 import asyncio
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from decode.audit import AuditLayer
+from decode.execution import ExecutionProvider, ExecutionResult
 from decode.governance import GovernanceGate, ScopePolicy
 from decode.hostcontrol import CommandPolicy, FilesystemScope, PermissionMode
 from decode.runtime import ExecutionCoordinator, HostController
@@ -115,14 +117,19 @@ class TestHostControlIntegration(unittest.TestCase):
 
     def test_shell_command_accepts_command_string(self):
         host = self._host(mode=PermissionMode.AUTO)
-        result = self._run(host, "shell_command", {"command": "echo hello-from-string"})
+        command = f'"{sys.executable}" -c "print(\'hello-from-string\')"'
+        result = self._run(host, "shell_command", {"command": command})
         self.assertEqual(result.status, ExecutionStatus.SUCCESS)
         self.assertIn("hello-from-string", result.value.normalized["stdout"])
 
     def test_shell_command_accepts_argv_list(self):
         # argv is the advertised alternative to command; both must reach the tool.
         host = self._host(mode=PermissionMode.AUTO)
-        result = self._run(host, "shell_command", {"argv": ["echo", "hello-from-argv"]})
+        result = self._run(
+            host,
+            "shell_command",
+            {"argv": [sys.executable, "-c", "print('hello-from-argv')"]},
+        )
         self.assertEqual(result.status, ExecutionStatus.SUCCESS)
         self.assertIn("hello-from-argv", result.value.normalized["stdout"])
 
@@ -150,6 +157,200 @@ class TestHostControlIntegration(unittest.TestCase):
         # a missing tool is reported, never a crash or a governance bypass
         self.assertFalse(result.value.success)
         self.assertIn("not found", result.value.error.lower())
+
+    def test_nonzero_command_exit_is_execution_failure(self):
+        host = self._host(mode=PermissionMode.AUTO)
+        result = self._run(
+            host,
+            "shell_command",
+            {"argv": [sys.executable, "-c", "raise SystemExit(9)"]},
+        )
+        self.assertEqual(result.status, ExecutionStatus.ERROR)
+        self.assertFalse(result.success)
+        self.assertEqual(result.value.normalized["exit_code"], 9)
+
+    def test_unknown_parameters_are_rejected_before_execution(self):
+        result = self._run(
+            self._host(),
+            "list_tools",
+            {"query": "python", "surprise": True},
+        )
+        self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+        self.assertIn("unsupported normalized arguments", result.error)
+
+    def test_shell_operator_is_rejected_before_execution(self):
+        result = self._run(
+            self._host(mode=PermissionMode.AUTO),
+            "shell_command",
+            {"argv": ["echo", "hello", "|", "decode-must-not-run"]},
+        )
+        self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+        self.assertIn("shell operator", result.error)
+
+    def test_curl_output_must_be_inside_write_scope(self):
+        outside = Path(self.tmp.name) / "outside" / "page.html"
+        result = self._run(
+            self._host(mode=PermissionMode.AUTO),
+            "shell_command",
+            {
+                "argv": [
+                    "curl",
+                    "https://example.test",
+                    "-o",
+                    str(outside),
+                ]
+            },
+        )
+        self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+        self.assertIn("authorized write scope", result.error)
+
+    def test_discovery_and_execution_use_the_same_selected_provider(self):
+        class FakeProvider(ExecutionProvider):
+            def __init__(self):
+                self.commands = []
+
+            @property
+            def name(self):
+                return "wsl/kali-linux"
+
+            async def execute(self, command, timeout=60, env=None):
+                self.commands.append(command)
+                if command == ["/usr/bin/env"]:
+                    return ExecutionResult(
+                        command=command,
+                        provider=self.name,
+                        success=True,
+                        stdout="PATH=/usr/bin:/bin\n",
+                    )
+                if command[:1] == ["/usr/bin/find"]:
+                    return ExecutionResult(
+                        command=command,
+                        provider=self.name,
+                        success=True,
+                        stdout="f\tcurl\t/usr/bin/curl\n",
+                    )
+                return ExecutionResult(
+                    command=command,
+                    provider=self.name,
+                    success=True,
+                    stdout="provider-bound\n",
+                )
+
+            async def check_health(self):
+                return True
+
+        provider = FakeProvider()
+        coord = _coordinator(Path(self.tmp.name), mode=PermissionMode.AUTO)
+        host = HostController(
+            coord,
+            self.scope,
+            CommandPolicy(),
+            executor=provider,
+        )
+
+        discovered = self._run(host, "list_tools", {"query": "curl"})
+        executed = self._run(host, "shell_command", {"argv": ["curl", "--version"]})
+
+        self.assertEqual(discovered.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(
+            discovered.value.normalized["provider"], "wsl/kali-linux"
+        )
+        self.assertEqual(executed.status, ExecutionStatus.SUCCESS)
+        self.assertEqual(executed.value.provider, "wsl/kali-linux")
+        self.assertEqual(len(provider.commands), 3)
+
+    def test_external_provider_does_not_fall_back_for_stateful_session(self):
+        class FakeProvider(ExecutionProvider):
+            @property
+            def name(self):
+                return "wsl/kali-linux"
+
+            async def execute(self, command, timeout=60, env=None):
+                raise AssertionError("provider must not be called")
+
+            async def check_health(self):
+                return True
+
+        coord = _coordinator(Path(self.tmp.name), mode=PermissionMode.AUTO)
+        host = HostController(
+            coord,
+            self.scope,
+            CommandPolicy(),
+            executor=FakeProvider(),
+        )
+
+        result = self._run(host, "session_open", {})
+
+        self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+        self.assertIn("no local fallback", result.error)
+
+    def test_network_command_target_must_be_in_engagement_scope(self):
+        class FakeProvider(ExecutionProvider):
+            def __init__(self):
+                self.called = False
+
+            @property
+            def name(self):
+                return "wsl/kali-linux"
+
+            async def execute(self, command, timeout=60, env=None):
+                self.called = True
+                return ExecutionResult(
+                    command=command,
+                    provider=self.name,
+                    success=True,
+                    stdout="must not execute",
+                )
+
+            async def check_health(self):
+                return True
+
+        provider = FakeProvider()
+        audit = AuditLayer(Path(self.tmp.name) / "target-audit")
+        coordinator = ExecutionCoordinator(
+            GovernanceGate(
+                ScopePolicy(allowed=["allowed.example.test"]),
+                audit=audit,
+                mode=PermissionMode.AUTO,
+            ),
+            audit=audit,
+        )
+        host = HostController(
+            coordinator,
+            self.scope,
+            CommandPolicy(),
+            executor=provider,
+        )
+
+        result = self._run(
+            host,
+            "shell_command",
+            {"argv": ["curl", "https://outside.example.test/status"]},
+        )
+
+        self.assertEqual(result.status, ExecutionStatus.DENIED)
+        self.assertFalse(provider.called)
+        self.assertIn("out of engagement scope", result.error)
+
+    def test_session_parameters_are_strictly_validated(self):
+        result = self._run(
+            self._host(mode=PermissionMode.AUTO),
+            "session_open",
+            {"cwd": str(self.root), "surprise": True},
+        )
+
+        self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+        self.assertIn("unsupported normalized arguments", result.error)
+
+    def test_network_command_is_denied_inside_local_session(self):
+        result = self._run(
+            self._host(mode=PermissionMode.AUTO),
+            "session_exec",
+            {"argv": ["curl", "https://allowed.example.test"]},
+        )
+
+        self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+        self.assertIn("use shell_command with an explicit target", result.error)
 
 
 if __name__ == "__main__":

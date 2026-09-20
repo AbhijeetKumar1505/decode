@@ -21,6 +21,9 @@ class TestPromptComposer(unittest.TestCase):
             # capabilities injected
             self.assertIn("git_diff", prompt)
             self.assertIn("shell_command", prompt)
+            self.assertIn("selected execution environment", prompt)
+            self.assertIn("not a semantic browser", prompt)
+            self.assertIn("authorized write scope", prompt)
             # policy + task-state note injected
             self.assertIn("scope", prompt.lower())
             self.assertIn("task state", prompt.lower())

@@ -1,144 +1,73 @@
-# Decode Product Constitution
+# De-code Product Constitution
 
 ## Vision
 
-Decode is an open-source cybersecurity agent that helps security professionals plan, execute, validate, and document authorized work across local, containerized, WSL, and remote environments.
+De-code is a Linux-first, local-first engineering and authorized-security agent
+platform for native Linux, WSL, and Docker. It reduces model dependence by
+moving procedure, safety, state, evidence, and verification into the application.
 
-Decode is not a chatbot with security commands attached. It is a governed tool-use agent with explicit permissions, evidence, and execution boundaries — it discovers and drives the tools already on the host rather than wrapping a fixed set.
+> Model = cognition. Runtime = authority. Workflow = procedure. Evidence = truth.
 
-## Mission
+## Problem and users
 
-Build an open, extensible AI-powered cybersecurity agent capable of understanding security objectives, discovering and driving whatever tools are installed on the host, and assisting security professionals while maintaining strict safety, transparency, auditability, reproducibility, and user control.
+Generic assistants rely on models to remember specialist methods, confuse launch
+with success, lose state, and cannot enforce authorization. De-code serves
+engineers, authorized red/blue/purple teams, incident responders, security
+researchers, auditable teams, and agent-system researchers.
 
-## Problem statement
+## Principles
 
-Security work is fragmented across tools, operating systems, data formats, and specialist workflows. Analysts spend substantial time translating intent into commands, switching contexts, correlating outputs, preserving evidence, and producing reports. General-purpose AI assistants add another interface but usually lack reliable tool discovery, typed execution contracts, durable security context, and enforceable safety boundaries.
+1. Authorization before action.
+2. Human control over consequential change.
+3. Workflow over improvised methodology.
+4. Evidence over model assertion.
+5. Local-first, provider-portable execution.
+6. Discovery and execution in one environment.
+7. Fail closed on ambiguity and broken audit.
+8. Structured state instead of transcript memory.
+9. Public reasons instead of private chain-of-thought.
+10. Honest maturity labels.
 
-Decode provides a common capability layer between human objectives and security tooling. It should make workflows easier to reproduce and inspect without hiding the commands, evidence, assumptions, or approvals that produced a result.
+## Product hierarchy
 
-## Target users
+```text
+workflow -> phase -> task -> capability -> tool
+```
 
-- Penetration testers performing explicitly authorized assessments.
-- Security researchers comparing tools, models, and planning strategies.
-- SOC and incident-response analysts investigating defensive telemetry.
-- Malware, forensics, cloud, identity, and application-security specialists.
-- Students working in legal labs, CTFs, and controlled training environments.
-- Playbook authors extending the agent with markdown procedures.
-- Teams that require auditable, repeatable security automation.
+Skills teach; they do not authorize, persist, execute, or verify. Red, blue, and
+purple are workflow configurations, not personalities.
 
-## Core philosophy
+## Responsibility split
 
-1. **Authorization before action** — scope and permission checks precede execution.
-2. **Human control** — consequential actions require clear review and approval.
-3. **Discovery over hardcoding** — the agent discovers and drives installed tools through one governed shell capability; nothing is wrapped per-tool.
-4. **Evidence over assertion** — conclusions link to collected outputs and provenance.
-5. **Local first** — core workflows remain useful without mandatory hosted services.
-6. **Extensibility by contract** — markdown playbooks, native capabilities, models, and executors expose typed, governed interfaces; there is no in-tree plugin loader.
-7. **Reproducibility** — plans, parameters, versions, approvals, and results are recordable.
-8. **Explainable decisions** — routing and planning decisions expose concise reasons, not hidden reasoning traces.
-9. **Fail closed** — missing dependencies, ambiguous scope, and policy failures stop execution safely.
-10. **Research honesty** — planned systems are never presented as implemented capabilities.
+Models interpret, hypothesize, compare, plan, summarize, and judge within bounds.
+They cannot grant scope, approve, determine process success, confirm unsupported
+findings, or bypass gates.
 
-## Goals
+De-code owns workflow, state, DAG scheduling, capability resolution, environment
+identity, policy, scope, approval, execution, evidence, verification, memory,
+audit, recovery, and UTOS accounting.
 
-- Turn authorized security objectives into an inspectable, step-by-step tool-use loop.
-- Discover the tools installed across supported execution environments (`list_tools`).
-- Run any installed tool or script through one governed capability (`shell_command`).
-- Route work through the governed loop to the appropriate models and executors.
-- Enforce permission, scope, and confirmation policies on every action.
-- Preserve findings, evidence, audit events, and execution feedback.
-- Support cloud and local model providers behind stable interfaces.
-- Enable community extensions via markdown playbooks and native host capabilities.
-- Provide deterministic replay inputs where the underlying tool permits it.
-- Establish a platform for research into planning, memory, and adaptive tool use.
+## Maturity
+
+- **Current:** Python CLI/TUI, universal loop, coordinator/governance, host
+  capabilities, providers, persistence, evidence, task state, routing, MCP.
+- **Bridge:** markdown workflows and universal loop as initial Active Brain.
+- **Target:** Core/Active split, YAML DSL, provider-bound kernel, FSM/DAG/events,
+  UTOS, FastAPI, TypeScript CLI.
 
 ## Non-goals
 
-- Fully autonomous exploitation without user-defined scope and approval gates.
-- Bypassing platform protections, endpoint security, or legal authorization.
-- Guaranteeing that model output is correct or that a target is secure.
-- Replacing specialist judgment, evidence review, or incident command.
-- Hiding raw commands, material parameters, failures, or model/provider changes.
-- Training a foundation model from scratch as a prerequisite for the product.
-- Hardcoding every Kali utility into the kernel.
-- Collecting telemetry by default or requiring a cloud control plane.
+No unscoped exploitation, model-as-workflow, hardcoded Kali catalog, mandatory
+cloud, second desktop engine, unsupported assurance claims, or ambiguous replay.
 
-## Core features
+## Success measures
 
-### Implemented
+Safety bypasses, false-success rate, provider identity consistency, verified
+completion, safe resume, finding precision/recall, evidence coverage,
+quality-adjusted resource use, environment conformance, and bound approvals.
 
-- Typer CLI and Rich/prompt_toolkit interactive REPL.
-- A single governed universal agent loop (`run_tool_loop`) behind the bare prompt and `/agent`.
-- Tool discovery (`list_tools`, a `$PATH` scan) — no hardcoded tool catalog.
-- Governed `shell_command` / `host_session` to run any installed CLI or script as an argument vector.
-- Governed host control: file read/write/edit/search, process and service operations.
-- READ, WRITE, and DESTRUCTIVE per-command risk classification with `plan`/`ask`/`auto` permission modes.
-- Local, Docker, WSL, SSH, and MCP execution-provider implementations.
-- Markdown playbooks (`SKILL.md`) and native host capabilities as the extension paths.
-- A live task-state (Neural Schema), composed prompts, verification/replan, and role→model routing.
-- Extension layer: MCP servers and declarative plugin packages behind a unified capability registry (`decode mcp` / `decode plugin`), with scoped config (project > user > system).
-- OpenRouter (default), OpenAI, and Anthropic provider adapters with data-locality-aware routing.
-- SQLite (optional MongoDB) session, target, finding, evidence, project, and artifact storage.
-- Audit, structured execution logging, execution feedback, and hashed immutable evidence.
-- Knowledge graph with capability → MITRE ATT&CK mapping.
+## Research and cloud
 
-### Partial
-
-- Cross-session memory and hybrid knowledge retrieval.
-- Reproducible replay metadata across every execution path.
-- Multi-model routing across roles (single-model by default; per-role overrides / opt-in routing).
-- Real MCP transport (a stdio adapter over the optional `mcp` SDK; validated with fakes in CI).
-
-### Planned
-
-- Broader markdown-playbook library and a plugin registry (`decode mcp/plugin search`).
-- Optional semantic memory retrieval.
-- Per-server target-scope declarations for MCP calls.
-
-## Future vision
-
-The mature platform exposes one consistent workflow across analyst workstations, Kali hosts, WSL, containers, and remote executors. A user states a scoped objective, watches the agent discover tools and choose each step, approves material actions, and receives a result linked to evidence and replay metadata.
-
-The governed core remains small. Tool knowledge is discovered at runtime, not hardcoded; reusable procedures live in markdown playbooks; execution details belong to executors; durable state belongs to the persistence layer; and policy is enforced independently by the `ExecutionCoordinator`.
-
-## Research objectives
-
-- Robust tool-use planning under incomplete and changing tool availability.
-- Model-routing policies that balance quality, cost, latency, and data locality.
-- Knowledge-graph and semantic-memory retrieval for long-running investigations.
-- Tool-output interpretation and confidence calibration.
-- Prompt-injection resistance across hostile security artifacts.
-- Memory compression without loss of provenance or critical evidence.
-- Benchmarks based on legal labs, synthetic environments, and defensive datasets.
-
-## Constraints
-
-- Security tooling can be destructive, privileged, noisy, or legally restricted.
-- LLM output is nondeterministic and must not be the sole authorization mechanism.
-- Tool versions and output formats vary significantly across environments.
-- Offline and resource-constrained deployments must remain viable.
-- Secrets and sensitive assessment data require strict minimization and isolation.
-- Windows, Linux, WSL, containers, and remote systems have different process models.
-- Optional infrastructure must degrade gracefully when unavailable.
-- Research features require measurable safeguards before production use.
-
-## Success metrics
-
-| Area | Measure |
-|---|---|
-| Safety | Zero execution paths that bypass scope and permission gates |
-| Auditability | Every executed skill produces execution, audit, and feedback records |
-| Reproducibility | Replay metadata captures tool version, executor, parameters, and artifact hashes |
-| Capability coverage | Percentage of declared capabilities backed by healthy tools per environment |
-| Reliability | Task success, retry, timeout, and recovery rates by tool and executor |
-| Quality | Evidence-supported finding precision and recall on controlled benchmarks |
-| Extensibility | Time and kernel changes required to add a third-party plugin |
-| Model routing | Quality, latency, and cost relative to a fixed-model baseline |
-| User control | Percentage of consequential actions preceded by explicit approval |
-| Research | Reproducible evaluations, published datasets, and documented limitations |
-
-## Roadmap
-
-Release completion is tracked in the repository-level [roadmap](../ROADMAP.md). Architecture choices are recorded in [architecture decision records](adr/README.md).
-
-Changes that conflict with this constitution require a documented architecture decision and an explicit update to this file.
+Research asks whether deterministic runtime/workflows and Core/Active separation
+improve reliability and efficiency. AWS is a future deployment profile, not a
+prerequisite or alternative architecture.

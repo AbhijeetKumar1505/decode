@@ -288,14 +288,21 @@ def run_command(
         return _deny(f"command not found: {argv[0]}")
     except subprocess.TimeoutExpired:
         return _deny(f"command timed out after {timeout}s")
-    return _ok(
-        command=argv,
-        risk=risk.value,
-        exit_code=completed.returncode,
-        stdout=completed.stdout[:4000],
-        stderr=completed.stderr[:2000],
-        duration=round(time.time() - start, 3),
-    )
+    fields = {
+        "command": argv,
+        "risk": risk.value,
+        "exit_code": completed.returncode,
+        "stdout": completed.stdout[:4000],
+        "stderr": completed.stderr[:2000],
+        "duration": round(time.time() - start, 3),
+    }
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        error = f"command exited with status {completed.returncode}"
+        if detail:
+            error = f"{error}: {detail[:500]}"
+        return {"ok": False, "error": error, **fields}
+    return _ok(**fields)
 
 
 # ── tool discovery ─────────────────────────────────────────────────────────

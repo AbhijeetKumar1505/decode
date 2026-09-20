@@ -6,9 +6,9 @@ Schema metaschema, so each property value must itself be a schema object. This
 module expands the shorthand to ``{"type": "string"}`` objects and keeps any
 parenthetical hint as the property ``description``.
 
-``required`` is intentionally not emitted: several capabilities accept
-alternatives the shorthand cannot express (``shell_command`` takes ``command``
-*or* ``argv``), and the governed server validates arguments itself.
+Required fields and ``additionalProperties: false`` are emitted so the schema
+shown to models and MCP clients matches the governed runtime contract. Tools
+with alternative inputs declare an explicit JSON Schema ``oneOf``.
 """
 
 from __future__ import annotations
@@ -58,9 +58,28 @@ def normalize_input_schema(raw: dict[str, Any]) -> dict[str, Any]:
     """Expand a shorthand input schema into a valid JSON Schema object."""
     properties = raw.get("properties") or {}
     out_props: dict[str, Any] = {}
+    required = list(raw.get("required") or [])
     for name, shorthand in properties.items():
         if isinstance(shorthand, dict):
             out_props[name] = shorthand  # already a JSON Schema object
         else:
-            out_props[name] = _expand_token(str(shorthand))
-    return {"type": "object", "properties": out_props}
+            token = str(shorthand)
+            optional = token.partition("(")[0].strip().endswith("?")
+            out_props[name] = _expand_token(token)
+            if not optional and name not in required:
+                required.append(name)
+    normalized = {
+        key: value
+        for key, value in raw.items()
+        if key not in {"properties", "required", "additionalProperties"}
+    }
+    normalized.update(
+        {
+            "type": "object",
+            "properties": out_props,
+            "additionalProperties": bool(raw.get("additionalProperties", False)),
+        }
+    )
+    if required:
+        normalized["required"] = required
+    return normalized

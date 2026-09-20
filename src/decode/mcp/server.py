@@ -10,9 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..app.config import Config
+from ..audit import AuditLayer
+from ..feedback import FeedbackStore
 from ..governance import GovernanceGate, ScopePolicy
 from ..hostcontrol import CommandPolicy, FilesystemScope
 from ..hostcontrol.mcp import host_capability_tools
+from ..logging_service import LoggingService
+from ..persistence.evidence import ProtectedEvidenceStore
 from ..runtime import (
     CoordinatedResult,
     ExecutionCoordinator,
@@ -39,9 +44,19 @@ class DecodeMCPServer:
             write_roots=list(self.config.write_roots),
         )
         self._policy = CommandPolicy()
-        self._gate = GovernanceGate(ScopePolicy(allow_all=True), mode=self.config.mode)
+        audit = AuditLayer(Config.AUDIT_PATH)
+        self._gate = GovernanceGate(
+            ScopePolicy(allow_all=True), audit=audit, mode=self.config.mode
+        )
         self._coordinator = coordinator or ExecutionCoordinator(
-            self._gate, approval_callback=approval_callback
+            self._gate,
+            approval_callback=approval_callback,
+            logging_service=LoggingService(Config.LOGS_PATH),
+            audit=audit,
+            feedback=FeedbackStore(Config.FEEDBACK_PATH),
+            evidence_store=ProtectedEvidenceStore(
+                Config.EVIDENCE_PATH / "executions"
+            ),
         )
         self._controller = HostController(self._coordinator, self._scope, self._policy)
 

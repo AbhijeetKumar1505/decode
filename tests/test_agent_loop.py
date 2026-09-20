@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,7 +24,16 @@ class _ScriptedProvider:
 
 
 TOOLS = [
-    {"name": "file_read", "description": "Read a file"},
+    {
+        "name": "file_read",
+        "description": "Read a file",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+            "additionalProperties": False,
+        },
+    },
     {"name": "process_list", "description": "List processes"},
 ]
 
@@ -70,6 +80,91 @@ class TestToolUseLoop(unittest.TestCase):
         result = self._run(loop, "do something")
         self.assertFalse(result["steps"][0]["observation"]["success"])
         self.assertIn("unknown tool", result["steps"][0]["observation"]["summary"])
+
+    def test_unknown_tool_parameter_is_rejected_before_invoke(self):
+        provider = _ScriptedProvider(
+            [
+                json.dumps(
+                    {
+                        "tool": "file_read",
+                        "params": {"path": "/etc/os-release", "surprise": True},
+                    }
+                ),
+                json.dumps({"message": "stopping"}),
+            ]
+        )
+
+        async def invoke(name, params):
+            raise AssertionError("invoke called with invalid parameters")
+
+        loop = ToolUseLoop(provider, TOOLS, invoke, max_steps=5)
+        result = self._run(loop, "read a file")
+        observation = result["steps"][0]["observation"]
+        self.assertFalse(observation["success"])
+        self.assertIn("unsupported tool parameters", observation["summary"])
+
+    def test_non_object_tool_parameters_are_rejected_without_state_crash(self):
+        from decode.schema import TaskState
+
+        provider = _ScriptedProvider(
+            [
+                json.dumps({"tool": "file_read", "params": ["/etc/os-release"]}),
+                json.dumps({"message": "stopping"}),
+            ]
+        )
+
+        async def invoke(name, params):
+            raise AssertionError("invoke called with invalid parameters")
+
+        state = TaskState(objective="read a file")
+        result = self._run(
+            ToolUseLoop(provider, TOOLS, invoke, max_steps=5, task_state=state),
+            "read a file",
+        )
+
+        observation = result["steps"][0]["observation"]
+        self.assertFalse(observation["success"])
+        self.assertIn("must be an object", observation["summary"])
+        self.assertEqual(state.actions[0].params, {})
+
+    def test_filtered_discovery_observation_keeps_late_matches_visible(self):
+        seen = []
+
+        class _Recorder(_ScriptedProvider):
+            async def chat(self, messages):
+                seen.append(list(messages))
+                return await super().chat(messages)
+
+        provider = _Recorder(
+            [
+                json.dumps({"tool": "list_tools", "params": {"query": "scanner"}}),
+                json.dumps({"message": "done"}),
+            ]
+        )
+        tools = [
+            {"name": f"scanner-{index:04d}", "path": f"/tools/scanner-{index:04d}"}
+            for index in range(250)
+        ]
+
+        async def invoke(name, params):
+            return {"success": True, "summary": "found", "data": {"tools": tools}}
+
+        discovery_tools = TOOLS + [
+            {
+                "name": "list_tools",
+                "description": "List installed tools",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "additionalProperties": False,
+                },
+            }
+        ]
+        self._run(ToolUseLoop(provider, discovery_tools, invoke), "find a scanner")
+
+        observation = seen[1][-1]["content"]
+        self.assertIn("scanner-0249", observation)
+        self.assertNotIn("observation_truncated", observation)
 
     def test_step_budget_is_bounded(self):
         # always returns a tool call; the loop must stop at the budget
@@ -273,10 +368,16 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
         )
 
     def test_discovers_then_runs_a_tool_then_answers(self):
+        executable = Path(sys.executable).name
         replies = [
-            json.dumps({"tool": "list_tools", "params": {"query": "echo"}}),
+            json.dumps({"tool": "list_tools", "params": {"query": executable}}),
             json.dumps(
-                {"tool": "shell_command", "params": {"command": "echo loop-works"}}
+                {
+                    "tool": "shell_command",
+                    "params": {
+                        "argv": [sys.executable, "-c", "print('loop-works')"]
+                    },
+                }
             ),
             json.dumps({"message": "done"}),
         ]
@@ -351,6 +452,71 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
         obs = result["steps"][0]["observation"]
         self.assertTrue(obs["success"])
         self.assertIn("found", obs["data"]["stdout"])
+
+    def test_mcp_required_url_is_checked_against_engagement_scope(self):
+        from decode.execution.mcp import MCPExecutor
+        from decode.extensions.mcp_manager import MCPToolDescriptor
+
+        class _Client:
+            def __init__(self):
+                self.called = False
+
+            async def call_tool(self, name, arguments):
+                self.called = True
+                return {"opened": arguments["url"]}
+
+            async def check(self):
+                return True
+
+        client = _Client()
+
+        class _FakeMCPManager:
+            async def available_tools(self):
+                return [
+                    MCPToolDescriptor(
+                        server="browser",
+                        name="browser.open",
+                        tool="open",
+                        description="Open a URL",
+                        risk="read",
+                        input_schema={
+                            "type": "object",
+                            "properties": {"url": {"type": "string"}},
+                            "required": ["url"],
+                            "additionalProperties": False,
+                        },
+                    )
+                ]
+
+            def executor_for(self, server):
+                return MCPExecutor(server=server, client=client)
+
+        replies = [
+            json.dumps(
+                {
+                    "tool": "browser.open",
+                    "params": {"url": "https://outside.example.test"},
+                }
+            ),
+            json.dumps({"message": "denied"}),
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            agent = self._build_agent(Path(d), replies)
+            agent.set_scope(["allowed.example.test"], allow_all=False)
+            result = asyncio.run(
+                agent.run_tool_loop(
+                    "open the URL",
+                    filesystem_scope=FilesystemScope(read_roots=[Path.cwd()]),
+                    command_policy=CommandPolicy(),
+                    permission_mode=PermissionMode.AUTO,
+                    mcp_manager=_FakeMCPManager(),
+                )
+            )
+
+        observation = result["steps"][0]["observation"]
+        self.assertFalse(observation["success"])
+        self.assertIn("out of engagement scope", observation["summary"])
+        self.assertFalse(client.called)
 
     def test_missing_tool_is_reported_in_the_loop(self):
         replies = [

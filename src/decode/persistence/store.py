@@ -358,7 +358,8 @@ class SessionStore:
 
     def list_sessions(self, limit: int = 20) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            "SELECT * FROM sessions ORDER BY created_at DESC LIMIT ?", (limit,)
+            "SELECT * FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
 

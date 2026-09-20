@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..schema import TaskMode
 from .coding import coding_tool_list
@@ -49,6 +49,7 @@ class Capability(BaseModel):
     server: str = ""  # mcp routing
     tool: str = ""  # mcp raw tool name
     category: str = ""  # skill category, used to gate playbooks by task mode
+    input_schema: dict[str, Any] = Field(default_factory=dict)
 
     def descriptor(self) -> dict[str, Any]:
         return {
@@ -56,6 +57,7 @@ class Capability(BaseModel):
             "description": self.description,
             "risk": self.risk,
             "source": self.source,
+            "input_schema": self.input_schema,
         }
 
 
@@ -117,6 +119,7 @@ def build_registry(
                 type="system" if is_gateway else "host",
                 description=tool.get("description", ""),
                 risk=str(tool.get("risk", "write")),
+                input_schema=tool.get("input_schema") or {},
             )
         )
     if include_coding:
@@ -128,6 +131,7 @@ def build_registry(
                     type="coding",
                     description=tool["description"],
                     risk=tool["risk"],
+                    input_schema=tool.get("input_schema") or {},
                 )
             )
     for tool in skill_tools:
@@ -139,6 +143,7 @@ def build_registry(
                 description=tool.get("description", ""),
                 risk=str(tool.get("risk", "write")),
                 category=str(tool.get("category", "")),
+                input_schema=tool.get("input_schema") or {},
             )
         )
     for desc in mcp_descriptors or []:
@@ -152,6 +157,7 @@ def build_registry(
                 executor=f"mcp/{desc.server}",
                 server=desc.server,
                 tool=desc.tool,
+                input_schema=desc.input_schema,
             )
         )
     return registry
