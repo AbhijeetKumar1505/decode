@@ -114,7 +114,9 @@ class ExecutionIdentity(BaseModel):
     @model_validator(mode="after")
     def require_complete_executable_identity(self) -> ExecutionIdentity:
         if bool(self.executable_path) != bool(self.executable_sha256):
-            raise ValueError("execution identity path and digest must be provided together")
+            raise ValueError(
+                "execution identity path and digest must be provided together"
+            )
         return self
 
 
@@ -150,8 +152,7 @@ class ActionPath(BaseModel):
     @classmethod
     def require_absolute_path(cls, value: str) -> str:
         if "\x00" in value or not (
-            PurePosixPath(value).is_absolute()
-            or PureWindowsPath(value).is_absolute()
+            PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
         ):
             raise ValueError("resolved action paths must be absolute and NUL-free")
         return value
@@ -168,8 +169,7 @@ class ResolvedExecutable(BaseModel):
     @classmethod
     def require_absolute_path(cls, value: str) -> str:
         if "\x00" in value or not (
-            PurePosixPath(value).is_absolute()
-            or PureWindowsPath(value).is_absolute()
+            PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
         ):
             raise ValueError("resolved executable path must be absolute and NUL-free")
         return value
@@ -226,7 +226,9 @@ class ResolvedAction(BaseModel):
         if len(indexes) != len(set(indexes)):
             raise ValueError("resolved executable argv indexes must be unique")
         if indexes and (indexes[0] != 0 or indexes != sorted(indexes)):
-            raise ValueError("resolved executables must be ordered from argv index zero")
+            raise ValueError(
+                "resolved executables must be ordered from argv index zero"
+            )
         for executable in self.executables:
             if executable.argv_index >= len(self.argv):
                 raise ValueError("resolved executable argv index is out of range")

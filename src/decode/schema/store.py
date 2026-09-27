@@ -22,9 +22,7 @@ class TaskStateStore:
             action["thought"] = ""
         for observation in snapshot["observations"]:
             observation["data"] = {}
-            observation["summary"] = (
-                "success" if observation["success"] else "failure"
-            )
+            observation["summary"] = "success" if observation["success"] else "failure"
         for artifact in snapshot["artifacts"]:
             artifact["summary"] = "evidence linked"
         self._store.save_task_state(

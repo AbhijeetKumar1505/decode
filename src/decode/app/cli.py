@@ -696,8 +696,7 @@ def _print_workflow_report(report: Any, *, json_output: bool = False) -> None:
         console.print("[cyan]Ready:[/cyan] " + ", ".join(report.ready))
     if report.needs_review:
         console.print(
-            "[yellow]Needs approval/review:[/yellow] "
-            + ", ".join(report.needs_review)
+            "[yellow]Needs approval/review:[/yellow] " + ", ".join(report.needs_review)
         )
     if report.failed:
         console.print("[red]Failed:[/red] " + ", ".join(report.failed))
@@ -819,12 +818,14 @@ def _workflow_executor(
         permission_mode = PermissionMode(mode)
     except ValueError as exc:
         raise ValueError("mode must be plan, ask, or auto") from exc
+
     async def approve(request: Any) -> bool:
         command = f" command={request.command}" if request.command else ""
         return Confirm.ask(
             f"Approve {request.action} ({request.risk.value}){command}?",
             default=False,
         )
+
     return GovernedAgentStageExecutor(
         runner.load_state(session_id),
         provider=provider,
@@ -880,9 +881,7 @@ def workflow_resume(
     runner = _workflow_runner()
     try:
         executor = _workflow_executor(runner, session_id, provider, mode)
-        report = asyncio.run(
-            runner.run(session_id, executor, approve_stage=approve)
-        )
+        report = asyncio.run(runner.run(session_id, executor, approve_stage=approve))
     except (ImportError, ValueError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from None

@@ -28,6 +28,9 @@
 
 ### Fixed
 
+- Replaced dynamic artifact INSERT, SELECT, and UPDATE SQL construction with
+  fixed statements or fixed query fragments and bound values; added a
+  SQL-metacharacter regression test. Kept the CI security scan enforced.
 - Completed the Phase 0 execution-truth gate: non-zero host commands now fail;
   tool schemas are strict and visible; shell operators/interpreters are rejected
   in vector mode; explicit command outputs are WRITE-classified and

@@ -410,9 +410,7 @@ class TestHostControlIntegration(unittest.TestCase):
         executed = self._run(host, "shell_command", {"argv": ["curl", "--version"]})
 
         self.assertEqual(discovered.status, ExecutionStatus.SUCCESS)
-        self.assertEqual(
-            discovered.value.normalized["provider"], "wsl/kali-linux"
-        )
+        self.assertEqual(discovered.value.normalized["provider"], "wsl/kali-linux")
         self.assertEqual(executed.status, ExecutionStatus.SUCCESS)
         self.assertEqual(executed.value.provider, "wsl/kali-linux")
         self.assertEqual(provider.commands[-1], ["/usr/bin/curl", "--version"])
@@ -1093,7 +1091,9 @@ class TestHostControlIntegration(unittest.TestCase):
         bound = approvals[-1]
         executable = host_ops.inspect_executable(sys.executable)
         self.assertEqual(bound.resolved_action["argv"][0], executable["path"])
-        self.assertEqual(bound.execution_identity.executable_sha256, executable["sha256"])
+        self.assertEqual(
+            bound.execution_identity.executable_sha256, executable["sha256"]
+        )
         self.assertEqual(bound.resolved_action["cwd"], str(self.root))
         self.assertEqual(
             bound.resolved_action["executables"][0]["path"], executable["path"]
@@ -1181,7 +1181,12 @@ class TestHostControlIntegration(unittest.TestCase):
         self.assertIn("session_context_changed", result.error)
         self.assertEqual(
             approvals[-1].resolved_action["outputs"],
-            [{"host": str(self.root / "result.txt"), "provider": str(self.root / "result.txt")}],
+            [
+                {
+                    "host": str(self.root / "result.txt"),
+                    "provider": str(self.root / "result.txt"),
+                }
+            ],
         )
         run.assert_not_called()
 

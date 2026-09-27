@@ -268,7 +268,9 @@ class UniversalAgent:
                 or resume_state.objective != goal
                 or resume_state.status != TaskStatus.INVESTIGATING
             ):
-                raise ValueError("checkpoint does not match the active task and session")
+                raise ValueError(
+                    "checkpoint does not match the active task and session"
+                )
             if len(resume_state.actions) != len(resume_state.observations) or any(
                 action.step != observation.step or action.tool != observation.tool
                 for action, observation in zip(

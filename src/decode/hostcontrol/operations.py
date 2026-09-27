@@ -340,9 +340,7 @@ def inspect_executable(
     )
 
 
-def list_tools(
-    query: str = "", limit: int = 400, *, exact: str = ""
-) -> dict[str, Any]:
+def list_tools(query: str = "", limit: int = 400, *, exact: str = "") -> dict[str, Any]:
     """List command-line tools installed on this host by scanning ``$PATH``.
 
     READ-only and shell-free: enumerates executables on the PATH so the agent can

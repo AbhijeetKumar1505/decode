@@ -19,9 +19,7 @@ from .models import (
 )
 from .registry import WorkflowRegistry
 
-StageExecutor = Callable[
-    [WorkflowStageContext], StageResult | Awaitable[StageResult]
-]
+StageExecutor = Callable[[WorkflowStageContext], StageResult | Awaitable[StageResult]]
 
 
 class WorkflowRunner:
@@ -145,7 +143,9 @@ class WorkflowRunner:
             gate_ok, failures = stage.gate.check(result)
             self._record_result(state, stage, result)
             if gate_ok:
-                self._checkpoint(state, stage.id, "success", result.summary or result.final)
+                self._checkpoint(
+                    state, stage.id, "success", result.summary or result.final
+                )
                 continue
             reason = "; ".join(failures)
             self._checkpoint(state, stage.id, "error", reason)
@@ -179,7 +179,9 @@ class WorkflowRunner:
             raise ValueError(f"stage '{stage_id}' is not a human approval stage")
         if node.status != "needs_review":
             raise ValueError(f"stage '{stage_id}' is not awaiting approval")
-        if not all(state.plan.nodes[item].status == "success" for item in node.depends_on):
+        if not all(
+            state.plan.nodes[item].status == "success" for item in node.depends_on
+        ):
             raise ValueError(f"stage '{stage_id}' dependencies are not complete")
         state.record_action(
             f"workflow:{stage_id}", {"approved": True}, "human approval"
@@ -236,9 +238,7 @@ class WorkflowRunner:
                     "successful_actions": result.successful_actions,
                     **result.data,
                 },
-                "evidence": (
-                    {"id": first.id, "sha256": first.sha256} if first else {}
-                ),
+                "evidence": ({"id": first.id, "sha256": first.sha256} if first else {}),
             },
         )
         for link in result.evidence[1:]:

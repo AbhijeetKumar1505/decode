@@ -61,12 +61,19 @@ def create_configured_executor(name: str = "local", **kwargs) -> ExecutionProvid
         if not isinstance(configuration, dict) or not configuration:
             raise ValueError("expected a non-empty provider object")
         provider = create_executor(name, **kwargs)
-        if provider.filesystem_mode not in {FilesystemMode.MAPPED, FilesystemMode.REMOTE}:
+        if provider.filesystem_mode not in {
+            FilesystemMode.MAPPED,
+            FilesystemMode.REMOTE,
+        }:
             if provider.name in configuration:
                 raise ValueError("selected provider does not support path mappings")
             return provider
         for identity, entries in configuration.items():
-            if not isinstance(identity, str) or not identity or not isinstance(entries, list):
+            if (
+                not isinstance(identity, str)
+                or not identity
+                or not isinstance(entries, list)
+            ):
                 raise ValueError("invalid provider mapping entry")
         entries = configuration.get(provider.name, [])
         mappings = tuple(ProviderPathMapping.model_validate(item) for item in entries)

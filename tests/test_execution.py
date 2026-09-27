@@ -192,7 +192,9 @@ class TestEnvironmentProviderContract(unittest.TestCase):
                 identity = provider.identify()
                 self.assertEqual(identity.name, provider.name)
                 self.assertEqual(identity.kind, provider.name.split("/", 1)[0])
-                self.assertEqual(identity.filesystem_mode, expected_modes[provider.name])
+                self.assertEqual(
+                    identity.filesystem_mode, expected_modes[provider.name]
+                )
                 self.assertTrue(identity.capabilities.command_execution)
                 self.assertRegex(identity.schema_version, r"^\d+\.\d+\.\d+$")
 
@@ -578,8 +580,22 @@ class TestDockerExecutionContext(unittest.TestCase):
             ("success", {"StatusCode": 0}, True, False, None, 0),
             ("nonzero", {"StatusCode": 7}, False, False, None, 7),
             ("timeout", ReadTimeout("late"), False, True, None, -1),
-            ("api_error", RuntimeError("docker API failed"), False, False, "docker API failed", -1),
-            ("malformed", {"StatusCode": "0"}, False, False, "invalid_docker_wait_status", -1),
+            (
+                "api_error",
+                RuntimeError("docker API failed"),
+                False,
+                False,
+                "docker API failed",
+                -1,
+            ),
+            (
+                "malformed",
+                {"StatusCode": "0"},
+                False,
+                False,
+                "invalid_docker_wait_status",
+                -1,
+            ),
         )
         for name, outcome, success, timed_out, error, exit_code in outcomes:
             with self.subTest(name=name):
@@ -769,18 +785,22 @@ class TestFactory(unittest.TestCase):
     def test_configured_mapping_binds_only_exact_provider_identity(self):
         with tempfile.TemporaryDirectory() as root:
             configuration = {
-                "wsl/kali-linux": [{
-                    "host_root": root,
-                    "provider_root": "/mnt/work",
-                    "writable": True,
-                }],
+                "wsl/kali-linux": [
+                    {
+                        "host_root": root,
+                        "provider_root": "/mnt/work",
+                        "writable": True,
+                    }
+                ],
             }
             with mock.patch.dict(
                 "os.environ", {"DECODE_PROVIDER_MAPPINGS": json.dumps(configuration)}
             ):
                 selected = create_configured_executor("wsl/kali-linux")
                 other = create_configured_executor("wsl/Ubuntu")
-            self.assertEqual(selected.map_path(root, write=True).provider_path, "/mnt/work")
+            self.assertEqual(
+                selected.map_path(root, write=True).provider_path, "/mnt/work"
+            )
             with self.assertRaisesRegex(ValueError, "no mapping"):
                 other.map_path(root)
 
@@ -794,18 +814,23 @@ class TestFactory(unittest.TestCase):
                 json.dumps({"local": [entry]}),
             ]
             for payload in invalid:
-                with self.subTest(payload=payload), mock.patch.dict(
-                    "os.environ", {"DECODE_PROVIDER_MAPPINGS": payload}
+                with (
+                    self.subTest(payload=payload),
+                    mock.patch.dict(
+                        "os.environ", {"DECODE_PROVIDER_MAPPINGS": payload}
+                    ),
                 ):
                     provider = "local" if '"local"' in payload else "wsl/kali-linux"
-                    with self.assertRaisesRegex(ValueError, "Invalid DECODE_PROVIDER_MAPPINGS"):
+                    with self.assertRaisesRegex(
+                        ValueError, "Invalid DECODE_PROVIDER_MAPPINGS"
+                    ):
                         create_configured_executor(provider)
 
     def test_configured_mapping_is_read_only_by_default(self):
         with tempfile.TemporaryDirectory() as root:
-            payload = json.dumps({
-                "wsl/kali-linux": [{"host_root": root, "provider_root": "/mnt/work"}]
-            })
+            payload = json.dumps(
+                {"wsl/kali-linux": [{"host_root": root, "provider_root": "/mnt/work"}]}
+            )
             with mock.patch.dict("os.environ", {"DECODE_PROVIDER_MAPPINGS": payload}):
                 provider = create_configured_executor("wsl/kali-linux")
             with self.assertRaisesRegex(ValueError, "not writable"):

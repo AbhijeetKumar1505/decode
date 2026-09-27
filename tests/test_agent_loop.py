@@ -253,7 +253,9 @@ class TestToolUseLoop(unittest.TestCase):
 
         self.assertEqual(result["stopped"], "final")
         self.assertEqual(calls, [("process_list", {})])
-        self.assertIn("Only the first requested tool was executed", seen[1][-1]["content"])
+        self.assertIn(
+            "Only the first requested tool was executed", seen[1][-1]["content"]
+        )
 
     def test_uses_provider_assistant_history_message(self):
         seen = []
@@ -379,7 +381,10 @@ class TestToolUseLoopTaskState(unittest.TestCase):
 
         replies = [json.dumps({"tool": "process_list", "params": {}})] * 2
         loop = ToolUseLoop(
-            _ScriptedProvider(replies), TOOLS, invoke, task_state=state,
+            _ScriptedProvider(replies),
+            TOOLS,
+            invoke,
+            task_state=state,
             checkpoint=checkpoint,
         )
         with self.assertRaisesRegex(OSError, "checkpoint unavailable"):
@@ -424,9 +429,7 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
             json.dumps(
                 {
                     "tool": "shell_command",
-                    "params": {
-                        "argv": [sys.executable, "-c", "print('loop-works')"]
-                    },
+                    "params": {"argv": [sys.executable, "-c", "print('loop-works')"]},
                 }
             ),
             json.dumps({"message": "done"}),
@@ -504,7 +507,10 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
                     all(step["observation"]["success"] for step in first["steps"]),
                     [step["observation"]["summary"][:200] for step in first["steps"]],
                 )
-                self.assertIn("decode-phase1-ok", first["steps"][1]["observation"]["data"]["stdout"])
+                self.assertIn(
+                    "decode-phase1-ok",
+                    first["steps"][1]["observation"]["data"]["stdout"],
+                )
                 checkpoint = states.load(sid)
                 self.assertEqual(len(checkpoint.actions), 2)
                 self.assertEqual(len(checkpoint.observations), 2)
@@ -512,7 +518,10 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
                 self.assertEqual(checkpoint.environment["executor"], executor.name)
                 self.assertTrue(checkpoint.artifacts)
                 evidence = checkpoint.artifacts[-1]
-                evidence_path = agent._coordinator._evidence.base_path / f"{evidence.evidence_id}.evidence"
+                evidence_path = (
+                    agent._coordinator._evidence.base_path
+                    / f"{evidence.evidence_id}.evidence"
+                )
                 self.assertTrue(evidence_path.is_file())
                 self.assertEqual(
                     hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
@@ -576,7 +585,9 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
         from decode.execution import DockerExecutor
 
         self._governed_checkpoint_conformance(
-            DockerExecutor(image=os.environ["DECODE_GOVERNED_DOCKER_IMAGE"], network="none"),
+            DockerExecutor(
+                image=os.environ["DECODE_GOVERNED_DOCKER_IMAGE"], network="none"
+            ),
             ["/usr/bin/printf", "decode-phase1-ok"],
         )
 

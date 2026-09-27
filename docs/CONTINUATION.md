@@ -255,6 +255,16 @@ browser authenticated-session storage, and AWS topology/services/region/budget.
   45 subtests). The serial Windows suite without live Docker also passed
   (502 passed, 12 skipped, 42 subtests). No code workaround was made for the
   unavailable engine or the transient test failure.
+- PR #20 CI remediation on 2026-09-27: Ruff formatting was applied to the 20
+  files rejected by `ruff format --check .`. The Bandit job reported three
+  medium-severity B608 findings in SQLite artifact INSERT, SELECT, and UPDATE
+  statements, not shell execution or high-severity issues. Those statements
+  now use fixed SQL syntax and bound values; a SQL-metacharacter regression
+  test was added. Local Ruff lint/format checks passed. Focused memory tests
+  passed (30); the full Windows suite with live WSL/Docker passed (505 passed,
+  10 skipped, 45 subtests), and direct Kali WSL passed (509 passed, 6 skipped,
+  39 subtests). Bandit is not installed locally and was not auto-installed;
+  confirm the security gate in the next PR CI run.
 - `git diff --check`: passed (line-ending notices only for untouched CRLF files).
 
 The completed Phase 1 work spans the execution-provider/session

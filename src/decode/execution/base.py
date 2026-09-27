@@ -412,7 +412,9 @@ class EnvironmentProvider(ABC):
         session.closed = True
         return session.summary()
 
-    def map_path(self, path: str | Path, *, write: bool = False) -> ResolvedProviderPath:
+    def map_path(
+        self, path: str | Path, *, write: bool = False
+    ) -> ResolvedProviderPath:
         candidate = Path(path).expanduser().resolve(strict=False)
         if self.filesystem_mode == FilesystemMode.NONE:
             raise ValueError(f"provider {self.name} has no filesystem contract")

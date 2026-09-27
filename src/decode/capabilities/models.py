@@ -257,9 +257,7 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, CapabilityArgument]] = {
             type=ArgumentType.STRING, required=True, max_length=16384
         )
     },
-    "session_open": {
-        "cwd": CapabilityArgument(type=ArgumentType.PATH, required=False)
-    },
+    "session_open": {"cwd": CapabilityArgument(type=ArgumentType.PATH, required=False)},
     "session_exec": {
         "command": CapabilityArgument(
             type=ArgumentType.STRING, required=False, max_length=8192
@@ -368,9 +366,7 @@ class CapabilitySpec(BaseModel):
         if self.name in {"shell_command", "session_exec"}:
             supplied = [key for key in ("command", "argv") if key in normalized]
             if len(supplied) != 1:
-                raise ValueError(
-                    f"{self.name} requires exactly one of command or argv"
-                )
+                raise ValueError(f"{self.name} requires exactly one of command or argv")
         return normalized
 
     @staticmethod

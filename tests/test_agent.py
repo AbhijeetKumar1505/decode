@@ -307,9 +307,7 @@ class TestOpenRouterRetry(unittest.TestCase):
 
         provider = self._provider(_Client())
         with mock.patch("asyncio.sleep", new=_async_noop):
-            result = asyncio.run(
-                provider.chat([{"role": "user", "content": "hi"}])
-            )
+            result = asyncio.run(provider.chat([{"role": "user", "content": "hi"}]))
         self.assertEqual(result, '{"message": "ready"}')
         self.assertEqual(calls["n"], 3)
 

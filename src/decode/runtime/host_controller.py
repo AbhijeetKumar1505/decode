@@ -239,9 +239,9 @@ class HostController:
 
                 return await self._coordinator.execute(request, _no_policy)
             argv = HostAgent._resolve_argv(normalized_params)
-            resolved_target = str(normalized_params.get("target", "")) or command_target(
-                argv
-            )
+            resolved_target = str(
+                normalized_params.get("target", "")
+            ) or command_target(argv)
             target_required = command_requires_target(argv)
             try:
                 self._policy.check(argv)
@@ -250,7 +250,8 @@ class HostController:
                     self._scope.check(output, write=True)
                 if outputs and self._uses_external_provider:
                     mapped_outputs = [
-                        self._executor.map_path(output, write=True) for output in outputs
+                        self._executor.map_path(output, write=True)
+                        for output in outputs
                     ]
                     replacements = {
                         item.host_path: item.provider_path for item in mapped_outputs
@@ -292,13 +293,15 @@ class HostController:
                     return None
 
                 return await self._coordinator.execute(request, _unsafe_command)
-            resolved_argv, resolved_executables, resolution_failure = (
-                await self._resolve_executables(
-                    capability,
-                    argv,
-                    target=resolved_target,
-                    target_required=target_required,
-                )
+            (
+                resolved_argv,
+                resolved_executables,
+                resolution_failure,
+            ) = await self._resolve_executables(
+                capability,
+                argv,
+                target=resolved_target,
+                target_required=target_required,
             )
             if resolution_failure is not None:
                 return resolution_failure
@@ -311,14 +314,17 @@ class HostController:
                 approval_params["_resolved_outputs"] = [str(path) for path in outputs]
             command = provider_argv or resolved_argv
             if self._uses_external_provider:
-                declared_outputs = [
-                    ActionPath(host=item.host_path, provider=item.provider_path)
-                    for item in mapped_outputs
-                ] if outputs else []
+                declared_outputs = (
+                    [
+                        ActionPath(host=item.host_path, provider=item.provider_path)
+                        for item in mapped_outputs
+                    ]
+                    if outputs
+                    else []
+                )
             else:
                 declared_outputs = [
-                    ActionPath(host=str(path), provider=str(path))
-                    for path in outputs
+                    ActionPath(host=str(path), provider=str(path)) for path in outputs
                 ]
             resolved_action = self._resolved_command_action(
                 capability,
@@ -335,7 +341,8 @@ class HostController:
             resolved_action is not None
             and risk == RiskLevel.READ
             and any(
-                effect in {
+                effect
+                in {
                     SideEffect.UNKNOWN,
                     SideEffect.NETWORK,
                     SideEffect.SESSION_STATE,
@@ -359,7 +366,9 @@ class HostController:
             risk=risk,
             params=approval_params,
             command=(
-                provider_argv or resolved_argv or HostAgent._resolve_argv(normalized_params)
+                provider_argv
+                or resolved_argv
+                or HostAgent._resolve_argv(normalized_params)
                 if capability == "shell_command"
                 else self._provider_discovery_command(normalized_params)
                 if capability == "list_tools" and self._uses_external_provider
@@ -397,8 +406,10 @@ class HostController:
                             "external provider"
                         ),
                     )
-                command = provider_argv or resolved_argv or HostAgent._resolve_argv(
-                    normalized_params
+                command = (
+                    provider_argv
+                    or resolved_argv
+                    or HostAgent._resolve_argv(normalized_params)
                 )
                 if execution_context.is_empty:
                     return await self._executor.execute(
@@ -748,9 +759,7 @@ class HostController:
                             "selected provider could not fingerprint the executable"
                         ),
                     )
-                ordered.append(
-                    {"name": exact, "path": candidate, "sha256": digest}
-                )
+                ordered.append({"name": exact, "path": candidate, "sha256": digest})
                 break
             return self._agent._result(
                 "list_tools",
@@ -784,7 +793,7 @@ class HostController:
                     available_dirs.append(directory)
             if available_dirs and len(available_dirs) < len(path_dirs):
                 result = await self._executor.execute(
-                    [find_args[0], *available_dirs, *find_args[len(path_dirs) + 1:]]
+                    [find_args[0], *available_dirs, *find_args[len(path_dirs) + 1 :]]
                 )
         if not result.success:
             result.partial = bool(result.stdout)
@@ -800,8 +809,7 @@ class HostController:
                 continue
             tools.setdefault(fields[1], fields[2])
         ordered = [
-            {"name": name, "path": path}
-            for name, path in sorted(tools.items())[:limit]
+            {"name": name, "path": path} for name, path in sorted(tools.items())[:limit]
         ]
         return self._agent._result(
             "list_tools",
@@ -1068,9 +1076,7 @@ class HostController:
             execution_context = ExecutionContext(
                 cwd=session.context.cwd,
                 environment=dict(session.context.environment),
-                declared_outputs=tuple(
-                    item.provider_path for item in mapped_outputs
-                ),
+                declared_outputs=tuple(item.provider_path for item in mapped_outputs),
             )
             approval_params["_resolved_outputs"] = [
                 item.host_path for item in mapped_outputs
@@ -1079,9 +1085,11 @@ class HostController:
                 item.provider_path for item in mapped_outputs
             ]
 
-        provider_command, resolved_executables, resolution_failure = (
-            await self._resolve_executables("session_exec", provider_command)
-        )
+        (
+            provider_command,
+            resolved_executables,
+            resolution_failure,
+        ) = await self._resolve_executables("session_exec", provider_command)
         if resolution_failure is not None:
             return resolution_failure
 
@@ -1238,7 +1246,9 @@ class HostController:
         is_cd = argv[0] == "cd"
         try:
             if session._policy is not policy:
-                raise ScopeViolation("session command policy changed; reopen the session")
+                raise ScopeViolation(
+                    "session command policy changed; reopen the session"
+                )
             self._policy.check(argv)
             if command_requires_target(argv):
                 raise ScopeViolation(
@@ -1249,7 +1259,11 @@ class HostController:
             if is_cd and len(argv) > 2:
                 raise ValueError("cd accepts at most one path")
             next_cwd = (
-                str((Path(cwd) / (argv[1] if len(argv) > 1 else ".")).expanduser().resolve(strict=False))
+                str(
+                    (Path(cwd) / (argv[1] if len(argv) > 1 else "."))
+                    .expanduser()
+                    .resolve(strict=False)
+                )
                 if is_cd
                 else ""
             )
@@ -1276,7 +1290,9 @@ class HostController:
             capability,
             resolved_argv,
             original_argv=argv,
-            outputs=[ActionPath(host=str(path), provider=str(path)) for path in outputs],
+            outputs=[
+                ActionPath(host=str(path), provider=str(path)) for path in outputs
+            ],
             cwd=cwd,
             session_state=is_cd,
             executables=executables,

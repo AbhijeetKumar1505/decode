@@ -290,11 +290,11 @@ def command_output_bindings(
             raw_bindings.append((args[index + 1], offset + index + 2, ""))
             index += 2
             continue
-        matched = next((prefix for prefix in prefix_flags if token.startswith(prefix)), None)
+        matched = next(
+            (prefix for prefix in prefix_flags if token.startswith(prefix)), None
+        )
         if matched is not None and token[len(matched) :]:
-            raw_bindings.append(
-                (token[len(matched) :], offset + index + 1, matched)
-            )
+            raw_bindings.append((token[len(matched) :], offset + index + 1, matched))
         if binary == "curl" and token == "-O":
             raw_bindings.append((str(cwd or Path.cwd()), None, ""))
         if binary == "curl" and token.startswith("-o") and token != "-o":
@@ -425,8 +425,7 @@ class CommandPolicy:
         binary = Path(str(inner[0])).name.lower()
         lowered = [str(value).lower() for value in inner[1:]]
         if binary in _SHELL_INTERPRETERS and any(
-            value in {"-c", "/c", "-command", "-encodedcommand"}
-            for value in lowered
+            value in {"-c", "/c", "-command", "-encodedcommand"} for value in lowered
         ):
             raise ScopeViolation(
                 "shell interpreter command strings are not permitted; use an argument vector"
