@@ -263,8 +263,9 @@ browser authenticated-session storage, and AWS topology/services/region/budget.
   test was added. Local Ruff lint/format checks passed. Focused memory tests
   passed (30); the full Windows suite with live WSL/Docker passed (505 passed,
   10 skipped, 45 subtests), and direct Kali WSL passed (509 passed, 6 skipped,
-  39 subtests). Bandit is not installed locally and was not auto-installed;
-  confirm the security gate in the next PR CI run.
+  39 subtests). Bandit is not installed locally and was not auto-installed.
+  PR #20 CI run `36331153673` passed the Bandit security, Ruff lint/format,
+  build, and Python 3.11/3.12 test jobs.
 - `git diff --check`: passed (line-ending notices only for untouched CRLF files).
 
 The completed Phase 1 work spans the execution-provider/session
