@@ -1454,7 +1454,7 @@ class AgentREPL:
         console.print(f"[green]Model → [bold]{model_name}[/bold][/green]")
 
     def _host_controller(self):
-        from decode.execution import create_executor
+        from decode.execution import create_configured_executor
         from decode.governance import GovernanceGate, ScopePolicy
         from decode.runtime import ExecutionCoordinator, HostController
 
@@ -1469,7 +1469,7 @@ class AgentREPL:
                 coord,
                 self._fs_scope,
                 self._cmd_policy,
-                executor=create_executor(Config.EXECUTOR),
+                executor=create_configured_executor(Config.EXECUTOR),
             )
         else:
             self._host_gate.set_mode(self._perm_mode)
@@ -1518,6 +1518,7 @@ class AgentREPL:
         if not goal:
             console.print("[yellow]Usage: /agent <goal>[/yellow]")
             return
+        self._ensure_session(goal)
         # No wrapping spinner here: tool calls may prompt for approval, which
         # conflicts with a live region. The loop respects the current /mode.
         # Steps, timing, and the model's first-person reasoning stream via on_step.
@@ -1553,7 +1554,16 @@ class AgentREPL:
             approval_callback=self._host_approval,
             on_step=on_step,
             mcp_manager=self._mcp(),
-            session_id=self._tracker.session_id if self._tracker else None,
+            session_id=self._tracker.session_id,
+            resume_state=(
+                state
+                if self._tracker
+                and (state := self._task_states.load(self._tracker.session_id))
+                and state.objective == goal
+                and state.status.value == "investigating"
+                else None
+            ),
+            checkpoint=self._task_states.save,
         )
         console.print(f"\n[bold]{result.get('final', '')}[/bold]\n")
         d_prompt, d_completion, cost = self._meter_usage(llm, p0, c0)

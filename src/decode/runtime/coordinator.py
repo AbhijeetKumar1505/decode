@@ -12,9 +12,10 @@ import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from enum import Enum
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..audit import AuditEvent, AuditLayer
 from ..execution.base import _activate_execution, _reset_execution, command_display
@@ -83,6 +84,8 @@ class ExecutionErrorCategory(str, Enum):
 class ExecutionIdentity(BaseModel):
     tool: str = Field(default="", max_length=128)
     tool_version: str = Field(default="", max_length=256)
+    executable_path: str = Field(default="", max_length=4096)
+    executable_sha256: str = Field(default="", pattern=r"^(?:[a-f0-9]{64})?$")
     adapter_id: str = Field(default="", max_length=128)
     adapter_version: str = Field(default="", max_length=64)
     parser_id: str = Field(default="", max_length=128)
@@ -94,6 +97,170 @@ class ExecutionIdentity(BaseModel):
     platform: str = Field(default="", max_length=128)
     architecture: str = Field(default="", max_length=128)
     environment_version: str = Field(default="", max_length=512)
+
+    @field_validator("executable_path")
+    @classmethod
+    def validate_executable_path(cls, value: str) -> str:
+        if value and (
+            "\x00" in value
+            or not (
+                PurePosixPath(value).is_absolute()
+                or PureWindowsPath(value).is_absolute()
+            )
+        ):
+            raise ValueError("execution identity executable path must be absolute")
+        return value
+
+    @model_validator(mode="after")
+    def require_complete_executable_identity(self) -> ExecutionIdentity:
+        if bool(self.executable_path) != bool(self.executable_sha256):
+            raise ValueError("execution identity path and digest must be provided together")
+        return self
+
+
+class SideEffect(str, Enum):
+    READ_ONLY = "read_only"
+    FILESYSTEM_WRITE = "filesystem_write"
+    NETWORK = "network"
+    SESSION_STATE = "session_state"
+    UNKNOWN = "unknown"
+
+
+class Idempotency(str, Enum):
+    UNKNOWN = "unknown"
+    IDEMPOTENT = "idempotent"
+    NON_IDEMPOTENT = "non_idempotent"
+
+
+class EvidencePolicy(str, Enum):
+    PROTECTED_RAW = "protected_raw"
+
+
+class ParserPolicy(str, Enum):
+    RAW_ONLY = "raw_only"
+
+
+class ActionPath(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    host: str = Field(min_length=1)
+    provider: str = Field(min_length=1)
+
+    @field_validator("host", "provider")
+    @classmethod
+    def require_absolute_path(cls, value: str) -> str:
+        if "\x00" in value or not (
+            PurePosixPath(value).is_absolute()
+            or PureWindowsPath(value).is_absolute()
+        ):
+            raise ValueError("resolved action paths must be absolute and NUL-free")
+        return value
+
+
+class ResolvedExecutable(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    argv_index: int = Field(ge=0, le=4095)
+    path: str = Field(min_length=1, max_length=4096)
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+    @field_validator("path")
+    @classmethod
+    def require_absolute_path(cls, value: str) -> str:
+        if "\x00" in value or not (
+            PurePosixPath(value).is_absolute()
+            or PureWindowsPath(value).is_absolute()
+        ):
+            raise ValueError("resolved executable path must be absolute and NUL-free")
+        return value
+
+
+class ResolvedAction(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    schema_version: str = "1.0.0"
+    capability: str = Field(min_length=1)
+    provider: str = Field(min_length=1)
+    tool: str = Field(min_length=1)
+    tool_version: str = ""
+    target: str = ""
+    argv: tuple[str, ...] = Field(min_length=1)
+    executables: tuple[ResolvedExecutable, ...] = ()
+    cwd: str = ""
+    inputs: tuple[ActionPath, ...] = ()
+    outputs: tuple[ActionPath, ...] = ()
+    side_effects: tuple[SideEffect, ...] = Field(
+        default=(SideEffect.UNKNOWN,),
+        min_length=1,
+    )
+    timeout_seconds: int = Field(ge=1, le=3600)
+    idempotency: Idempotency = Idempotency.UNKNOWN
+    evidence_policy: EvidencePolicy = EvidencePolicy.PROTECTED_RAW
+    parser_policy: ParserPolicy = ParserPolicy.RAW_ONLY
+
+    @field_validator("argv")
+    @classmethod
+    def validate_argv(cls, values: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not value or "\x00" in value for value in values):
+            raise ValueError("resolved argv must contain non-empty NUL-free tokens")
+        return values
+
+    @field_validator("cwd")
+    @classmethod
+    def validate_cwd(cls, value: str) -> str:
+        if value and (
+            "\x00" in value
+            or not (
+                PurePosixPath(value).is_absolute()
+                or PureWindowsPath(value).is_absolute()
+            )
+        ):
+            raise ValueError("resolved cwd must be absolute and NUL-free")
+        return value
+
+    @model_validator(mode="after")
+    def validate_effects(self) -> ResolvedAction:
+        if self.outputs and SideEffect.FILESYSTEM_WRITE not in self.side_effects:
+            raise ValueError("declared outputs require filesystem_write side effect")
+        indexes = [item.argv_index for item in self.executables]
+        if len(indexes) != len(set(indexes)):
+            raise ValueError("resolved executable argv indexes must be unique")
+        if indexes and (indexes[0] != 0 or indexes != sorted(indexes)):
+            raise ValueError("resolved executables must be ordered from argv index zero")
+        for executable in self.executables:
+            if executable.argv_index >= len(self.argv):
+                raise ValueError("resolved executable argv index is out of range")
+            if self.argv[executable.argv_index] != executable.path:
+                raise ValueError("resolved executable path must match resolved argv")
+        if self.executables:
+            primary_path = self.executables[0].path
+            primary_name = (
+                PureWindowsPath(primary_path).name
+                if PureWindowsPath(primary_path).is_absolute()
+                else PurePosixPath(primary_path).name
+            )
+            if self.tool != primary_name:
+                raise ValueError("resolved tool must match the primary executable path")
+        return self
+
+    def telemetry_summary(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "capability": self.capability,
+            "provider": self.provider,
+            "tool": self.tool,
+            "tool_version": self.tool_version,
+            "executable_count": len(self.executables),
+            "executable_verified": bool(self.executables),
+            "target_present": bool(self.target),
+            "side_effects": [effect.value for effect in self.side_effects],
+            "timeout_seconds": self.timeout_seconds,
+            "idempotency": self.idempotency.value,
+            "evidence_policy": self.evidence_policy.value,
+            "parser_policy": self.parser_policy.value,
+            "input_count": len(self.inputs),
+            "output_count": len(self.outputs),
+        }
 
 
 class ExecutionRequest(BaseModel):
@@ -107,6 +274,7 @@ class ExecutionRequest(BaseModel):
     required_privileges: list[str] = Field(default_factory=lambda: ["user"])
     credential_refs: list[str] = Field(default_factory=list)
     execution_identity: ExecutionIdentity = Field(default_factory=ExecutionIdentity)
+    resolved_action: ResolvedAction | None = None
     approval_ttl_seconds: int = Field(default=300, ge=1, le=3600)
     approval_expires_at: datetime | None = None
     dependency: str = ""
@@ -149,6 +317,9 @@ class ExecutionRequest(BaseModel):
             "required_privileges": self.required_privileges,
             "credential_refs": self.credential_refs,
             "execution_identity": self.execution_identity.model_dump(),
+            "resolved_action": self.resolved_action.model_dump(mode="json")
+            if self.resolved_action
+            else None,
             "approval_expires_at": self.approval_expires_at.isoformat()
             if self.approval_expires_at
             else "",
@@ -157,6 +328,32 @@ class ExecutionRequest(BaseModel):
             material, sort_keys=True, separators=(",", ":"), default=str
         )
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def resolved_action_error(self) -> str:
+        resolved = self.resolved_action
+        if resolved is None:
+            return ""
+        if resolved.capability != self.action or resolved.provider != self.executor:
+            return "resolved action does not match capability or provider"
+        if resolved.target != self.target:
+            return "resolved target does not match execution target"
+        if list(resolved.argv) != self.command:
+            return "resolved action argv does not match execution command"
+        if self.execution_identity.tool != resolved.tool:
+            return "resolved tool identity does not match execution identity"
+        if self.execution_identity.tool_version != resolved.tool_version:
+            return "resolved tool version does not match execution identity"
+        if resolved.executables:
+            primary = resolved.executables[0]
+            if self.execution_identity.executable_path != primary.path:
+                return "resolved executable path does not match execution identity"
+            if self.execution_identity.executable_sha256 != primary.sha256:
+                return "resolved executable digest does not match execution identity"
+        if self.risk == RiskLevel.READ and any(
+            effect != SideEffect.READ_ONLY for effect in resolved.side_effects
+        ):
+            return "resolved side effects require WRITE risk"
+        return ""
 
 
 class ApprovalRequest(BaseModel):
@@ -170,6 +367,7 @@ class ApprovalRequest(BaseModel):
     required_privileges: list[str] = Field(default_factory=list)
     credential_refs: list[str] = Field(default_factory=list)
     execution_identity: ExecutionIdentity = Field(default_factory=ExecutionIdentity)
+    resolved_action: dict[str, Any] = Field(default_factory=dict)
     expires_at: datetime
     digest: str
 
@@ -312,6 +510,18 @@ class ExecutionCoordinator:
                 started,
             )
 
+        consistency_error = request.resolved_action_error()
+        if consistency_error:
+            return self._finish_without_execution(
+                request,
+                request_id,
+                digest,
+                ExecutionStatus.BLOCKED,
+                ExecutionErrorCategory.UNSUPPORTED_ACTION,
+                consistency_error,
+                started,
+            )
+
         if self._hooks is not None:
             from ..hostcontrol.hooks import HookEvent
 
@@ -391,6 +601,11 @@ class ExecutionCoordinator:
                 required_privileges=request.required_privileges,
                 credential_refs=request.credential_refs,
                 execution_identity=request.execution_identity,
+                resolved_action=self._safe_value(
+                    request.resolved_action.model_dump(mode="json")
+                )
+                if request.resolved_action
+                else {},
                 expires_at=expires_at,
                 digest=digest,
             )
@@ -448,6 +663,17 @@ class ExecutionCoordinator:
                     "material execution request changed after approval",
                     started,
                 )
+
+        if request.approval_digest() != digest or request.resolved_action_error():
+            return self._finish_without_execution(
+                request,
+                request_id,
+                digest,
+                ExecutionStatus.BLOCKED,
+                ExecutionErrorCategory.UNSUPPORTED_ACTION,
+                "material resolved action changed before execution",
+                started,
+            )
 
         if not self._record_authorization(request, request_id, digest):
             return self._telemetry_unavailable(request, request_id, digest, started)
@@ -641,6 +867,9 @@ class ExecutionCoordinator:
                         "required_privileges": request.required_privileges,
                         "credential_refs": request.credential_refs,
                         "execution_identity": request.execution_identity.model_dump(),
+                        "resolved_action": request.resolved_action.telemetry_summary()
+                        if request.resolved_action
+                        else {},
                         "approval_expires_at": request.approval_expires_at.isoformat()
                         if request.approval_expires_at
                         else "",
@@ -679,6 +908,9 @@ class ExecutionCoordinator:
                             else "",
                             "executor": request.executor,
                             "execution_identity": request.execution_identity.model_dump(),
+                            "resolved_action": request.resolved_action.telemetry_summary()
+                            if request.resolved_action
+                            else {},
                             "evidence": result.evidence.model_dump()
                             if result.evidence
                             else {},
@@ -702,6 +934,9 @@ class ExecutionCoordinator:
             "risk": request.risk.value,
             "executor": request.executor,
             "execution_identity": request.execution_identity.model_dump(),
+            "resolved_action": request.resolved_action.telemetry_summary()
+            if request.resolved_action
+            else {},
             "required_privileges": request.required_privileges,
             "credential_refs": request.credential_refs,
             "approval_expires_at": request.approval_expires_at.isoformat()

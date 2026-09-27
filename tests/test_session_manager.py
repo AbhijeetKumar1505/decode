@@ -152,6 +152,32 @@ class TaskStateStoreTest(unittest.TestCase):
         self.assertEqual(loaded.objective, "probe")
         self.assertEqual(len(loaded.actions), 1)
 
+    def test_checkpoint_excludes_raw_command_parameters_and_observation(self):
+        from decode.schema.store import TaskStateStore
+        from decode.schema.task_state import TaskState
+
+        sid = self.store.create_session(goal="probe")
+        state = TaskState(session_id=sid, objective="probe")
+        state.record_action(
+            "shell_command",
+            {"argv": ["tool", "--token", "sensitive-value"]},
+            "use sensitive-value",
+        )
+        state.record_observation(
+            "shell_command",
+            {
+                "success": True,
+                "summary": "sensitive-value",
+                "data": {"stdout": "sensitive-value"},
+            },
+        )
+        TaskStateStore(self.store).save(state)
+        raw = self.store.load_task_state(sid)
+        self.assertNotIn("sensitive-value", raw)
+        loaded = TaskStateStore(self.store).load(sid)
+        self.assertEqual(loaded.actions[0].params, {})
+        self.assertEqual(loaded.observations[0].data, {})
+
 
 if __name__ == "__main__":
     unittest.main()

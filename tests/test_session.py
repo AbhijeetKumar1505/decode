@@ -62,7 +62,10 @@ class TestPersistentSession(unittest.TestCase):
         tools = [s["tool"] for s in result["steps"]]
         self.assertEqual(tools, ["session_open", "session_exec", "session_close"])
         # every session step was governed and succeeded
-        self.assertTrue(all(s["observation"]["success"] for s in result["steps"]))
+        self.assertTrue(
+            all(s["observation"]["success"] for s in result["steps"]),
+            result["steps"],
+        )
         # the cd persisted: close reports the working directory ending in /sub
         close_obs = result["steps"][2]["observation"]
         self.assertTrue(
@@ -74,6 +77,7 @@ class TestPersistentSession(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d).resolve()
             replies = [
+                json.dumps({"tool": "session_open", "params": {"cwd": str(root)}}),
                 json.dumps(
                     {
                         "tool": "session_exec",
@@ -97,7 +101,7 @@ class TestPersistentSession(unittest.TestCase):
                     permission_mode=PermissionMode.AUTO,
                 )
             )
-        obs = result["steps"][0]["observation"]
+        obs = result["steps"][1]["observation"]
         self.assertTrue(obs["success"])
         self.assertIn("session-works", obs["data"]["stdout"])
 

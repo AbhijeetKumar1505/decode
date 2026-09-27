@@ -1,5 +1,7 @@
 import asyncio
+import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -336,6 +338,54 @@ class TestToolUseLoopTaskState(unittest.TestCase):
         # a transient system state-message is appended for the model call
         self.assertGreaterEqual(seen[0].count("system"), 2)
 
+    def test_checkpoint_failure_prevents_execution(self):
+        from decode.schema import TaskState
+
+        state = TaskState(objective="inspect")
+        calls = []
+
+        async def invoke(name, params):
+            calls.append(name)
+            return {"success": True, "summary": "ok"}
+
+        def checkpoint(current):
+            if current.actions:
+                raise OSError("checkpoint unavailable")
+
+        loop = ToolUseLoop(
+            _ScriptedProvider([json.dumps({"tool": "process_list", "params": {}})]),
+            TOOLS,
+            invoke,
+            task_state=state,
+            checkpoint=checkpoint,
+        )
+        with self.assertRaisesRegex(OSError, "checkpoint unavailable"):
+            asyncio.run(loop.run("inspect"))
+        self.assertEqual(calls, [])
+
+    def test_observation_checkpoint_failure_stops_next_action(self):
+        from decode.schema import TaskState
+
+        state = TaskState(objective="inspect")
+        calls = []
+
+        async def invoke(name, params):
+            calls.append(name)
+            return {"success": True, "summary": "ok"}
+
+        def checkpoint(current):
+            if current.observations:
+                raise OSError("checkpoint unavailable")
+
+        replies = [json.dumps({"tool": "process_list", "params": {}})] * 2
+        loop = ToolUseLoop(
+            _ScriptedProvider(replies), TOOLS, invoke, task_state=state,
+            checkpoint=checkpoint,
+        )
+        with self.assertRaisesRegex(OSError, "checkpoint unavailable"):
+            asyncio.run(loop.run("inspect"))
+        self.assertEqual(calls, ["process_list"])
+
 
 class TestUniversalAgentLoopIntegration(unittest.TestCase):
     """End-to-end: the bare-prompt path discovers tools and drives them, governed."""
@@ -394,7 +444,16 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
     def test_evidence_is_linked_as_a_task_artifact(self):
         replies = [
             json.dumps(
-                {"tool": "shell_command", "params": {"command": "echo artifact-test"}}
+                {
+                    "tool": "shell_command",
+                    "params": {
+                        "argv": [
+                            sys.executable,
+                            "-c",
+                            "print('artifact-test')",
+                        ]
+                    },
+                }
             ),
             json.dumps({"message": "done"}),
         ]
@@ -403,6 +462,123 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
             result = self._loop(agent, "run echo")
         # the captured evidence flowed into the task state as a linked artifact
         self.assertIn("Artifacts:", result["state_summary"])
+
+    def _governed_checkpoint_conformance(self, executor, command):
+        from decode.persistence.store import SessionStore
+        from decode.schema import TaskStatus
+        from decode.schema.store import TaskStateStore
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            store = SessionStore(db_path=root / "decode.db")
+            try:
+                sid = store.create_session(goal="provider conformance")
+                states = TaskStateStore(store)
+                replies = [
+                    json.dumps({"tool": "list_tools", "params": {"query": "printf"}}),
+                    json.dumps({"tool": "shell_command", "params": {"argv": command}}),
+                ]
+                agent = self._build_agent(root, replies)
+                agent.execution_provider = executor
+
+                async def approve(_request):
+                    return True
+
+                kwargs = {
+                    "filesystem_scope": FilesystemScope(read_roots=[Path.cwd()]),
+                    "command_policy": CommandPolicy(),
+                    "permission_mode": PermissionMode.ASK,
+                    "approval_callback": approve,
+                    "session_id": sid,
+                    "checkpoint": states.save,
+                }
+                first = asyncio.run(
+                    agent.run_tool_loop("provider conformance", max_steps=2, **kwargs)
+                )
+                self.assertEqual(first["stopped"], "budget")
+                self.assertEqual(
+                    [step["tool"] for step in first["steps"]],
+                    ["list_tools", "shell_command"],
+                )
+                self.assertTrue(
+                    all(step["observation"]["success"] for step in first["steps"]),
+                    [step["observation"]["summary"][:200] for step in first["steps"]],
+                )
+                self.assertIn("decode-phase1-ok", first["steps"][1]["observation"]["data"]["stdout"])
+                checkpoint = states.load(sid)
+                self.assertEqual(len(checkpoint.actions), 2)
+                self.assertEqual(len(checkpoint.observations), 2)
+                self.assertEqual(checkpoint.status, TaskStatus.INVESTIGATING)
+                self.assertEqual(checkpoint.environment["executor"], executor.name)
+                self.assertTrue(checkpoint.artifacts)
+                evidence = checkpoint.artifacts[-1]
+                evidence_path = agent._coordinator._evidence.base_path / f"{evidence.evidence_id}.evidence"
+                self.assertTrue(evidence_path.is_file())
+                self.assertEqual(
+                    hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
+                    evidence.evidence_hash,
+                )
+                self.assertTrue(agent.logging.get_logs(tool_filter="shell_command"))
+                self.assertTrue(agent.audit.query(event_type="tool_execution"))
+                self.assertTrue(agent.feedback.get_execution_feedback("shell_command"))
+
+                agent.llm = _ScriptedProvider([json.dumps({"message": "done"})])
+                second = asyncio.run(
+                    agent.run_tool_loop(
+                        "provider conformance", resume_state=checkpoint, **kwargs
+                    )
+                )
+                self.assertEqual(second["stopped"], "final")
+                self.assertEqual(len(states.load(sid).actions), 2)
+                self.assertEqual(states.load(sid).status, TaskStatus.COMPLETE)
+            finally:
+                store.close()
+
+    def test_local_governed_checkpoint_conformance(self):
+        from decode.execution import LocalExecutor
+
+        self._governed_checkpoint_conformance(
+            LocalExecutor(), [sys.executable, "-c", "print('decode-phase1-ok')"]
+        )
+
+    def test_resume_rejects_unresolved_action_and_session_mismatch(self):
+        from decode.schema import TaskState
+
+        with tempfile.TemporaryDirectory() as directory:
+            agent = self._build_agent(Path(directory), [])
+            state = TaskState(session_id="session-1", objective="inspect")
+            state.record_action("shell_command", {"argv": ["echo", "once"]})
+            for sid in ("session-1", "session-2"):
+                with self.assertRaisesRegex(ValueError, "checkpoint"):
+                    asyncio.run(
+                        agent.run_tool_loop(
+                            "inspect", session_id=sid, resume_state=state
+                        )
+                    )
+
+    @unittest.skipUnless(
+        sys.platform == "win32" and os.environ.get("DECODE_RUN_WSL_CONFORMANCE") == "1",
+        "requires explicit Kali WSL conformance opt-in",
+    )
+    def test_kali_wsl_governed_checkpoint_conformance(self):
+        from decode.execution import WSLExecutor
+
+        self._governed_checkpoint_conformance(
+            WSLExecutor(distro="kali-linux"),
+            ["/usr/bin/printf", "decode-phase1-ok"],
+        )
+
+    @unittest.skipUnless(
+        os.environ.get("DECODE_GOVERNED_DOCKER_IMAGE", ""),
+        "requires a cached GNU-compatible Docker image",
+    )
+    def test_docker_governed_checkpoint_conformance(self):
+        from decode.execution import DockerExecutor
+
+        self._governed_checkpoint_conformance(
+            DockerExecutor(image=os.environ["DECODE_GOVERNED_DOCKER_IMAGE"], network="none"),
+            ["/usr/bin/printf", "decode-phase1-ok"],
+        )
 
     def test_mcp_tool_is_exposed_and_routed_through_the_coordinator(self):
         from decode.execution.mcp import MCPExecutor

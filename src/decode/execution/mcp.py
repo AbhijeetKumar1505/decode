@@ -13,7 +13,14 @@ import json
 import time
 from typing import Any, Protocol
 
-from .base import Command, ExecutionProvider, ExecutionResult, command_display
+from .base import (
+    Command,
+    EnvironmentCapabilities,
+    ExecutionContext,
+    ExecutionProvider,
+    ExecutionResult,
+    command_display,
+)
 
 
 class MCPClient(Protocol):
@@ -39,16 +46,40 @@ class MCPExecutor(ExecutionProvider):
     def name(self) -> str:
         return f"mcp/{self._server}" if self._server else "mcp"
 
+    @property
+    def platform(self) -> str:
+        return "semantic"
+
+    @property
+    def capabilities(self) -> EnvironmentCapabilities:
+        return EnvironmentCapabilities(command_execution=True)
+
     @staticmethod
     def encode(tool: str, arguments: dict[str, Any] | None = None) -> str:
         """Helper: build the JSON command string this provider expects."""
         return json.dumps({"tool": tool, "arguments": arguments or {}})
 
     async def execute(
-        self, command: Command, timeout: int = 60, env: dict[str, str] | None = None
+        self,
+        command: Command,
+        timeout: int = 60,
+        env: dict[str, str] | None = None,
+        context: ExecutionContext | None = None,
     ) -> ExecutionResult:
         start = time.time()
         display = command_display(command)
+        try:
+            self.prepare_context(context, env=env)
+        except ValueError as exc:
+            return ExecutionResult(
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr=str(exc),
+                exit_code=-1,
+                duration=time.time() - start,
+                error="invalid_execution_context",
+            )
         if not isinstance(command, str):
             return ExecutionResult(
                 command=display,

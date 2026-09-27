@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import json
 import os
@@ -7,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from decode.app.config import Config
+from decode.hostcontrol import CommandPolicy, FilesystemScope, PermissionMode
 from decode.models import (
     DataPolicy,
     ModelCost,
@@ -18,6 +20,8 @@ from decode.models import (
 from decode.persistence import SessionStore
 from decode.persistence.evidence import EvidenceCollector
 from decode.persistence.manager import SessionManager
+from decode.schema import TaskState
+from decode.schema.store import TaskStateStore
 from decode.skills.registry import SkillRegistry
 from decode.tui.app import AgentREPL
 
@@ -168,6 +172,36 @@ class TestResumeFlow(unittest.TestCase):
         repl._continue_last = True
         repl._apply_resume_request()
         self.assertFalse(repl._session_active)
+
+    def test_agent_uses_matching_checkpoint_after_session_resume(self):
+        sid = self.store.create_session(goal="inspect")
+        states = TaskStateStore(self.store)
+        state = TaskState(session_id=sid, objective="inspect")
+        state.record_action("list_tools", {})
+        state.record_observation("list_tools", {"success": True})
+        states.save(state)
+
+        repl = _bare_repl(self.store)
+        repl._task_states = states
+        repl._fs_scope = FilesystemScope(read_roots=[Path.cwd()])
+        repl._cmd_policy = CommandPolicy()
+        repl._perm_mode = PermissionMode.ASK
+        repl._render_header_bar = lambda: None
+        repl._mcp = lambda: None
+        repl._host_approval = mock.AsyncMock(return_value=True)
+        repl._meter_usage = lambda *args: (0, 0, 0.0)
+        repl._record_run = lambda *args: None
+        repl._agent.run_tool_loop = mock.AsyncMock(
+            return_value={"final": "done", "steps": []}
+        )
+        with mock.patch("decode.app.tui.app.console"):
+            repl._resume_session(sid)
+            asyncio.run(repl._handle_agent("inspect"))
+        kwargs = repl._agent.run_tool_loop.await_args.kwargs
+        self.assertEqual(kwargs["session_id"], sid)
+        self.assertEqual(len(kwargs["resume_state"].actions), 1)
+        self.assertEqual(kwargs["resume_state"].objective, "inspect")
+        self.assertEqual(kwargs["checkpoint"].__self__, states)
 
 
 if __name__ == "__main__":

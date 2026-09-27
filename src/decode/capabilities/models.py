@@ -224,6 +224,9 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, CapabilityArgument]] = {
         "query": CapabilityArgument(
             type=ArgumentType.STRING, required=False, max_length=256
         ),
+        "exact": CapabilityArgument(
+            type=ArgumentType.STRING, required=False, max_length=256
+        ),
         "limit": CapabilityArgument(
             type=ArgumentType.INTEGER,
             required=False,
@@ -559,7 +562,7 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
     ),
     "session_open": CapabilitySpec(
         name="session_open",
-        description="Open a governed local stateful session",
+        description="Open a governed provider-bound stateful session",
         category="host",
         risk=RiskLevel.READ,
         kind="internal",
@@ -567,7 +570,7 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
     ),
     "session_exec": CapabilitySpec(
         name="session_exec",
-        description="Run one governed command in a local stateful session",
+        description="Run one governed command in a provider-bound stateful session",
         category="host",
         risk=RiskLevel.WRITE,
         kind="internal",
@@ -575,7 +578,7 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
     ),
     "session_close": CapabilitySpec(
         name="session_close",
-        description="Close a governed local stateful session",
+        description="Close a governed provider-bound stateful session",
         category="host",
         risk=RiskLevel.READ,
         kind="internal",

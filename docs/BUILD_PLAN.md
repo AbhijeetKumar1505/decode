@@ -63,12 +63,42 @@ allowlist; filtered discovery observations remain exact; and `local` or an
 explicit `wsl/<distribution>` owns both PATH discovery and execution. Browser,
 HTTP, and search are semantic capabilities only when an explicit provider
 advertises a strict schema—finding a browser executable does not create one.
-External-provider output files and stateful sessions fail closed until Phase 1
-adds provider filesystem and session contracts.
+External-provider output files fail closed unless an explicit writable provider
+mapping covers them. Provider-bound sessions require an explicit stateful-session
+capability and mapped cwd; WSL and SSH support context-persistent sessions while
+Docker and MCP continue to fail closed.
 
 ## Phase 1 — Stable execution kernel
 
-**Status — Next.**
+**Status — Gate complete (2026-09-24; Bridge contracts remain).** Typed provider identity,
+capability, filesystem-mode, host-to-provider path mapping, and execution-context
+contracts are now in place. Local paths are explicitly shared; WSL, Docker, and
+SSH mappings fail closed until configured; MCP declares no host filesystem.
+Configured providers bind cwd/environment and declared outputs to their native
+transport. The host controller scope-checks host output paths, maps and rewrites
+only classified output arguments, and binds both path sets into the governed
+action. Provider sessions now carry immutable session/provider identity and
+persist mapped cwd/environment across independently governed actions. Local,
+WSL, and SSH declare support; Docker and MCP do not. Resolved-action identity,
+side-effect/output metadata, approval binding, and privacy-safe telemetry now
+cover governed host CLI actions and provider session commands. Tool discovery
+fingerprints executable content inside the selected provider; governed CLI and
+external-provider session actions bind absolute executable paths and SHA-256
+digests to approval and recheck them immediately before launch. Semantic tool
+versions remain unknown; arbitrary CLI inputs and side effects are not yet
+fully migrated or inferable. Local compatibility sessions now bind executable
+identity, cwd, environment hash, and outputs to approval. Broader all-provider
+conformance remains. Offline Docker process-outcome coverage and an opt-in live
+Kali WSL smoke check are in place. A locally built Docker test image now passes
+live process-outcome checks. Governed task persistence, evidence, and resume
+conformance passed on local Linux, Windows-to-Kali WSL, and Docker with a
+GNU-compatible cached image. The bounded agent now checkpoints before each
+action, after each observation, and on completion; matching unfinished tasks
+resume from sanitized persisted state without automatic command replay.
+Unresolved actions require manual review. Minimal/BusyBox images do not yet
+satisfy the provider discovery helper contract, so all-distro portability is
+not claimed. Semantic version and arbitrary CLI input/side-effect inference
+remain future hardening, not Phase 1 gate evidence.
 
 Define EnvironmentProvider, CapabilityRegistry, PolicyEngine,
 ExecutionCoordinator, EvidenceStore, and EventStore contracts. A resolved action

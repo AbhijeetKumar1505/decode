@@ -2,8 +2,18 @@ import asyncio
 import shlex
 import shutil
 import time
+from collections.abc import Sequence
 
-from .base import Command, ExecutionProvider, ExecutionResult, command_display
+from .base import (
+    Command,
+    EnvironmentCapabilities,
+    ExecutionContext,
+    ExecutionProvider,
+    ExecutionResult,
+    FilesystemMode,
+    ProviderPathMapping,
+    command_display,
+)
 
 
 class SSHExecutor(ExecutionProvider):
@@ -21,18 +31,53 @@ class SSHExecutor(ExecutionProvider):
         user: str | None = None,
         port: int = 22,
         identity_file: str | None = None,
-    ):
+        path_mappings: Sequence[ProviderPathMapping] = (),
+    ) -> None:
         self._host = host
         self._user = user
         self._port = port
         self._identity_file = identity_file
+        self._path_mappings = tuple(path_mappings)
 
     @property
     def name(self) -> str:
         target = f"{self._user}@{self._host}" if self._user else self._host
         return f"ssh/{target}:{self._port}"
 
-    def _ssh_argv(self, command: Command) -> list[str]:
+    @property
+    def platform(self) -> str:
+        return "remote"
+
+    @property
+    def command_timeout_seconds(self) -> int:
+        return 120
+
+    @property
+    def filesystem_mode(self) -> FilesystemMode:
+        return FilesystemMode.REMOTE
+
+    @property
+    def path_mappings(self) -> tuple[ProviderPathMapping, ...]:
+        return self._path_mappings
+
+    @property
+    def capabilities(self) -> EnvironmentCapabilities:
+        return EnvironmentCapabilities(
+            command_execution=True,
+            tool_discovery=True,
+            cwd=True,
+            environment=True,
+            path_mapping=bool(self.path_mappings),
+            scoped_filesystem=bool(self.path_mappings),
+            stateful_sessions=True,
+        )
+
+    def _ssh_argv(
+        self,
+        command: Command,
+        context: ExecutionContext | None = None,
+    ) -> list[str]:
+        execution_context = context or ExecutionContext()
         argv = [
             "ssh",
             "-p",
@@ -46,13 +91,38 @@ class SSHExecutor(ExecutionProvider):
             argv += ["-i", self._identity_file]
         target = f"{self._user}@{self._host}" if self._user else self._host
         remote_command = command if isinstance(command, str) else shlex.join(command)
+        if execution_context.environment:
+            assignments = " ".join(
+                f"{name}={shlex.quote(value)}"
+                for name, value in execution_context.environment.items()
+            )
+            remote_command = f"/usr/bin/env {assignments} {remote_command}"
+        if execution_context.cwd:
+            remote_command = (
+                f"cd -- {shlex.quote(execution_context.cwd)} && {remote_command}"
+            )
         argv += [target, remote_command]
         return argv
 
     async def execute(
-        self, command: Command, timeout: int = 120, env: dict[str, str] | None = None
+        self,
+        command: Command,
+        timeout: int = 120,
+        env: dict[str, str] | None = None,
+        context: ExecutionContext | None = None,
     ) -> ExecutionResult:
         display = command_display(command)
+        try:
+            execution_context = self.prepare_context(context, env=env)
+        except ValueError as exc:
+            return ExecutionResult(
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr=str(exc),
+                exit_code=-1,
+                error="invalid_execution_context",
+            )
         if not shutil.which("ssh"):
             return ExecutionResult(
                 command=display,
@@ -66,10 +136,9 @@ class SSHExecutor(ExecutionProvider):
         proc = None
         try:
             proc = await asyncio.create_subprocess_exec(
-                *self._ssh_argv(command),
+                *self._ssh_argv(command, execution_context),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=env,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             return ExecutionResult(

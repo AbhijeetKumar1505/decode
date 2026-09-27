@@ -80,7 +80,9 @@ class HostAgent(Agent):
             return ops.file_fetch(params["source"], params["dest"], scope)
         if capability == "list_tools":
             return ops.list_tools(
-                params.get("query", ""), int(params.get("limit", 400))
+                params.get("query", ""),
+                int(params.get("limit", 400)),
+                exact=params.get("exact", ""),
             )
         if capability == "process_list":
             return ops.process_list()
