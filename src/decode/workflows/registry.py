@@ -11,7 +11,9 @@ from ..skills.markdown_skill import playbook_directories, split_frontmatter
 from .models import WorkflowSpec
 
 
-def parse_workflow(text: str, *, fallback_name: str, source: str = "") -> WorkflowSpec | None:
+def parse_workflow(
+    text: str, *, fallback_name: str, source: str = ""
+) -> WorkflowSpec | None:
     frontmatter, body = split_frontmatter(text)
     if not frontmatter.strip():
         return None

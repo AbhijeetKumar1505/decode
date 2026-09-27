@@ -194,6 +194,35 @@ def test_invalid_lifecycle_metadata(
     assert memory.recall()[0]["version"] == 1
 
 
+def test_sqlite_artifact_sql_metacharacters_remain_data(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path / "artifacts.db")
+    try:
+        project_id = store.create_project("synthetic")
+        crafted = "note'); DROP TABLE artifacts; --"
+        artifact_id = store.add_artifact(
+            crafted, crafted, "original", project_id=project_id
+        )
+        other_id = store.add_artifact("note", "other", project_id=project_id)
+
+        matches = store.get_artifacts(project_id=project_id, type=crafted)
+        assert [item["id"] for item in matches] == [artifact_id]
+        assert (
+            store.update_artifact(
+                artifact_id,
+                expected_version=1,
+                scope="project",
+                project_id=project_id,
+                value=crafted,
+            )
+            == 2
+        )
+        assert store.get_artifacts(artifact_id=artifact_id)[0]["value"] == crafted
+        assert store.get_artifacts(artifact_id=other_id)[0]["value"] == ""
+        assert len(store.get_artifacts(project_id=project_id)) == 2
+    finally:
+        store.close()
+
+
 def test_sensitive_history_never_leaks_into_exports_or_retrieval(
     lifecycle_store,
 ) -> None:

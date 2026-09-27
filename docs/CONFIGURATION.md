@@ -22,8 +22,24 @@ Current system-tool selection accepts `DECODE_EXECUTOR=local`,
 `DECODE_EXECUTOR=wsl/<distribution>`, and the compatibility spelling
 `wsl:<distribution>`. A qualified WSL identity binds PATH discovery and command
 execution to that distribution. External-provider output files and stateful
-sessions are intentionally unavailable until provider filesystem/session scope
-is implemented; there is no local fallback.
+sessions require an explicit provider path mapping; there is no local fallback.
+
+`DECODE_PROVIDER_MAPPINGS` is a JSON object keyed by the selected provider's
+exact identity. Set it in the project `.env` or user environment. Each value is
+an array of `{host_root, provider_root, writable, provider_style}` entries.
+Roots must be absolute. `writable` defaults to false and `provider_style` to
+`posix`. For example, with `DECODE_EXECUTOR=wsl/kali-linux` on Windows:
+
+```text
+DECODE_PROVIDER_MAPPINGS={"wsl/kali-linux":[{"host_root":"E:\\hackagent","provider_root":"/mnt/e/hackagent","writable":false}]}
+```
+
+Only the exact selected identity is applied; a mapping for another WSL distro,
+Docker image, or SSH endpoint grants nothing. Invalid selected-provider
+configuration stops initialization. Mapping does not itself authorize a path:
+filesystem scope and per-command risk/approval still apply. Docker mappings
+become container mounts; WSL/SSH mappings must reflect an existing path in that
+environment. Do not include secrets in mapping configuration.
 
 Search/HTTP/browser/auth sessions are explicit providers with network scope,
 egress, download path, credential refs, evidence. Desktop browser tools are not

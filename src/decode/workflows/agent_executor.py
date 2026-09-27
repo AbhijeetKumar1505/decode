@@ -73,9 +73,7 @@ class GovernedAgentStageExecutor:
     @staticmethod
     def _prompt(context: WorkflowStageContext) -> str:
         prior = json.dumps(context.prior_results, indent=2, default=str)
-        instructions = "\n".join(
-            f"- {item}" for item in context.stage.instructions
-        )
+        instructions = "\n".join(f"- {item}" for item in context.stage.instructions)
         deliverables = ", ".join(context.stage.deliverables) or "a supported result"
         return (
             f"Workflow: {context.workflow_name} v{context.workflow_version}\n"

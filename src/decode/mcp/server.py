@@ -54,9 +54,7 @@ class DecodeMCPServer:
             logging_service=LoggingService(Config.LOGS_PATH),
             audit=audit,
             feedback=FeedbackStore(Config.FEEDBACK_PATH),
-            evidence_store=ProtectedEvidenceStore(
-                Config.EVIDENCE_PATH / "executions"
-            ),
+            evidence_store=ProtectedEvidenceStore(Config.EVIDENCE_PATH / "executions"),
         )
         self._controller = HostController(self._coordinator, self._scope, self._policy)
 

@@ -28,8 +28,7 @@ def _restrict_access(path: Path, *, directory: bool) -> None:
     inheritance = 0
     if directory:
         inheritance = (
-            win32security.OBJECT_INHERIT_ACE
-            | win32security.CONTAINER_INHERIT_ACE
+            win32security.OBJECT_INHERIT_ACE | win32security.CONTAINER_INHERIT_ACE
         )
     dacl = win32security.ACL()
     dacl.AddAccessAllowedAceEx(

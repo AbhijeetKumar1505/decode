@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from urllib.parse import urlparse
@@ -34,6 +35,13 @@ class PermissionMode(str, Enum):
 
 class ScopeViolation(PermissionError):
     """Raised when a path or command falls outside its allowlist."""
+
+
+@dataclass(frozen=True)
+class CommandOutputBinding:
+    path: Path
+    argument_index: int | None
+    prefix: str = ""
 
 
 class FilesystemScope:
@@ -246,12 +254,24 @@ def command_output_paths(
     argv: Sequence[str], *, cwd: str | Path | None = None
 ) -> list[Path]:
     """Return explicit filesystem outputs declared by a command vector."""
+    resolved: list[Path] = []
+    for binding in command_output_bindings(argv, cwd=cwd):
+        if binding.path not in resolved:
+            resolved.append(binding.path)
+    return resolved
+
+
+def command_output_bindings(
+    argv: Sequence[str], *, cwd: str | Path | None = None
+) -> list[CommandOutputBinding]:
+    """Return output paths and the argv positions that carry them."""
     _is_sudo, inner = strip_sudo(argv)
     if not inner:
         return []
+    offset = len(argv) - len(inner)
     binary = Path(str(inner[0])).name.lower()
     args = [str(value) for value in inner[1:]]
-    raw_paths: list[str] = []
+    raw_bindings: list[tuple[str, int | None, str]] = []
     value_flags = {"--output", "--output-file"}
     prefix_flags = ("--output=", "--output-file=")
     if binary == "curl":
@@ -267,39 +287,74 @@ def command_output_paths(
     while index < len(args):
         token = args[index]
         if token in value_flags and index + 1 < len(args):
-            raw_paths.append(args[index + 1])
+            raw_bindings.append((args[index + 1], offset + index + 2, ""))
             index += 2
             continue
-        matched = next((prefix for prefix in prefix_flags if token.startswith(prefix)), None)
+        matched = next(
+            (prefix for prefix in prefix_flags if token.startswith(prefix)), None
+        )
         if matched is not None and token[len(matched) :]:
-            raw_paths.append(token[len(matched) :])
+            raw_bindings.append((token[len(matched) :], offset + index + 1, matched))
         if binary == "curl" and token == "-O":
-            raw_paths.append(str(cwd or Path.cwd()))
+            raw_bindings.append((str(cwd or Path.cwd()), None, ""))
         if binary == "curl" and token.startswith("-o") and token != "-o":
-            raw_paths.append(token[2:])
+            raw_bindings.append((token[2:], offset + index + 1, "-o"))
         if binary == "nmap" and token[:3] in {"-oN", "-oX", "-oG", "-oA"}:
             if len(token) > 3:
-                raw_paths.append(token[3:])
+                raw_bindings.append((token[3:], offset + index + 1, token[:3]))
             elif index + 1 < len(args):
-                raw_paths.append(args[index + 1])
+                raw_bindings.append((args[index + 1], offset + index + 2, ""))
                 index += 1
         index += 1
 
-    positional = [value for value in args if value and not value.startswith("-")]
+    positional = [
+        (index, value)
+        for index, value in enumerate(args)
+        if value and not value.startswith("-")
+    ]
     if binary in {"cp", "mv", "install"} and positional:
-        raw_paths.append(positional[-1])
+        index, value = positional[-1]
+        raw_bindings.append((value, offset + index + 1, ""))
     elif binary in {"touch", "mkdir", "tee"}:
-        raw_paths.extend(positional)
+        raw_bindings.extend(
+            (value, offset + index + 1, "") for index, value in positional
+        )
 
     base = Path(cwd or Path.cwd()).expanduser().resolve(strict=False)
-    resolved: list[Path] = []
-    for value in raw_paths:
+    resolved: list[CommandOutputBinding] = []
+    for value, argument_index, prefix in raw_bindings:
         candidate = Path(value).expanduser()
         path = candidate if candidate.is_absolute() else base / candidate
         normalized = path.resolve(strict=False)
-        if normalized not in resolved:
-            resolved.append(normalized)
+        binding = CommandOutputBinding(
+            path=normalized,
+            argument_index=argument_index,
+            prefix=prefix,
+        )
+        if binding not in resolved:
+            resolved.append(binding)
     return resolved
+
+
+def rewrite_command_output_paths(
+    argv: Sequence[str],
+    replacements: Mapping[str | Path, str],
+    *,
+    cwd: str | Path | None = None,
+) -> list[str]:
+    """Rewrite only argv fields already classified as explicit outputs."""
+    normalized_replacements = {
+        Path(host_path).expanduser().resolve(strict=False): provider_path
+        for host_path, provider_path in replacements.items()
+    }
+    rewritten = [str(value) for value in argv]
+    for binding in command_output_bindings(argv, cwd=cwd):
+        if binding.argument_index is None:
+            continue
+        replacement = normalized_replacements.get(binding.path)
+        if replacement is not None:
+            rewritten[binding.argument_index] = f"{binding.prefix}{replacement}"
+    return rewritten
 
 
 def command_target(argv: Sequence[str]) -> str:
@@ -370,8 +425,7 @@ class CommandPolicy:
         binary = Path(str(inner[0])).name.lower()
         lowered = [str(value).lower() for value in inner[1:]]
         if binary in _SHELL_INTERPRETERS and any(
-            value in {"-c", "/c", "-command", "-encodedcommand"}
-            for value in lowered
+            value in {"-c", "/c", "-command", "-encodedcommand"} for value in lowered
         ):
             raise ScopeViolation(
                 "shell interpreter command strings are not permitted; use an argument vector"

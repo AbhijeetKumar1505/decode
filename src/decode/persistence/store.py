@@ -684,12 +684,27 @@ class SessionStore:
             "created_at": now,
             "updated_at": now,
         }
-        columns = ", ".join(record)
-        placeholders = ", ".join("?" for _ in record)
         with self._conn:
             self._conn.execute(
-                f"INSERT INTO artifacts ({columns}) VALUES ({placeholders})",
-                tuple(record.values()),
+                """INSERT INTO artifacts (
+                    id, scope, project_id, session_id, user_id, type, key, value,
+                    sensitive, expires_at, confidence, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    record["id"],
+                    record["scope"],
+                    record["project_id"],
+                    record["session_id"],
+                    record["user_id"],
+                    record["type"],
+                    record["key"],
+                    record["value"],
+                    record["sensitive"],
+                    record["expires_at"],
+                    record["confidence"],
+                    record["created_at"],
+                    record["updated_at"],
+                ),
             )
         return aid
 
@@ -704,24 +719,32 @@ class SessionStore:
         include_expired: bool = False,
         artifact_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        clauses, params = [], []
-        for column, value in {
-            "session_id": session_id,
-            "project_id": project_id,
-            "type": type,
-            "scope": scope,
-            "user_id": user_id,
-            "id": artifact_id,
-        }.items():
-            if value is not None:
-                clauses.append(f"{column} = ?")
-                params.append(value)
+        query = "SELECT * FROM artifacts WHERE 1 = 1"
+        params: list[Any] = []
+        if session_id is not None:
+            query += " AND session_id = ?"
+            params.append(session_id)
+        if project_id is not None:
+            query += " AND project_id = ?"
+            params.append(project_id)
+        if type is not None:
+            query += " AND type = ?"
+            params.append(type)
+        if scope is not None:
+            query += " AND scope = ?"
+            params.append(scope)
+        if user_id is not None:
+            query += " AND user_id = ?"
+            params.append(user_id)
+        if artifact_id is not None:
+            query += " AND id = ?"
+            params.append(artifact_id)
         if not include_expired:
-            clauses.append("(expires_at IS NULL OR expires_at > ?)")
+            query += " AND (expires_at IS NULL OR expires_at > ?)"
             params.append(self._now())
-        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        query += " ORDER BY created_at"
         rows = self._conn.execute(
-            f"SELECT * FROM artifacts{where} ORDER BY created_at",
+            query,
             params,
         ).fetchall()
         return [dict(row) for row in rows]
@@ -747,11 +770,24 @@ class SessionStore:
         if type(expected_version) is not int or expected_version != record["version"]:
             raise ValueError("artifact version conflict")
         updated = artifact_revision(record, changes)
-        assignments = ", ".join(f"{key} = ?" for key in updated)
         with self._conn:
             cursor = self._conn.execute(
-                f"UPDATE artifacts SET {assignments} WHERE id = ? AND version = ?",
-                (*updated.values(), artifact_id, expected_version),
+                """UPDATE artifacts SET
+                    key = ?, value = ?, sensitive = ?, expires_at = ?,
+                    confidence = ?, version = ?, updated_at = ?, history = ?
+                    WHERE id = ? AND version = ?""",
+                (
+                    updated["key"],
+                    updated["value"],
+                    updated["sensitive"],
+                    updated["expires_at"],
+                    updated["confidence"],
+                    updated["version"],
+                    updated["updated_at"],
+                    updated["history"],
+                    artifact_id,
+                    expected_version,
+                ),
             )
             if cursor.rowcount != 1:
                 raise ValueError("artifact version conflict")

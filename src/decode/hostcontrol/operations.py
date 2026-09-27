@@ -12,6 +12,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import os
+import re
 import shutil
 import subprocess  # nosec B404 - governed, argument-vector only, policy-checked
 import time
@@ -308,7 +309,38 @@ def run_command(
 # ── tool discovery ─────────────────────────────────────────────────────────
 
 
-def list_tools(query: str = "", limit: int = 400) -> dict[str, Any]:
+def inspect_executable(
+    executable: str, *, search_path: str | None = None
+) -> dict[str, Any]:
+    """Resolve and fingerprint one local executable without launching it."""
+    requested = str(executable or "").strip()
+    if not requested or "\x00" in requested:
+        return _deny("executable name must be non-empty and NUL-free")
+    candidate = Path(requested)
+    if not candidate.is_absolute() and candidate.name != requested:
+        return _deny("executable must be an absolute path or basename")
+    if search_path == "" and not candidate.is_absolute():
+        return _ok(found=False, executable=requested)
+    resolved = shutil.which(requested, path=search_path)
+    if not resolved:
+        return _ok(found=False, executable=requested)
+    try:
+        path = Path(resolved).resolve(strict=True)
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+    except OSError:
+        return _deny("selected executable could not be fingerprinted")
+    return _ok(
+        found=True,
+        name=path.name,
+        path=str(path),
+        sha256=digest.hexdigest(),
+    )
+
+
+def list_tools(query: str = "", limit: int = 400, *, exact: str = "") -> dict[str, Any]:
     """List command-line tools installed on this host by scanning ``$PATH``.
 
     READ-only and shell-free: enumerates executables on the PATH so the agent can
@@ -317,8 +349,30 @@ def list_tools(query: str = "", limit: int = 400) -> dict[str, Any]:
     the tool name; ``limit`` bounds the number returned.
     """
     query = (query or "").strip().lower()
+    exact = (exact or "").strip()
+    if exact and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+@-]{0,255}", exact):
+        return _deny("exact tool name must be a basename")
     limit = max(1, min(int(limit or 400), 5000))
     path_dirs = [d for d in os.environ.get("PATH", "").split(os.pathsep) if d]
+    if exact:
+        identity = inspect_executable(exact)
+        if not identity["ok"]:
+            return identity
+        tools = []
+        if identity["found"]:
+            tools.append(
+                {
+                    "name": identity["name"],
+                    "path": identity["path"],
+                    "sha256": identity["sha256"],
+                }
+            )
+        return _ok(
+            tools=tools,
+            count=len(tools),
+            truncated=False,
+            path_dirs=path_dirs,
+        )
     seen: dict[str, str] = {}
     truncated = False
     for directory in path_dirs:
@@ -332,6 +386,8 @@ def list_tools(query: str = "", limit: int = 400) -> dict[str, Any]:
                 if name in seen:
                     continue
                 if query and query not in name.lower():
+                    continue
+                if exact and name != exact:
                     continue
                 try:
                     if not entry.is_file() and not entry.is_symlink():

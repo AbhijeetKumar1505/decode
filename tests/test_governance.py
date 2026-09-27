@@ -12,12 +12,15 @@ from decode.governance import Decision, GovernanceGate, ScopePolicy
 from decode.logging_service import LoggingService
 from decode.persistence.evidence import ProtectedEvidenceStore
 from decode.runtime import (
+    ActionPath,
     ApprovalGrant,
     ExecutionCoordinator,
     ExecutionErrorCategory,
     ExecutionIdentity,
     ExecutionRequest,
     ExecutionStatus,
+    ResolvedAction,
+    SideEffect,
     credential_refs_from_params,
     redact_sensitive,
 )
@@ -243,7 +246,16 @@ class TestExecutionCoordinator(unittest.TestCase):
                             "password": "synthetic-secret",
                             "nested": {"api_key": "synthetic-key"},
                         },
-                        command="check password=synthetic-secret",
+                        command=["check", "password=synthetic-secret"],
+                        executor="local",
+                        execution_identity=ExecutionIdentity(tool="check"),
+                        resolved_action=ResolvedAction(
+                            capability="credential_check",
+                            provider="local",
+                            tool="check",
+                            argv=("check", "password=synthetic-secret"),
+                            timeout_seconds=60,
+                        ),
                         credential_refs=["request-param:password"],
                     ),
                     operation,
@@ -254,6 +266,10 @@ class TestExecutionCoordinator(unittest.TestCase):
             self.assertEqual(approvals[0].params["password"], "[REDACTED]")
             self.assertEqual(approvals[0].params["nested"]["api_key"], "[REDACTED]")
             self.assertNotIn("synthetic-secret", approvals[0].command)
+            self.assertNotIn(
+                "synthetic-secret",
+                str(approvals[0].resolved_action),
+            )
 
     def test_mismatched_or_expired_approval_never_executes(self):
         cases = ["mismatched", "expired"]
@@ -672,6 +688,148 @@ class TestExecutionCoordinator(unittest.TestCase):
         )
         second = first.model_copy(update={"params": {"ports": "443"}})
         self.assertNotEqual(first.approval_digest(), second.approval_digest())
+
+    def test_resolved_action_changes_invalidate_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            audit, logging, feedback = self._services(Path(directory))
+            executed: list[bool] = []
+            request = ExecutionRequest(
+                action="shell_command",
+                risk=RiskLevel.WRITE,
+                command=["touch", "/controlled/result.txt"],
+                executor="local",
+                execution_identity=ExecutionIdentity(tool="touch"),
+                resolved_action=ResolvedAction(
+                    capability="shell_command",
+                    provider="local",
+                    tool="touch",
+                    argv=("touch", "/controlled/result.txt"),
+                    outputs=(
+                        ActionPath(
+                            host="/controlled/result.txt",
+                            provider="/controlled/result.txt",
+                        ),
+                    ),
+                    side_effects=(SideEffect.FILESYSTEM_WRITE,),
+                    timeout_seconds=60,
+                ),
+            )
+
+            def approve(approval):
+                self.assertEqual(
+                    approval.resolved_action["outputs"][0]["host"],
+                    "/controlled/result.txt",
+                )
+                request.resolved_action = request.resolved_action.model_copy(
+                    update={"timeout_seconds": 120}
+                )
+                return True
+
+            async def operation() -> str:
+                executed.append(True)
+                return "must not run"
+
+            coordinator = ExecutionCoordinator(
+                GovernanceGate(ScopePolicy(allow_all=True), audit=audit),
+                approval_callback=approve,
+                logging_service=logging,
+                audit=audit,
+                feedback=feedback,
+            )
+            result = asyncio.run(coordinator.execute(request, operation))
+
+            self.assertEqual(result.status, ExecutionStatus.DENIED)
+            self.assertEqual(
+                result.error_category,
+                ExecutionErrorCategory.APPROVAL_INVALID,
+            )
+            self.assertFalse(executed)
+
+    def test_resolved_action_mismatch_blocks_and_safe_telemetry_is_recorded(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            audit, logging, feedback = self._services(Path(directory))
+            coordinator = ExecutionCoordinator(
+                GovernanceGate(ScopePolicy(allow_all=True), audit=audit),
+                logging_service=logging,
+                audit=audit,
+                feedback=feedback,
+            )
+            action = ResolvedAction(
+                capability="shell_command",
+                provider="local",
+                tool="pwd",
+                argv=("pwd", "password=synthetic-secret"),
+                timeout_seconds=60,
+            )
+            request = ExecutionRequest(
+                action="shell_command",
+                risk=RiskLevel.READ,
+                command=["pwd", "password=synthetic-secret"],
+                executor="wsl/kali-linux",
+                execution_identity=ExecutionIdentity(tool="pwd"),
+                resolved_action=action,
+            )
+
+            async def operation() -> str:
+                raise AssertionError("mismatched action executed")
+
+            result = asyncio.run(coordinator.execute(request, operation))
+
+            self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+            self.assertIn("does not match", result.error)
+            metadata = logging.get_logs(tool_filter="shell_command")[0]["metadata"]
+            self.assertEqual(metadata["resolved_action"]["provider"], "local")
+            self.assertNotIn("argv", metadata["resolved_action"])
+            self.assertNotIn("synthetic-secret", str(metadata))
+            self.assertTrue(feedback.get_execution_feedback("shell_command"))
+
+    def test_resolved_unknown_effect_cannot_claim_read_risk(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            audit, logging, feedback = self._services(root)
+            request = ExecutionRequest(
+                action="shell_command",
+                risk=RiskLevel.READ,
+                command=["unknown-tool"],
+                executor="local",
+                execution_identity=ExecutionIdentity(tool="unknown-tool"),
+                resolved_action=ResolvedAction(
+                    capability="shell_command",
+                    provider="local",
+                    tool="unknown-tool",
+                    argv=("unknown-tool",),
+                    timeout_seconds=60,
+                ),
+            )
+            coordinator = ExecutionCoordinator(
+                GovernanceGate(ScopePolicy(allow_all=True), audit=audit),
+                logging_service=logging,
+                audit=audit,
+                feedback=feedback,
+            )
+
+            async def operation() -> str:
+                raise AssertionError("unknown effect executed as READ")
+
+            result = asyncio.run(coordinator.execute(request, operation))
+
+            self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+            self.assertIn("WRITE risk", result.error)
+
+    def test_resolved_filesystem_paths_must_be_absolute(self) -> None:
+        with self.assertRaisesRegex(ValidationError, "must be absolute"):
+            ActionPath(host="relative.txt", provider="/workspace/result.txt")
+        with self.assertRaisesRegex(ValidationError, "resolved cwd"):
+            ResolvedAction(
+                capability="shell_command",
+                provider="local",
+                tool="pwd",
+                argv=("pwd",),
+                cwd="relative",
+                timeout_seconds=60,
+            )
 
     def test_approval_digest_binds_privilege_credentials_and_expiry(self):
         expiry = datetime.now(UTC) + timedelta(minutes=5)

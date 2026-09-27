@@ -39,3 +39,38 @@ SQLite lifecycle, runtime-path isolation, CLI output, and host behavior that doe
 not require Linux tooling. The current checkout uses the ignored `wenv` virtual
 environment. Linux-sensitive behavior is independently rerun in Kali WSL; a
 native Windows pass does not replace that provider gate.
+
+## Phase 1 provider conformance bridge
+
+The default suite uses offline fakes for Docker success, non-zero exit, request
+timeout, malformed wait status, API error, start-failure cleanup, missing image
+without auto-pull, and a missing SDK. Only a
+timeout is labeled timed out; API and malformed-status failures remain failures
+with their available raw output. Local process tests run on both Windows and
+Kali Linux.
+
+Live transport checks are explicit opt-ins in `tests/test_execution.py`:
+
+- On Windows, set `DECODE_RUN_WSL_CONFORMANCE=1` to check success, non-zero
+  exit, and a missing command in `wsl/kali-linux`.
+- Set `DECODE_RUN_DOCKER_CONFORMANCE=1` and
+  `DECODE_DOCKER_CONFORMANCE_IMAGE` to an already-present image containing
+  `/bin/sh`. The test inspects the image first and never pulls it. It checks
+  success, non-zero exit, missing command, missing image, and no leaked
+  containers or image pulls. A reachable daemon is required; an unavailable
+  daemon is not counted as a pass.
+
+On the current host, `decode-conformance:local` was built from the explicitly
+pulled official `busybox:1.38` base. It is a local Docker artifact, not a
+repository file or a portable release image. Pulling a base on another host
+requires separate authorization.
+
+Governed task lifecycle checks are in `tests/test_agent_loop.py`. The local
+test runs by default. On Windows, `DECODE_RUN_WSL_CONFORMANCE=1` enables the
+live `wsl/kali-linux` task; `DECODE_GOVERNED_DOCKER_IMAGE` enables the Docker
+task using a cached image with GNU discovery utilities. Each checks governed
+tool discovery, command execution, SQLite checkpoints, protected evidence
+hash, structured log, audit, feedback, and no automatic action replay on
+resume. The Docker process tests separately use
+`DECODE_DOCKER_CONFORMANCE_IMAGE`. These tests do not attest to every Linux
+distribution or arbitrary CLI side effect.

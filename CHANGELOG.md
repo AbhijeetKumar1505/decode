@@ -2,8 +2,35 @@
 
 ## Unreleased
 
+- Completed the Phase 1 governed task gate on local Linux, Kali WSL, and
+  Docker: automatic sanitized checkpoints, safe same-task resume, verified
+  evidence links, and mandatory execution telemetry. Failed checkpoints stop
+  the loop; unresolved actions require manual review.
+- Recovered WSL provider discovery from stale inherited PATH directories
+  without accepting a failed partial scan as a complete inventory.
+
+- Added governed exact-tool inspection with a provider-local SHA-256 fingerprint
+  and PATH-only discovery. Governed CLI and external-provider session actions
+  now bind absolute executable paths and SHA-256 digests to approval and recheck
+  them immediately before launch; semantic tool version remains follow-up work.
+- Bound local session commands to their captured PATH, exact executable
+  fingerprint, cwd, environment hash, and declared outputs. Local `cd` binds
+  its next cwd; changed executable or session context blocks launch.
+- Corrected Docker wait-result classification: API errors are no longer reported
+  as timeouts, malformed statuses fail, and available partial output is kept.
+  Explicit create/start now cleans up start failures and never implicitly pulls
+  a missing image. Added offline outcome checks and opt-in live Kali WSL/Docker
+  conformance tests.
+
+- Exposed exact-provider path mappings through `DECODE_PROVIDER_MAPPINGS` for
+  the universal agent and interactive host controller. Mappings default to
+  read-only and do not bypass filesystem scope or command approval.
+
 ### Fixed
 
+- Replaced dynamic artifact INSERT, SELECT, and UPDATE SQL construction with
+  fixed statements or fixed query fragments and bound values; added a
+  SQL-metacharacter regression test. Kept the CI security scan enforced.
 - Completed the Phase 0 execution-truth gate: non-zero host commands now fail;
   tool schemas are strict and visible; shell operators/interpreters are rejected
   in vector mode; explicit command outputs are WRITE-classified and
@@ -61,6 +88,20 @@
 
 ### Added
 
+- Began the Phase 1 execution-kernel contract with typed environment identity,
+  capability declarations, filesystem modes, and fail-closed host-to-provider
+  path mappings for local, WSL, Docker, SSH, and MCP providers.
+- Added typed provider execution context for cwd, environment, and declared
+  outputs; configured external providers now bind mapped outputs to native
+  transports while unmapped or read-only paths remain denied.
+- Added provider-bound context-persistent sessions for local, WSL, and SSH with
+  immutable session/provider identity, mapped cwd transitions, per-command
+  governance, approval-bound outputs, and scope/mapping revalidation. Docker and
+  MCP sessions remain disabled.
+- Added a typed resolved action for governed CLI and provider session commands.
+  Exact argv, target, mapped outputs, known side effects, timeout, idempotency,
+  and evidence/parser policy are approval-bound; redacted approval details and
+  privacy-safe telemetry summaries preserve the same action identity.
 - Vendored the [mattpocock/skills](https://github.com/mattpocock/skills) engineering, productivity, and misc sets as 29 markdown playbooks in `decode/skills/playbooks/` (TDD, code review, domain modeling, bug diagnosis, to-spec/to-tickets, grilling, wizard, and more). Each upstream skill is imported as one consolidated `.md` (companion reference files inlined so `rglob` discovery does not register them as separate playbooks) with frontmatter conformed to Decode's schema (`category: agent_core`, `risk: READ`, tags include `mattpocock`). The `in-progress/` and `deprecated/` upstream sets were not imported. Guaranteed-discovery coverage added in `tests/test_markdown_skills.py`.
 - Shared `ExecutionCoordinator` with typed requests/outcomes, material-action approval digests, audit fail-closed preflight, stable error categories, redacted structured logging, audit events, and execution feedback.
 - Governance regression coverage for scope, approval, dependency blocking, timeout, cancellation, redaction, and audit-service failure.

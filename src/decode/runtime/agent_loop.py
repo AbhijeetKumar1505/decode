@@ -24,6 +24,7 @@ from ..utils import parse_llm_response
 InvokeTool = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 # on_step(event) -> None; event["phase"] is "call" | "result" | "final".
 StepCallback = Callable[[dict[str, Any]], None]
+CheckpointCallback = Callable[[Any], None]
 
 
 def _matches_json_type(value: Any, expected: str) -> bool:
@@ -112,6 +113,7 @@ class ToolUseLoop:
         project_rules: str = "",
         verifier: Any = None,
         max_replans: int = 2,
+        checkpoint: CheckpointCallback | None = None,
     ) -> None:
         self._provider = provider
         self._tools = tools
@@ -135,6 +137,11 @@ class ToolUseLoop:
         # every action/observation into it, so reasoning is not driven by the raw
         # message log alone.
         self._task_state = task_state
+        self._checkpoint = checkpoint
+
+    def _save_checkpoint(self) -> None:
+        if self._task_state is not None and self._checkpoint is not None:
+            self._checkpoint(self._task_state)
 
     def _emit(self, event: dict[str, Any]) -> None:
         if self._on_step is None:
@@ -151,6 +158,7 @@ class ToolUseLoop:
         )
 
     async def run(self, goal: str) -> dict[str, Any]:
+        self._save_checkpoint()
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt()},
             {"role": "user", "content": f"Goal: {goal}"},
@@ -184,6 +192,7 @@ class ToolUseLoop:
                     if not verdict.valid and self._replans < self._max_replans:
                         self._replans += 1
                         self._task_state.mark("investigating")
+                        self._save_checkpoint()
                         self._emit(
                             {
                                 "phase": "verify",
@@ -207,6 +216,7 @@ class ToolUseLoop:
                         continue
                 if self._task_state is not None:
                     self._task_state.mark("complete")
+                self._save_checkpoint()
                 self._emit(
                     {
                         "phase": "final",
@@ -233,6 +243,7 @@ class ToolUseLoop:
             state_params = params if isinstance(params, dict) else {}
             if self._task_state is not None:
                 self._task_state.record_action(tool, state_params, thought)
+            self._save_checkpoint()
             self._emit(
                 {
                     "phase": "call",
@@ -255,6 +266,7 @@ class ToolUseLoop:
             last_observation = observation
             if self._task_state is not None:
                 self._task_state.record_observation(tool, observation)
+            self._save_checkpoint()
             self._emit({"phase": "result", "tool": tool, "observation": observation})
             steps.append(
                 {

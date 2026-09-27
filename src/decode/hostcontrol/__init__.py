@@ -13,10 +13,12 @@ from .policy import (
     FilesystemScope,
     PermissionMode,
     ScopeViolation,
+    command_output_bindings,
     command_output_paths,
     command_requires_target,
     command_target,
     resolve_mode_decision,
+    rewrite_command_output_paths,
 )
 from .session import HostSession
 
@@ -51,11 +53,11 @@ HOST_CAPABILITY_META = {
     ),
     "session_open": (
         RiskLevel.READ,
-        "Open a persistent shell session that keeps its working directory and environment across turns",
+        "Open a provider-bound session that keeps its working directory and environment across turns",
     ),
     "session_exec": (
         RiskLevel.WRITE,
-        "Run one command in the persistent session (cwd/env persist; per-command risk-classified). Opens the session on first use",
+        "Run one command in the provider-bound session (cwd/env persist; per-command risk-classified). Opens the session on first use",
     ),
     "session_close": (
         RiskLevel.READ,
@@ -75,8 +77,10 @@ __all__ = [
     "HostSession",
     "PermissionMode",
     "ScopeViolation",
+    "command_output_bindings",
     "command_output_paths",
     "command_requires_target",
     "command_target",
     "resolve_mode_decision",
+    "rewrite_command_output_paths",
 ]

@@ -1,7 +1,17 @@
 import asyncio
+import os
+import sys
 import time
 
-from .base import Command, ExecutionProvider, ExecutionResult, command_display
+from .base import (
+    Command,
+    EnvironmentCapabilities,
+    ExecutionContext,
+    ExecutionProvider,
+    ExecutionResult,
+    FilesystemMode,
+    command_display,
+)
 
 
 class LocalExecutor(ExecutionProvider):
@@ -13,29 +23,56 @@ class LocalExecutor(ExecutionProvider):
     def name(self) -> str:
         return "local"
 
+    @property
+    def platform(self) -> str:
+        return sys.platform
+
+    @property
+    def filesystem_mode(self) -> FilesystemMode:
+        return FilesystemMode.SHARED
+
+    @property
+    def capabilities(self) -> EnvironmentCapabilities:
+        return EnvironmentCapabilities(
+            command_execution=True,
+            tool_discovery=True,
+            cwd=True,
+            environment=True,
+            path_mapping=True,
+            scoped_filesystem=True,
+            stateful_sessions=True,
+        )
+
     async def execute(
         self,
         command: Command,
         timeout: int = DEFAULT_TIMEOUT,
         env: dict[str, str] | None = None,
+        context: ExecutionContext | None = None,
     ) -> ExecutionResult:
         start = time.time()
         proc = None
         display = command_display(command)
         try:
+            execution_context = self.prepare_context(context, env=env)
+            process_env = None
+            if execution_context.environment:
+                process_env = {**os.environ, **execution_context.environment}
             if isinstance(command, str):
                 proc = await asyncio.create_subprocess_shell(
                     command,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
-                    env=env,
+                    cwd=execution_context.cwd or None,
+                    env=process_env,
                 )
             else:
                 proc = await asyncio.create_subprocess_exec(
                     *(str(part) for part in command),
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
-                    env=env,
+                    cwd=execution_context.cwd or None,
+                    env=process_env,
                 )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             duration = time.time() - start
@@ -73,6 +110,16 @@ class LocalExecutor(ExecutionProvider):
                 exit_code=-1,
                 duration=time.time() - start,
                 error=f"Command not found: {e}",
+            )
+        except ValueError as e:
+            return ExecutionResult(
+                command=display,
+                provider=self.name,
+                success=False,
+                stderr=str(e),
+                exit_code=-1,
+                duration=time.time() - start,
+                error="invalid_execution_context",
             )
         except Exception as e:
             return ExecutionResult(

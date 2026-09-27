@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .app.config import Config
-from .execution import ExecutionResult, create_executor
+from .execution import ExecutionResult, create_configured_executor
 from .governance import GovernanceGate, ScopePolicy
 from .kernel.context import ContextManager
 from .kernel.provider import create_provider
@@ -47,7 +47,7 @@ class UniversalAgent:
         self.provider_name = provider or Config.PROVIDER
         Config.validate(self.provider_name)
         self.llm = create_provider(self.provider_name)
-        self.execution_provider = create_executor(Config.EXECUTOR)
+        self.execution_provider = create_configured_executor(Config.EXECUTOR)
         self.memory = SelfLearningMemory(Config.MEMORY_PATH)
         self.skill_registry = SkillRegistry()
 
@@ -209,6 +209,8 @@ class UniversalAgent:
         session_id: str | None = None,
         task_mode: Any = None,
         model_role: str = "worker",
+        resume_state: Any = None,
+        checkpoint: Any = None,
     ) -> dict[str, Any]:
         """Drive a bounded tool-use loop over host + playbook capabilities.
 
@@ -225,7 +227,7 @@ class UniversalAgent:
         from .hostcontrol.mcp import host_capability_tools
         from .runtime import HostController, ToolUseLoop
         from .runtime.coordinator import ExecutionStatus
-        from .schema import ScopeView, TaskMode, TaskState
+        from .schema import ScopeView, TaskMode, TaskState, TaskStatus
         from .verification import ModelVerifier, Verifier
 
         scope = filesystem_scope or FilesystemScope(read_roots=[Path.cwd()])
@@ -252,13 +254,44 @@ class UniversalAgent:
             environment={
                 "cwd": os.getcwd(),
                 "platform": platform.system(),
-                "executor": Config.EXECUTOR,
+                "executor": self.execution_provider.name,
             },
         )
         # Tie the task-state to the caller's session so checkpoints persist under
         # the same id, and expose it so callers can checkpoint it after the run.
         if session_id:
             task_state.session_id = session_id
+        if resume_state is not None:
+            if (
+                not session_id
+                or resume_state.session_id != session_id
+                or resume_state.objective != goal
+                or resume_state.status != TaskStatus.INVESTIGATING
+            ):
+                raise ValueError(
+                    "checkpoint does not match the active task and session"
+                )
+            if len(resume_state.actions) != len(resume_state.observations) or any(
+                action.step != observation.step or action.tool != observation.tool
+                for action, observation in zip(
+                    resume_state.actions, resume_state.observations, strict=True
+                )
+            ):
+                raise ValueError(
+                    "checkpoint has an unresolved action; manual review is required"
+                )
+            task_state = resume_state.model_copy(deep=True)
+            task_state.scope = ScopeView(
+                read_roots=list(getattr(scope, "read_roots", [])),
+                write_roots=list(getattr(scope, "write_roots", [])),
+                targets=list(self._scope_entries),
+                allow_destructive=self._allow_destructive,
+            )
+            task_state.environment = {
+                "cwd": os.getcwd(),
+                "platform": platform.system(),
+                "executor": self.execution_provider.name,
+            }
         self._last_task_state = task_state
 
         from .capabilities.coding import (
@@ -456,6 +489,7 @@ class UniversalAgent:
                 on_step=on_step,
                 task_state=task_state,
                 verifier=verifier,
+                checkpoint=checkpoint,
             )
             return await loop.run(goal)
         finally:

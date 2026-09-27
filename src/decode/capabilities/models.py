@@ -224,6 +224,9 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, CapabilityArgument]] = {
         "query": CapabilityArgument(
             type=ArgumentType.STRING, required=False, max_length=256
         ),
+        "exact": CapabilityArgument(
+            type=ArgumentType.STRING, required=False, max_length=256
+        ),
         "limit": CapabilityArgument(
             type=ArgumentType.INTEGER,
             required=False,
@@ -254,9 +257,7 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, CapabilityArgument]] = {
             type=ArgumentType.STRING, required=True, max_length=16384
         )
     },
-    "session_open": {
-        "cwd": CapabilityArgument(type=ArgumentType.PATH, required=False)
-    },
+    "session_open": {"cwd": CapabilityArgument(type=ArgumentType.PATH, required=False)},
     "session_exec": {
         "command": CapabilityArgument(
             type=ArgumentType.STRING, required=False, max_length=8192
@@ -365,9 +366,7 @@ class CapabilitySpec(BaseModel):
         if self.name in {"shell_command", "session_exec"}:
             supplied = [key for key in ("command", "argv") if key in normalized]
             if len(supplied) != 1:
-                raise ValueError(
-                    f"{self.name} requires exactly one of command or argv"
-                )
+                raise ValueError(f"{self.name} requires exactly one of command or argv")
         return normalized
 
     @staticmethod
@@ -559,7 +558,7 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
     ),
     "session_open": CapabilitySpec(
         name="session_open",
-        description="Open a governed local stateful session",
+        description="Open a governed provider-bound stateful session",
         category="host",
         risk=RiskLevel.READ,
         kind="internal",
@@ -567,7 +566,7 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
     ),
     "session_exec": CapabilitySpec(
         name="session_exec",
-        description="Run one governed command in a local stateful session",
+        description="Run one governed command in a provider-bound stateful session",
         category="host",
         risk=RiskLevel.WRITE,
         kind="internal",
@@ -575,7 +574,7 @@ CAPABILITIES: dict[str, CapabilitySpec] = {
     ),
     "session_close": CapabilitySpec(
         name="session_close",
-        description="Close a governed local stateful session",
+        description="Close a governed provider-bound stateful session",
         category="host",
         risk=RiskLevel.READ,
         kind="internal",

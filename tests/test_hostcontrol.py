@@ -11,10 +11,12 @@ from decode.hostcontrol import (
     HostSession,
     PermissionMode,
     ScopeViolation,
+    command_output_bindings,
     command_output_paths,
     command_requires_target,
     command_target,
     resolve_mode_decision,
+    rewrite_command_output_paths,
 )
 from decode.hostcontrol import operations as ops
 from decode.hostcontrol.mcp import host_capability_tools
@@ -97,6 +99,49 @@ class TestCommandPolicy(unittest.TestCase):
         paths = command_output_paths(argv, cwd="C:/authorized")
         self.assertEqual(len(paths), 1)
         self.assertTrue(str(paths[0]).replace("\\", "/").endswith("evidence/page.html"))
+
+    def test_output_rewrite_changes_only_classified_output_arguments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cwd = Path(directory)
+            output = cwd / "evidence" / "page.html"
+            argv = [
+                "sudo",
+                "curl",
+                "https://example.test/evidence/page.html",
+                "--output=evidence/page.html",
+            ]
+            bindings = command_output_bindings(argv, cwd=cwd)
+            rewritten = rewrite_command_output_paths(
+                argv,
+                {output: "/workspace/evidence/page.html"},
+                cwd=cwd,
+            )
+
+        self.assertEqual(len(bindings), 1)
+        self.assertEqual(bindings[0].argument_index, 3)
+        self.assertEqual(
+            rewritten,
+            [
+                "sudo",
+                "curl",
+                "https://example.test/evidence/page.html",
+                "--output=/workspace/evidence/page.html",
+            ],
+        )
+
+    def test_implicit_output_has_no_argument_to_rewrite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cwd = Path(directory)
+            argv = ["curl", "-O", "https://example.test/page.html"]
+            bindings = command_output_bindings(argv, cwd=cwd)
+            rewritten = rewrite_command_output_paths(
+                argv,
+                {cwd: "/workspace"},
+                cwd=cwd,
+            )
+
+        self.assertEqual(bindings[0].argument_index, None)
+        self.assertEqual(rewritten, argv)
 
     def test_network_target_is_extracted_and_diagnostics_stay_local(self):
         argv = ["curl", "https://api.example.test/v1"]

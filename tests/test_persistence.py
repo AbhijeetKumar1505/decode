@@ -40,9 +40,7 @@ class TestSessionStore(unittest.TestCase):
         self.assertEqual(len(sessions), 2)
 
     def test_list_sessions_breaks_timestamp_ties_by_creation_order(self):
-        with patch.object(
-            self.store, "_now", return_value="2026-09-18T00:00:00+00:00"
-        ):
+        with patch.object(self.store, "_now", return_value="2026-09-18T00:00:00+00:00"):
             first = self.store.create_session(goal="Goal 1")
             second = self.store.create_session(goal="Goal 2")
 
