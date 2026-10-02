@@ -1,10 +1,17 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from decode.persistence.store import SessionStore
 from decode.planner.dag import CompletionCriterion
-from decode.schema import ScopeView, TaskMode, TaskState, TaskStatus
+from decode.schema import (
+    ActiveEscalationKind,
+    ScopeView,
+    TaskMode,
+    TaskState,
+    TaskStatus,
+)
 from decode.schema.store import TaskStateStore
 
 
@@ -131,6 +138,41 @@ class TestTaskState(unittest.TestCase):
                 self.assertEqual(len(loaded.actions), 1)
                 self.assertEqual(loaded.findings[0].title, "missing test")
                 self.assertIsNone(ts_store.load("no-such-session"))
+            finally:
+                store.close()
+
+    def test_legacy_incomplete_active_result_gets_explicit_unknown_label(self):
+        with tempfile.TemporaryDirectory() as d:
+            store = SessionStore(db_path=Path(d) / "t.db")
+            try:
+                state = self._state()
+                payload = state.model_dump(mode="json")
+                payload["active_nodes"] = {
+                    "inspect": {
+                        "session_id": state.session_id,
+                        "node_id": "inspect",
+                        "workflow_fingerprint": "a" * 64,
+                        "node_fingerprint": "b" * 64,
+                        "outcome": "blocked",
+                        "attempts": 0,
+                        "observations": [],
+                    }
+                }
+                store.save_task_state(state.session_id, json.dumps(payload))
+                states = TaskStateStore(store)
+
+                loaded = states.load(state.session_id)
+                self.assertEqual(
+                    loaded.active_nodes["inspect"].escalation.kind,
+                    ActiveEscalationKind.LEGACY_UNCLASSIFIED,
+                )
+                states.save(loaded)
+                self.assertEqual(
+                    states.load(state.session_id)
+                    .active_nodes["inspect"]
+                    .escalation.kind,
+                    ActiveEscalationKind.LEGACY_UNCLASSIFIED,
+                )
             finally:
                 store.close()
 

@@ -114,6 +114,7 @@ class ToolUseLoop:
         verifier: Any = None,
         max_replans: int = 2,
         checkpoint: CheckpointCallback | None = None,
+        stop_on_failure: bool = False,
     ) -> None:
         self._provider = provider
         self._tools = tools
@@ -138,6 +139,7 @@ class ToolUseLoop:
         # message log alone.
         self._task_state = task_state
         self._checkpoint = checkpoint
+        self._stop_on_failure = stop_on_failure
 
     def _save_checkpoint(self) -> None:
         if self._task_state is not None and self._checkpoint is not None:
@@ -189,25 +191,53 @@ class ToolUseLoop:
                     verdict = self._verifier.verify(self._task_state, last_observation)
                     if inspect.isawaitable(verdict):  # e.g. a reviewer-model verifier
                         verdict = await verdict
-                    if not verdict.valid and self._replans < self._max_replans:
-                        self._replans += 1
-                        self._task_state.mark("investigating")
+                    if not verdict.valid:
+                        failed = (
+                            verdict.failed_criteria
+                            or verdict.reasons
+                            or ["completion verification failed"]
+                        )
+                        can_replan = self._replans < self._max_replans
+                        if can_replan:
+                            self._replans += 1
+                            self._task_state.mark("investigating")
+                        else:
+                            self._task_state.mark("blocked")
                         self._save_checkpoint()
                         self._emit(
                             {
                                 "phase": "verify",
                                 "valid": False,
-                                "failed": verdict.failed_criteria,
+                                "failed": failed,
                                 "replans": self._replans,
+                                "exhausted": not can_replan,
                             }
                         )
+                        if not can_replan:
+                            summary = "completion not verified: " + "; ".join(failed)
+                            self._emit(
+                                {
+                                    "phase": "final",
+                                    "verified": False,
+                                    "message": summary,
+                                    "state_summary": self._state_summary(),
+                                }
+                            )
+                            return {
+                                "final": summary,
+                                "thought": thought,
+                                "steps": steps,
+                                "stopped": "verification_failed",
+                                "failed_criteria": failed,
+                                "state_summary": self._state_summary(),
+                            }
                         messages.append(self._assistant_message(raw))
                         messages.append(
                             {
                                 "role": "user",
                                 "content": (
                                     "Verification failed before completing: "
-                                    + "; ".join(verdict.failed_criteria)
+                                    + "; ".join(failed)
                                     + ". Continue working to satisfy the completion conditions, "
                                     "or explain in a final message why they cannot be met."
                                 ),
@@ -276,6 +306,16 @@ class ToolUseLoop:
                     "observation": observation,
                 }
             )
+            if self._stop_on_failure and observation.get("success") is not True:
+                if self._task_state is not None:
+                    self._task_state.mark("blocked")
+                self._save_checkpoint()
+                return {
+                    "final": "governed stage action did not complete; review required",
+                    "steps": steps,
+                    "stopped": "action_failed",
+                    "state_summary": self._state_summary(),
+                }
             messages.append(self._assistant_message(raw))
             deferred_calls = int(decision.get("additional_tool_calls") or 0)
             one_call_note = (
@@ -294,6 +334,9 @@ class ToolUseLoop:
                     ),
                 }
             )
+        if self._stop_on_failure and self._task_state is not None:
+            self._task_state.mark("blocked")
+            self._save_checkpoint()
         return {
             "final": "step budget exhausted",
             "steps": steps,

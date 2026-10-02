@@ -183,6 +183,93 @@ class TestHostControlIntegration(unittest.TestCase):
         self.assertEqual(result.status, ExecutionStatus.SUCCESS)
         self.assertGreater(result.value.normalized["total"], 0)
 
+    def test_external_command_and_session_recheck_guard_after_preparation(self) -> None:
+        for capability in ("shell_command", "session_exec"):
+            with self.subTest(capability=capability):
+                provider = _MappedSessionProvider(self.root)
+                coordinator = _coordinator(Path(self.tmp.name), PermissionMode.AUTO)
+                host = HostController(
+                    coordinator, self.scope, CommandPolicy(), executor=provider
+                )
+                changed = False
+
+                def guard() -> str:
+                    return "scope changed during preparation" if changed else ""
+
+                coordinator.set_pre_execution_check(guard)
+                original = host._recheck_executables
+
+                async def prepare(action: Any) -> Any:
+                    nonlocal changed
+                    result = await original(action)
+                    await asyncio.sleep(0)
+                    changed = True
+                    return result
+
+                host._recheck_executables = prepare
+                params = {"argv": ["pwd"]}
+                if capability == "session_exec":
+                    opened = self._run(host, "session_open", {"cwd": str(self.root)})
+                    self.assertEqual(opened.status, ExecutionStatus.SUCCESS)
+                result = self._run(host, capability, params)
+                self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+                self.assertEqual(provider.commands, [])
+                self.assertIn("scope changed", result.error)
+                self.assertTrue(coordinator._logging.get_logs(tool_filter=capability))
+                self.assertTrue(
+                    coordinator._feedback.get_execution_feedback(capability)
+                )
+                self.assertTrue(coordinator._audit.query(event_type="rejection"))
+
+    def test_external_launch_rechecks_actual_host_restrictions(self) -> None:
+        for capability in ("shell_command", "session_exec"):
+            for mutation in ("scope", "policy", "provider", "mapping", "session"):
+                if mutation == "session" and capability != "session_exec":
+                    continue
+                with self.subTest(capability=capability, mutation=mutation):
+                    provider = _MappedSessionProvider(self.root)
+                    coordinator = _coordinator(Path(self.tmp.name), PermissionMode.AUTO)
+                    host = HostController(
+                        coordinator, self.scope, CommandPolicy(), executor=provider
+                    )
+                    if capability == "session_exec":
+                        opened = self._run(
+                            host, "session_open", {"cwd": str(self.root)}
+                        )
+                        self.assertTrue(opened.success)
+                    original = host._recheck_executables
+
+                    async def prepare(action: Any) -> Any:
+                        result = await original(action)
+                        await asyncio.sleep(0)
+                        if mutation == "scope":
+                            host.set_scope(FilesystemScope(), host._policy)
+                        elif mutation == "policy":
+                            host.set_scope(self.scope, None)
+                        elif mutation == "provider":
+                            host._executor = _MappedSessionProvider(self.root)
+                        elif mutation == "mapping":
+                            provider._mappings = ()
+                        else:
+                            host._provider_session.context = ExecutionContext(
+                                cwd="/other"
+                            )
+                        return result
+
+                    host._recheck_executables = prepare
+                    result = self._run(host, capability, {"argv": ["pwd"]})
+                    self.assertFalse(result.success)
+                    self.assertEqual(provider.commands, [])
+                    self.assertTrue(
+                        coordinator._logging.get_logs(tool_filter=capability)
+                    )
+                    self.assertTrue(
+                        coordinator._feedback.get_execution_feedback(capability)
+                    )
+                    self.assertTrue(
+                        coordinator._audit.query(event_type="tool_execution")
+                    )
+
     def test_plan_mode_denies_execution(self):
         host = self._host(mode=PermissionMode.PLAN)
         result = self._run(host, "file_read", {"path": str(self.root / "x")})

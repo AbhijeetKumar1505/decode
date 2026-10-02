@@ -10,12 +10,13 @@ The plan/action DAG is a reused :class:`PlanGraph`; completion conditions reuse
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..planner.dag import CompletionCriterion, PlanGraph
 
@@ -39,6 +40,131 @@ class TaskStatus(str, Enum):
     BLOCKED = "blocked"
     COMPLETE = "complete"
     FAILED = "failed"
+
+
+class ActiveOutcome(str, Enum):
+    COMPLETED = "completed"
+    NEEDS_REPLAN = "needs_replan"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+
+
+class ActiveEscalationKind(str, Enum):
+    POLICY = "policy"
+    APPROVAL = "approval"
+    DEPENDENCY = "dependency"
+    VERIFICATION = "verification"
+    TIMEOUT = "timeout"
+    CANCELLATION = "cancellation"
+    SAFETY = "safety"
+    EXECUTION = "execution"
+    BUDGET = "budget"
+    MATERIAL_CHANGE = "material_change"
+    LEGACY_UNCLASSIFIED = "legacy_unclassified"
+
+
+class ActiveEscalation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: ActiveEscalationKind
+    request_id: str = ""
+
+
+class ActiveObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    request_id: str = Field(min_length=1, max_length=128)
+    capability: str = Field(min_length=1, max_length=128)
+    provider: str = Field(min_length=1, max_length=128)
+    status: Literal["success", "denied", "blocked", "error", "timeout", "cancelled"]
+    success: bool = False
+    error_category: Literal[
+        "",
+        "policy_denial",
+        "approval_required",
+        "approval_rejected",
+        "approval_invalid",
+        "approval_expired",
+        "missing_dependency",
+        "timeout",
+        "cancellation",
+        "execution_failure",
+        "telemetry_failure",
+        "unsupported_action",
+    ] = ""
+    evidence_id: str = Field(default="", max_length=128)
+    evidence_hash: str = Field(default="", pattern=r"^(?:[a-f0-9]{64})?$")
+    signals: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def evidence_pair_and_success(self) -> ActiveObservation:
+        if bool(self.evidence_id) != bool(self.evidence_hash):
+            raise ValueError("active observation evidence id and hash must be paired")
+        if self.success and self.status != "success":
+            raise ValueError("active observation success requires execution success")
+        if any(
+            not (
+                (name == "file_sha256" and re.fullmatch(r"[a-f0-9]{64}", value))
+                or (name == "file_path_sha256" and re.fullmatch(r"[a-f0-9]{64}", value))
+                or (
+                    name == "file_size_bytes"
+                    and re.fullmatch(r"0|[1-9][0-9]*", value)
+                    and len(value) <= 19
+                    and int(value) <= 2**63 - 1
+                )
+            )
+            for name, value in self.signals.items()
+        ):
+            raise ValueError("active observation signals must be known file metadata")
+        return self
+
+
+class ActiveNodeResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    session_id: str = Field(min_length=1)
+    node_id: str = Field(min_length=1)
+    workflow_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    node_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    outcome: ActiveOutcome
+    gate_passed: bool = False
+    attempts: int = Field(default=0, ge=0, le=32)
+    observations: tuple[ActiveObservation, ...] = Field(default=(), max_length=32)
+    failed_criteria: tuple[str, ...] = ()
+    escalation: ActiveEscalation | None = None
+
+    @model_validator(mode="after")
+    def completion_requires_observation_and_gate(self) -> ActiveNodeResult:
+        if self.outcome is ActiveOutcome.COMPLETED and (
+            not self.gate_passed
+            or not any(
+                observation.success
+                and observation.evidence_id
+                and observation.evidence_hash
+                for observation in self.observations
+            )
+            or self.failed_criteria
+            or self.escalation is not None
+        ):
+            raise ValueError(
+                "active completion requires a successful gated protected observation"
+            )
+        if self.outcome is not ActiveOutcome.COMPLETED and self.escalation is None:
+            raise ValueError("incomplete active result requires typed escalation")
+        if (
+            self.escalation is not None
+            and self.escalation.request_id
+            and not any(
+                item.request_id == self.escalation.request_id
+                for item in self.observations
+            )
+        ):
+            raise ValueError("active escalation must refer to an observed request")
+        if self.attempts < sum(
+            observation.status != "blocked" for observation in self.observations
+        ):
+            raise ValueError("active attempts cannot be below observed executions")
+        return self
 
 
 class Hypothesis(BaseModel):
@@ -113,6 +239,7 @@ class TaskState(BaseModel):
     observations: list[Observation] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     artifacts: list[Artifact] = Field(default_factory=list)
+    active_nodes: dict[str, ActiveNodeResult] = Field(default_factory=dict)
     unresolved_questions: list[str] = Field(default_factory=list)
     completion_conditions: list[CompletionCriterion] = Field(default_factory=list)
     status: TaskStatus = TaskStatus.INVESTIGATING

@@ -6,6 +6,8 @@ operational database as sessions, findings, and plans, keyed by session id.
 
 from __future__ import annotations
 
+import json
+
 from ..persistence.store import SessionStore
 from ..runtime.coordinator import redact_sensitive
 from .task_state import TaskState
@@ -31,4 +33,17 @@ class TaskStateStore:
 
     def load(self, session_id: str) -> TaskState | None:
         raw = self._store.load_task_state(session_id)
-        return TaskState.model_validate_json(raw) if raw else None
+        if not raw:
+            return None
+        payload = json.loads(raw)
+        active_nodes = (
+            payload.get("active_nodes", {}) if isinstance(payload, dict) else {}
+        )
+        for active in active_nodes.values() if isinstance(active_nodes, dict) else ():
+            if (
+                isinstance(active, dict)
+                and active.get("outcome") != "completed"
+                and "escalation" not in active
+            ):
+                active["escalation"] = {"kind": "legacy_unclassified"}
+        return TaskState.model_validate(payload)

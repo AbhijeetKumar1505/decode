@@ -407,6 +407,13 @@ class CoordinatedResult(BaseModel):
     evidence: EvidenceReference | None = None
 
 
+class CoordinatedCancellation(asyncio.CancelledError):
+    def __init__(self, result: CoordinatedResult, provider: str) -> None:
+        super().__init__("execution cancelled")
+        self.result = result
+        self.provider = provider
+
+
 ApprovalCallback = Callable[
     [ApprovalRequest],
     bool | ApprovalGrant | Awaitable[bool | ApprovalGrant],
@@ -456,6 +463,7 @@ class ExecutionCoordinator:
         self._gate = gate
         self._approval_callback = approval_callback
         self._hooks = hooks
+        self._pre_execution_check: Callable[[], str] | None = None
         self._audit = audit or gate.audit
         runtime_root = self._audit.base_path.parent
         self._logging = logging_service or LoggingService(runtime_root / "logs")
@@ -466,6 +474,9 @@ class ExecutionCoordinator:
 
     def set_approval_callback(self, callback: ApprovalCallback | None) -> None:
         self._approval_callback = callback
+
+    def set_pre_execution_check(self, callback: Callable[[], str] | None) -> None:
+        self._pre_execution_check = callback
 
     def set_mode(self, mode: Any) -> None:
         self._gate.set_mode(mode)
@@ -478,6 +489,8 @@ class ExecutionCoordinator:
         request: ExecutionRequest,
         operation: ExecutionOperation,
         approval_callback: ApprovalCallback | None = None,
+        *,
+        preparation: ExecutionOperation | None = None,
     ) -> CoordinatedResult:
         request_id = str(uuid.uuid4())
         started = time.perf_counter()
@@ -569,6 +582,7 @@ class ExecutionCoordinator:
                 audit_event=False,
             )
 
+        effective_approval_expiry = request.approval_expires_at
         if decision.decision == Decision.NEEDS_APPROVAL:
             selected_approval = approval_callback or self._approval_callback
             if selected_approval is None:
@@ -655,6 +669,7 @@ class ExecutionCoordinator:
                     "approval expired before execution",
                     started,
                 )
+            effective_approval_expiry = min(grant.expires_at, expires_at)
             if request.approval_digest() != digest:
                 return self._finish_without_execution(
                     request,
@@ -677,6 +692,22 @@ class ExecutionCoordinator:
                 started,
             )
 
+        if self._pre_execution_check is not None:
+            try:
+                reason = self._pre_execution_check()
+            except Exception:
+                reason = "pre-execution validation unavailable"
+            if reason:
+                return self._finish_without_execution(
+                    request,
+                    request_id,
+                    digest,
+                    ExecutionStatus.BLOCKED,
+                    ExecutionErrorCategory.UNSUPPORTED_ACTION,
+                    self._safe_text(reason),
+                    started,
+                )
+
         if not self._record_authorization(request, request_id, digest):
             return self._telemetry_unavailable(request, request_id, digest, started)
 
@@ -686,7 +717,79 @@ class ExecutionCoordinator:
             request.target,
         )
         try:
-            value = await operation()
+            launch_check = self._pre_execution_check
+            launch_mode = self.get_mode()
+            value = await preparation() if preparation is not None else None
+            if value is None:
+                if preparation is not None:
+                    reason = ""
+                    if (
+                        request.approval_digest() != digest
+                        or request.resolved_action_error()
+                    ):
+                        reason = "material resolved action changed during preparation"
+                    elif (
+                        self._pre_execution_check is not launch_check
+                        or self.get_mode() != launch_mode
+                    ):
+                        reason = "execution restrictions changed during preparation"
+                    elif self._pre_execution_check is not None:
+                        try:
+                            reason = self._pre_execution_check()
+                        except Exception:
+                            reason = "pre-execution validation unavailable"
+                    if not reason:
+                        try:
+                            launch_decision = self._gate.evaluate(
+                                request.action,
+                                request.target,
+                                request.risk.value,
+                                target_required=request.target_required,
+                            )
+                        except Exception:
+                            return self._telemetry_unavailable(
+                                request, request_id, digest, started
+                            )
+                        if launch_decision.decision is Decision.DENY:
+                            return self._finish_without_execution(
+                                request,
+                                request_id,
+                                digest,
+                                ExecutionStatus.DENIED,
+                                ExecutionErrorCategory.POLICY_DENIAL,
+                                launch_decision.reason,
+                                started,
+                                audit_event=False,
+                            )
+                        if (
+                            launch_decision.decision is Decision.NEEDS_APPROVAL
+                            and decision.decision is not Decision.NEEDS_APPROVAL
+                        ):
+                            reason = "execution now requires renewed approval"
+                    if reason:
+                        return self._finish_without_execution(
+                            request,
+                            request_id,
+                            digest,
+                            ExecutionStatus.BLOCKED,
+                            ExecutionErrorCategory.UNSUPPORTED_ACTION,
+                            self._safe_text(reason),
+                            started,
+                        )
+                if (
+                    effective_approval_expiry is not None
+                    and effective_approval_expiry <= datetime.now(UTC)
+                ):
+                    return self._finish_without_execution(
+                        request,
+                        request_id,
+                        digest,
+                        ExecutionStatus.DENIED,
+                        ExecutionErrorCategory.APPROVAL_EXPIRED,
+                        "approval expired before launch",
+                        started,
+                    )
+                value = await operation()
         except asyncio.CancelledError:
             result = self._terminal_result(
                 request,
@@ -699,7 +802,7 @@ class ExecutionCoordinator:
                 started,
             )
             self._record_terminal(request, result)
-            raise
+            raise CoordinatedCancellation(result, request.executor) from None
         except TimeoutError:
             result = self._terminal_result(
                 request,

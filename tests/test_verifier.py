@@ -11,6 +11,40 @@ TOOLS = [{"name": "test_run", "description": "Run the test suite"}]
 
 
 class TestVerifier(unittest.TestCase):
+    def test_at_least_criterion_requires_numeric_minimum(self):
+        criterion = CompletionCriterion(
+            kind="at_least", field="successful_actions", expected=2
+        )
+        self.assertFalse(criterion.check({"successful_actions": True})[0])
+        self.assertFalse(criterion.check({"successful_actions": float("nan")})[0])
+        self.assertFalse(criterion.check({"successful_actions": 1})[0])
+        self.assertTrue(criterion.check({"successful_actions": 2})[0])
+
+    def test_successful_actions_and_protected_evidence_are_derived(self):
+        state = TaskState(objective="inspect")
+        state.completion_conditions = [
+            CompletionCriterion(
+                kind="at_least", field="successful_actions", expected=2
+            ),
+            CompletionCriterion(kind="at_least", field="evidence_count", expected=1),
+        ]
+        state.record_action("inspect", {})
+        state.record_observation(
+            "inspect", {"success": True, "evidence": {"id": "raw-only"}}
+        )
+        verdict = Verifier().verify(state)
+        self.assertFalse(verdict.valid)
+        self.assertEqual(len(verdict.failed_criteria), 2)
+        state.record_action("inspect", {})
+        state.record_observation(
+            "inspect",
+            {
+                "success": True,
+                "evidence": {"id": "protected", "sha256": "digest"},
+            },
+        )
+        self.assertTrue(Verifier().verify(state).valid)
+
     def test_no_conditions_accepts(self):
         state = TaskState(objective="x")
         result = Verifier().verify(state)
@@ -133,6 +167,30 @@ class TestLoopReplanWithModelReviewer(unittest.TestCase):
         self.assertEqual(result["final"], "done for real")
         self.assertTrue(any(s["tool"] == "test_run" for s in result["steps"]))
 
+    def test_reviewer_rejection_after_budget_blocks_completion(self):
+        worker = _ScriptedProvider([json.dumps({"message": "done"})])
+        reviewer = _ScriptedProvider(
+            [json.dumps({"valid": False, "reasons": ["evidence missing"]})]
+        )
+
+        async def invoke(name, params):
+            raise AssertionError("no action should execute")
+
+        state = TaskState(objective="verify evidence")
+        loop = ToolUseLoop(
+            worker,
+            TOOLS,
+            invoke,
+            task_state=state,
+            verifier=ModelVerifier(reviewer),
+            max_replans=0,
+        )
+
+        result = asyncio.run(loop.run("verify evidence"))
+        self.assertEqual(result["stopped"], "verification_failed")
+        self.assertEqual(result["failed_criteria"], ["evidence missing"])
+        self.assertEqual(state.status.value, "blocked")
+
 
 class TestLoopReplan(unittest.TestCase):
     def test_finalization_blocked_until_condition_met(self):
@@ -173,7 +231,7 @@ class TestLoopReplan(unittest.TestCase):
         self.assertTrue(any(s["tool"] == "test_run" for s in result["steps"]))
 
     def test_replan_is_bounded(self):
-        # Model always tries to finish; condition never satisfied -> bounded, then accepts.
+        # Model always tries to finish; exhausted verification must not accept it.
         provider = _ScriptedProvider([json.dumps({"message": "done"})] * 6)
 
         async def invoke(name, params):
@@ -193,8 +251,40 @@ class TestLoopReplan(unittest.TestCase):
             max_replans=2,
         )
         result = asyncio.run(loop.run("impossible"))
-        # after max_replans it accepts the final message rather than looping forever
-        self.assertEqual(result["stopped"], "final")
+        self.assertEqual(result["stopped"], "verification_failed")
+        self.assertIn("completion not verified", result["final"])
+        self.assertEqual(state.status.value, "blocked")
+        self.assertTrue(result["failed_criteria"])
+
+    def test_exhausted_verification_checkpoints_blocked_state(self):
+        provider = _ScriptedProvider([json.dumps({"message": "done"})])
+
+        async def invoke(name, params):
+            raise AssertionError("no action should execute")
+
+        state = TaskState(objective="verify")
+        state.completion_conditions.append(
+            CompletionCriterion(kind="equals", field="last_success", expected=True)
+        )
+        checkpoints = []
+        events = []
+        loop = ToolUseLoop(
+            provider,
+            TOOLS,
+            invoke,
+            task_state=state,
+            verifier=Verifier(),
+            max_replans=0,
+            checkpoint=lambda current: checkpoints.append(current.status.value),
+            on_step=events.append,
+        )
+
+        result = asyncio.run(loop.run("verify"))
+        self.assertEqual(result["stopped"], "verification_failed")
+        self.assertEqual(state.status.value, "blocked")
+        self.assertEqual(checkpoints, ["investigating", "blocked"])
+        self.assertEqual([event["phase"] for event in events], ["verify", "final"])
+        self.assertFalse(events[-1]["verified"])
 
 
 if __name__ == "__main__":

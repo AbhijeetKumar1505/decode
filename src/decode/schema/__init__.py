@@ -8,6 +8,11 @@ observations, findings, open questions, and completion conditions.
 
 from .task_state import (
     ActionRecord,
+    ActiveEscalation,
+    ActiveEscalationKind,
+    ActiveNodeResult,
+    ActiveObservation,
+    ActiveOutcome,
     Artifact,
     Finding,
     Hypothesis,
@@ -20,6 +25,11 @@ from .task_state import (
 
 __all__ = [
     "ActionRecord",
+    "ActiveEscalation",
+    "ActiveEscalationKind",
+    "ActiveNodeResult",
+    "ActiveObservation",
+    "ActiveOutcome",
     "Artifact",
     "Finding",
     "Hypothesis",

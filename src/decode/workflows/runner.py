@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ..persistence.manager import SessionManager
-from ..schema import ScopeView, TaskState, TaskStatus
+from ..schema import ActiveEscalationKind, ScopeView, TaskState, TaskStatus
 from ..schema.store import TaskStateStore
+from .agent_executor import ActiveStageRuntime
 from .models import (
     StageExecution,
+    StageOutcome,
     StageResult,
     WorkflowRunReport,
     WorkflowSpec,
@@ -129,18 +132,60 @@ class WorkflowRunner:
                 f"execute deterministic workflow stage {stage.id}",
             )
             context = self._context(state, spec, stage)
+            runtime = ActiveStageRuntime(state, context.model_copy(deep=True))
             try:
+                bind_state = getattr(executor, "bind_state", None)
+                if callable(bind_state):
+                    bind_state(state)
                 result = executor(context)
                 if inspect.isawaitable(result):
                     result = await result
                 result = StageResult.model_validate(result)
-            except Exception as exc:
-                result = StageResult(
-                    success=False,
-                    error=f"{type(exc).__name__}: {exc}",
-                    summary="stage executor failed",
+            except asyncio.CancelledError:
+                result = runtime.finish(
+                    StageResult(
+                        success=False,
+                        outcome=StageOutcome.BLOCKED,
+                        error="workflow stage cancelled; review required",
+                    ),
+                    escalation=ActiveEscalationKind.CANCELLATION,
+                )
+            except Exception:
+                result = runtime.finish(
+                    StageResult(
+                        success=False,
+                        error="stage executor failed; no automatic replay",
+                        summary="stage executor failed",
+                    ),
+                    escalation=ActiveEscalationKind.EXECUTION,
+                )
+            if result.active is not None and (
+                result.active.session_id != state.session_id
+                or result.active.node_id != stage.id
+                or result.active.workflow_fingerprint
+                != state.environment.get("workflow_fingerprint")
+                or result.active.node_fingerprint
+                != state.plan.nodes[stage.id].material_fingerprint()
+            ):
+                result = runtime.finish(
+                    StageResult(
+                        success=False,
+                        outcome=StageOutcome.BLOCKED,
+                        error="active result does not match the durable workflow node",
+                    ),
+                    escalation=ActiveEscalationKind.MATERIAL_CHANGE,
                 )
             gate_ok, failures = stage.gate.check(result)
+            if result.active is not None and result.active.gate_passed != gate_ok:
+                result = runtime.finish(
+                    StageResult(
+                        success=False,
+                        outcome=StageOutcome.BLOCKED,
+                        error="active result gate differs from durable workflow gate",
+                    ),
+                    escalation=ActiveEscalationKind.VERIFICATION,
+                )
+                gate_ok, failures = stage.gate.check(result)
             self._record_result(state, stage, result)
             if gate_ok:
                 self._checkpoint(
@@ -148,6 +193,11 @@ class WorkflowRunner:
                 )
                 continue
             reason = "; ".join(failures)
+            if result.outcome in {StageOutcome.NEEDS_REPLAN, StageOutcome.BLOCKED}:
+                self._checkpoint(state, stage.id, "needs_review", reason)
+                state.mark(TaskStatus.BLOCKED)
+                self._states.save(state)
+                return self._report(state, spec, message=reason)
             self._checkpoint(state, stage.id, "error", reason)
             state.mark(TaskStatus.FAILED)
             self._states.save(state)
@@ -227,6 +277,8 @@ class WorkflowRunner:
     def _record_result(
         self, state: TaskState, stage: WorkflowStage, result: StageResult
     ) -> None:
+        if result.active is not None:
+            state.active_nodes[stage.id] = result.active
         first = result.evidence[0] if result.evidence else None
         state.record_observation(
             f"workflow:{stage.id}",
@@ -236,6 +288,8 @@ class WorkflowRunner:
                 "data": {
                     "final": result.final,
                     "successful_actions": result.successful_actions,
+                    "outcome": result.outcome.value,
+                    "failed_criteria": result.failed_criteria,
                     **result.data,
                 },
                 "evidence": ({"id": first.id, "sha256": first.sha256} if first else {}),

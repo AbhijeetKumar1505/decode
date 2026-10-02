@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from .app.config import Config
@@ -18,6 +19,7 @@ from .models import (
 from .observability.audit import AuditLayer
 from .observability.feedback import FeedbackStore
 from .observability.logging_service import LoggingService
+from .planner import CompletionCriterion
 from .runtime import (
     ApprovalRequest,
     CoordinatedResult,
@@ -27,6 +29,7 @@ from .runtime import (
     redact_sensitive,
     target_from_params,
 )
+from .runtime.coordinator import CoordinatedCancellation
 from .skills.base import RiskLevel
 from .skills.registry import SkillRegistry
 
@@ -119,6 +122,7 @@ class UniversalAgent:
         allow_all: bool = False,
         allow_destructive: bool | None = None,
     ) -> None:
+        previous = getattr(self, "_coordinator", None)
         self._scope_entries = [entry.strip() for entry in entries if entry.strip()]
         self._allow_all = allow_all
         if allow_destructive is not None:
@@ -132,12 +136,18 @@ class UniversalAgent:
             audit=self.audit,
             allow_destructive=self._allow_destructive,
         )
+        if previous is not None:
+            gate.set_mode(previous.get_mode())
         self._coordinator = ExecutionCoordinator(
             gate,
+            approval_callback=previous._approval_callback if previous else None,
+            hooks=previous._hooks if previous else None,
             logging_service=self.logging,
             audit=self.audit,
             feedback=self.feedback,
         )
+        if previous is not None:
+            self._coordinator.set_pre_execution_check(previous._pre_execution_check)
 
     async def execute_registered_skill(
         self,
@@ -209,8 +219,12 @@ class UniversalAgent:
         session_id: str | None = None,
         task_mode: Any = None,
         model_role: str = "worker",
+        completion_conditions: list[CompletionCriterion] | None = None,
         resume_state: Any = None,
         checkpoint: Any = None,
+        on_governed_result: Callable[[CoordinatedResult, str], None] | None = None,
+        before_governed_call: Callable[[], str] | None = None,
+        stop_on_failure: bool = False,
     ) -> dict[str, Any]:
         """Drive a bounded tool-use loop over host + playbook capabilities.
 
@@ -244,6 +258,10 @@ class UniversalAgent:
         # loop reads and writes each turn, seeded from the goal, scope, and env.
         task_state = TaskState(
             objective=goal,
+            completion_conditions=[
+                CompletionCriterion.model_validate(item).model_copy(deep=True)
+                for item in (completion_conditions or [])
+            ],
             mode=TaskMode(task_mode) if task_mode is not None else TaskMode.HYBRID,
             scope=ScopeView(
                 read_roots=list(getattr(scope, "read_roots", [])),
@@ -267,6 +285,11 @@ class UniversalAgent:
                 or resume_state.session_id != session_id
                 or resume_state.objective != goal
                 or resume_state.status != TaskStatus.INVESTIGATING
+                or (
+                    completion_conditions is not None
+                    and resume_state.completion_conditions
+                    != task_state.completion_conditions
+                )
             ):
                 raise ValueError(
                     "checkpoint does not match the active task and session"
@@ -360,9 +383,15 @@ class UniversalAgent:
             "destructive": RiskLevel.DESTRUCTIVE,
         }
 
-        def _observe(result: Any) -> dict[str, Any]:
-            ok = result.status == ExecutionStatus.SUCCESS
+        def _observe(result: CoordinatedResult, provider: str) -> dict[str, Any]:
+            if on_governed_result is not None:
+                on_governed_result(result, provider)
             value = result.value
+            ok = (
+                result.status == ExecutionStatus.SUCCESS
+                and result.success
+                and getattr(value, "success", True) is True
+            )
             evidence = (
                 {"id": result.evidence.id, "sha256": result.evidence.sha256}
                 if getattr(result, "evidence", None) is not None
@@ -435,11 +464,36 @@ class UniversalAgent:
             async def _op() -> Any:
                 return await executor.execute(command)
 
-            return _observe(await self._coordinator.execute(request, _op))
+            return _observe(
+                await self._coordinator.execute(request, _op), f"mcp/{cap.server}"
+            )
 
         async def invoke(name: str, params: dict[str, Any]) -> dict[str, Any]:
+            if before_governed_call is not None:
+                reason = before_governed_call()
+                if reason:
+                    from .runtime.coordinator import ExecutionRequest
+
+                    async def no_execution() -> None:
+                        return None
+
+                    return _observe(
+                        await self._coordinator.execute(
+                            ExecutionRequest(
+                                action=name,
+                                risk=RiskLevel.READ,
+                                executor="internal",
+                                blocked_reason=reason,
+                                metadata={"source": "active_stage"},
+                            ),
+                            no_execution,
+                        ),
+                        "internal",
+                    )
             if name in host_caps:
-                return _observe(await host.run(name, params))
+                return _observe(
+                    await host.run(name, params), host._executor_name_for(name)
+                )
             if is_coding_capability(name):
                 # Typed coding capability: translate to a governed shell_command
                 # (no new execution path) and enrich the observation with parsed
@@ -449,7 +503,8 @@ class UniversalAgent:
                 except ValueError as exc:
                     return {"success": False, "summary": str(exc), "data": {}}
                 observation = _observe(
-                    await host.run("shell_command", {"argv": argv}, stdin=stdin)
+                    await host.run("shell_command", {"argv": argv}, stdin=stdin),
+                    host._executor_name_for("shell_command"),
                 )
                 observation["data"] = {
                     **(observation.get("data") or {}),
@@ -459,13 +514,24 @@ class UniversalAgent:
             cap = registry.get(name)
             if cap is not None and cap.source == "mcp":
                 return await _mcp_invoke(cap, params)
-            return _observe(await self.execute_registered_skill(name, params))
+            return _observe(
+                await self.execute_registered_skill(name, params), Config.EXECUTOR
+            )
 
         # Apply the loop's permission mode + approval prompt to the shared
         # coordinator for the duration of the loop, then restore. Host caps and
         # skills both route through this coordinator, so approval is consistent.
         prev_mode = self._coordinator.get_mode()
         prev_callback = self._coordinator._approval_callback
+        stage_coordinator = self._coordinator
+        prev_check = stage_coordinator._pre_execution_check
+        if before_governed_call is not None:
+
+            def check_stage_execution() -> str:
+                prior_reason = prev_check() if prev_check is not None else ""
+                return prior_reason or before_governed_call()
+
+            stage_coordinator.set_pre_execution_check(check_stage_execution)
         if permission_mode is not None:
             self._coordinator.set_mode(permission_mode)
         if approval_callback is not None:
@@ -490,9 +556,15 @@ class UniversalAgent:
                 task_state=task_state,
                 verifier=verifier,
                 checkpoint=checkpoint,
+                stop_on_failure=stop_on_failure,
             )
             return await loop.run(goal)
+        except CoordinatedCancellation as exc:
+            if on_governed_result is not None:
+                on_governed_result(exc.result, exc.provider)
+            raise
         finally:
+            stage_coordinator.set_pre_execution_check(prev_check)
             self._coordinator.set_mode(prev_mode)
             self._coordinator.set_approval_callback(prev_callback)
 

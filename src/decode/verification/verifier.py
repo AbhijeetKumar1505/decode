@@ -11,6 +11,8 @@ context fields:
   (e.g. ``last_observation.exit_code``, ``last_observation.stdout``).
 - ``findings_count`` (int), ``findings`` (list[str] of titles)
 - ``observations_count`` (int)
+- ``successful_actions`` (int), ``evidence_count`` (int) — successful
+  observations and artifacts with both a protected evidence id and hash.
 - ``status`` (str) — the current task status.
 
 With no completion conditions declared, verification accepts (nothing to check).
@@ -43,10 +45,15 @@ class Verifier:
             else (latest.data if latest is not None else {})
         ) or {}
         findings = getattr(task_state, "findings", [])
+        artifacts = getattr(task_state, "artifacts", [])
         return {
             "last_success": bool(latest.success) if latest is not None else False,
             "last_observation": last_data,
             "observations_count": len(observations),
+            "successful_actions": sum(bool(item.success) for item in observations),
+            "evidence_count": sum(
+                bool(item.evidence_id and item.evidence_hash) for item in artifacts
+            ),
             "findings_count": len(findings),
             "findings": [f.title for f in findings],
             "status": getattr(task_state.status, "value", str(task_state.status)),
