@@ -63,8 +63,12 @@ Provider: local / WSL / Docker / SSH / MCP
 Verification -> Evidence -> Findings -> Memory / Audit / Usage
 ```
 
-Core Brain, Active Brain, and workflow v2 are Target. The current universal loop
-is a Bridge that combines some of these responsibilities.
+Core Brain and workflow v2 remain Target. Phase 2 implements a bounded Active
+stage runtime in the Python workflow Bridge: shared context, working
+observations, deterministic local gates, and typed completion/escalation for
+model-driven or explicit model-free READ stages. The full Core/Active split,
+cross-node recovery, and general semantic validators remain Target. The
+interactive universal loop is still Bridge behavior.
 
 ### Execution kernel
 

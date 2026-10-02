@@ -29,9 +29,11 @@ workflow runtime. Documentation uses five maturity labels:
 The current baseline includes the Python CLI/TUI, universal tool loop,
 coordinator and governance, host capabilities, execution providers, SQLite,
 evidence/audit foundations, task/DAG primitives, model adapters, and MCP.
-Markdown workflows and the combined universal loop are Bridge components. The
-Core/Active Brain split, workflow v2 schema, runtime FSM, UTOS, local API,
-TypeScript CLI, and AWS deployment are Target or Deferred work.
+Markdown workflows and the combined universal loop are Bridge components.
+Phase 2 implements a bounded Active stage runtime with model-driven and
+model-free READ execution, typed escalation, protected evidence, and local
+verification. The full Core/Active Brain split, workflow v2 schema, runtime FSM,
+UTOS, local API, TypeScript CLI, and AWS deployment are Target or Deferred work.
 
 Use the [canonical build plan](docs/BUILD_PLAN.md) for sequence and the
 [continuation ledger](docs/CONTINUATION.md) to resume implementation safely.
@@ -97,9 +99,10 @@ Provider: local / WSL / Docker / SSH / MCP
 Verification -> Evidence -> Findings -> Memory / Audit / Usage
 ```
 
-Core Brain and Active Brain are Target architecture. Today, the universal agent
-loop combines parts of those responsibilities and must remain bounded by the
-same execution coordinator. Workflows own procedure, capabilities describe
+Core Brain and the full split remain Target architecture. The bounded Active
+runtime now wraps one workflow node around the universal loop or an explicit
+model-free READ action. Both use the same execution coordinator. Workflows own
+procedure, capabilities describe
 stable operations, providers own environment-specific discovery and execution,
 and tools remain replaceable mechanisms.
 

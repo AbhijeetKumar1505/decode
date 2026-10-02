@@ -1,7 +1,7 @@
 # De-code Documentation
 
 **Architecture generation:** v2 transition
-**Last reconciled:** 2026-09-17
+**Last reconciled:** 2026-10-01
 
 De-code is a governed engineering and authorized-security execution system. The
 model supplies cognition; deterministic workflows, state, policy, capabilities,

@@ -74,3 +74,29 @@ hash, structured log, audit, feedback, and no automatic action replay on
 resume. The Docker process tests separately use
 `DECODE_DOCKER_CONFORMANCE_IMAGE`. These tests do not attest to every Linux
 distribution or arbitrary CLI side effect.
+
+## Phase 2 bounded Active gate
+
+`tests/test_workflows.py` exercises model-driven and model-free stages using
+scripted models and real governed READs. Tests check typed completion/escalation,
+durable node/workflow bindings, protected evidence hashes, log/audit/feedback,
+blocked budgets, no-action finals, initialization/runtime errors, cancellation,
+denied WRITE without replay, material mutation during approval, preservation
+and restoration of existing pre-execution restrictions, unavailable launch
+validation failing closed, dependency readiness, bounded
+context, exact file criteria, refreshed dependency evidence, and safe resume.
+No live model API or real security target is needed.
+
+Shipping regressions also exercise scope reset preserving a prior guard,
+material changes during awaited executable preparation, dependency parameter
+and Active-record mutation, and in-flight cancellation provenance in both
+adapters. Host/coordinator tests directly revoke external scope, policy,
+provider mappings, and session context during preparation and expire a shorter
+approval grant with a fake clock; they assert no command launch and telemetry.
+
+Local stage conformance runs by default. The same Phase 1 opt-ins enable
+`test_kali_active_stage_conformance_with_and_without_model` and
+`test_docker_active_stage_conformance_with_and_without_model` on the live
+selected providers. Docker uses an already-cached GNU-compatible image with
+network disabled; it never pulls or installs a dependency. These are provider
+stage gates, not a claim that the entire unit suite ran inside that image.
