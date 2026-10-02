@@ -24,7 +24,13 @@ Commander/Ink/Zod API client. Later Tauri/React desktop. No second engine.
 
 Provider-neutral gateway; OpenRouter/direct/local adapters; logical roles and
 UTOS; no LangChain/LangGraph foundation. SQLite is canonical; JSON/Markdown/SARIF
-exports; Tree-sitter before optional embeddings.
+exports; Tree-sitter before optional embeddings. The Engineering Knowledge Layer
+starts with the existing SQLite graph tables, optional FTS5 indexing, and an
+opt-in read-only Markdown vault adapter. A dedicated graph database is Research,
+not a Phase 2 dependency. [Kuzu's upstream repository](https://github.com/kuzudb/kuzu)
+was archived in 2025; evaluate its active successor
+[LadybugDB](https://github.com/LadybugDB/ladybug) only if measured graph
+traversal needs outgrow the SQLite baseline.
 
 Targets are native Linux, explicit WSL distributions including Kali, Docker/OCI,
 and explicit SSH/MCP. AWS is Deferred.

@@ -6,6 +6,7 @@ recovery metadata. They do not grant approval or execute tools.
 
 import hashlib
 import json
+import math
 from enum import Enum
 from typing import Any
 
@@ -43,7 +44,21 @@ class CompletionCriterion(BaseModel):
             )
         if self.kind == "present" and actual in (None, "", [], {}):
             return False, f"completion criterion failed: {self.field} is required"
-        if self.kind not in {"equals", "present"}:
+        if self.kind == "at_least":
+            if (
+                isinstance(actual, bool)
+                or not isinstance(actual, (int, float))
+                or isinstance(self.expected, bool)
+                or not isinstance(self.expected, (int, float))
+                or not math.isfinite(actual)
+                or not math.isfinite(self.expected)
+                or actual < self.expected
+            ):
+                return (
+                    False,
+                    f"completion criterion failed: {self.field} is below the required minimum",
+                )
+        if self.kind not in {"equals", "present", "at_least"}:
             return False, f"unsupported completion criterion: {self.kind}"
         return True, ""
 

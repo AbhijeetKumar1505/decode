@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from pydantic import ValidationError
 
@@ -14,6 +15,7 @@ from decode.persistence.evidence import ProtectedEvidenceStore
 from decode.runtime import (
     ActionPath,
     ApprovalGrant,
+    ApprovalRequest,
     ExecutionCoordinator,
     ExecutionErrorCategory,
     ExecutionIdentity,
@@ -148,6 +150,44 @@ class _FailingEvidenceStore:
 
 
 class TestExecutionCoordinator(unittest.TestCase):
+    def test_pre_execution_validation_failure_is_closed_and_audited(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            audit, logging, feedback = self._services(root)
+            coordinator = ExecutionCoordinator(
+                GovernanceGate(ScopePolicy(["192.0.2.10"]), audit=audit),
+                logging_service=logging,
+                audit=audit,
+                feedback=feedback,
+            )
+
+            def unavailable_check() -> str:
+                raise RuntimeError("password=synthetic-secret")
+
+            coordinator.set_pre_execution_check(unavailable_check)
+            executed: list[bool] = []
+
+            async def operation() -> None:
+                executed.append(True)
+
+            result = asyncio.run(
+                coordinator.execute(
+                    ExecutionRequest(
+                        action="inspect", target="192.0.2.10", risk=RiskLevel.READ
+                    ),
+                    operation,
+                )
+            )
+            self.assertEqual(executed, [])
+            self.assertEqual(result.status, ExecutionStatus.BLOCKED)
+            self.assertEqual(
+                result.error_category, ExecutionErrorCategory.UNSUPPORTED_ACTION
+            )
+            self.assertEqual(result.error, "pre-execution validation unavailable")
+            self.assertNotIn("synthetic-secret", str(logging.get_logs()))
+            self.assertTrue(audit.query(event_type="rejection"))
+            self.assertTrue(feedback.get_execution_feedback("inspect"))
+
     def _services(self, root: Path):
         audit = AuditLayer(root / "audit")
         logging = LoggingService(root / "logs")
@@ -318,6 +358,68 @@ class TestExecutionCoordinator(unittest.TestCase):
                 )
                 self.assertEqual(result.error_category, expected)
                 self.assertEqual(executed, [])
+
+    def test_shorter_approval_grant_expires_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            audit, logging, feedback = self._services(root)
+            now = datetime.now(UTC)
+            clock = now
+            executed = []
+
+            def approve(request: ApprovalRequest) -> ApprovalGrant:
+                return ApprovalGrant(
+                    digest=request.digest,
+                    approved_at=now,
+                    expires_at=now + timedelta(seconds=1),
+                )
+
+            async def preparation() -> None:
+                nonlocal clock
+                await asyncio.sleep(0)
+                clock = now + timedelta(seconds=2)
+
+            def guard() -> str:
+                nonlocal clock
+                clock = now + timedelta(seconds=2)
+                return ""
+
+            async def operation() -> None:
+                executed.append(True)
+
+            coordinator = ExecutionCoordinator(
+                GovernanceGate(ScopePolicy(allow_all=True), audit=audit),
+                approval_callback=approve,
+                logging_service=logging,
+                audit=audit,
+                feedback=feedback,
+            )
+            request = ExecutionRequest(
+                action="write_action",
+                risk=RiskLevel.WRITE,
+                approval_expires_at=now + timedelta(seconds=60),
+            )
+            with patch("decode.runtime.coordinator.datetime", wraps=datetime) as dates:
+                dates.now.side_effect = lambda *_: clock
+                for prepare in (True, False):
+                    with self.subTest(preparation=prepare):
+                        clock = now
+                        coordinator.set_pre_execution_check(None if prepare else guard)
+                        result = asyncio.run(
+                            coordinator.execute(
+                                request,
+                                operation,
+                                preparation=preparation if prepare else None,
+                            )
+                        )
+                        self.assertEqual(
+                            result.error_category,
+                            ExecutionErrorCategory.APPROVAL_EXPIRED,
+                        )
+            self.assertEqual(executed, [])
+            self.assertTrue(logging.get_logs(tool_filter="write_action"))
+            self.assertTrue(feedback.get_execution_feedback("write_action"))
+            self.assertTrue(audit.query(event_type="rejection"))
 
     def test_material_change_after_approval_never_executes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -628,7 +730,7 @@ class TestExecutionCoordinator(unittest.TestCase):
                 audit=audit,
                 feedback=feedback,
             )
-            with self.assertRaises(asyncio.CancelledError):
+            with self.assertRaises(asyncio.CancelledError) as cancelled:
                 asyncio.run(
                     coordinator.execute(
                         ExecutionRequest(
@@ -639,6 +741,11 @@ class TestExecutionCoordinator(unittest.TestCase):
                     )
                 )
 
+            self.assertTrue(cancelled.exception.result.request_id)
+            self.assertEqual(
+                cancelled.exception.result.status, ExecutionStatus.CANCELLED
+            )
+            self.assertEqual(cancelled.exception.provider, "")
             self.assertEqual(
                 feedback.get_execution_feedback("safe_lookup")[0]["error"],
                 "cancellation",

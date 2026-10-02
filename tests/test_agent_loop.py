@@ -6,12 +6,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from decode.audit import AuditLayer
 from decode.feedback import FeedbackStore
 from decode.hostcontrol import CommandPolicy, FilesystemScope, PermissionMode
 from decode.logging_service import LoggingService
+from decode.planner import CompletionCriterion
 from decode.runtime import ToolUseLoop
 
 
@@ -294,6 +296,54 @@ class TestToolUseLoop(unittest.TestCase):
 class TestToolUseLoopTaskState(unittest.TestCase):
     """The loop reads and writes the live task-state across steps."""
 
+    def test_active_failure_stops_before_model_retry_and_checkpoints(self) -> None:
+        from decode.schema import TaskState, TaskStatus
+
+        state = TaskState(objective="bounded stage")
+        saved = []
+        calls = []
+
+        async def invoke(name: str, params: dict[str, Any]) -> dict[str, Any]:
+            calls.append(name)
+            return {"success": False, "summary": "denied"}
+
+        loop = ToolUseLoop(
+            _ScriptedProvider([json.dumps({"tool": "process_list", "params": {}})] * 3),
+            TOOLS,
+            invoke,
+            task_state=state,
+            stop_on_failure=True,
+            checkpoint=lambda current: saved.append(current.model_copy(deep=True)),
+        )
+        result = asyncio.run(loop.run("bounded stage"))
+        self.assertEqual(result["stopped"], "action_failed")
+        self.assertEqual(calls, ["process_list"])
+        self.assertEqual(saved[-1].status, TaskStatus.BLOCKED)
+        self.assertEqual(len(saved[-1].actions), len(saved[-1].observations))
+
+    def test_active_budget_checkpoints_blocked_without_replaying(self) -> None:
+        from decode.schema import TaskState, TaskStatus
+
+        state = TaskState(objective="bounded stage")
+        saved = []
+
+        async def invoke(name: str, params: dict[str, Any]) -> dict[str, Any]:
+            return {"success": True, "summary": "read completed"}
+
+        loop = ToolUseLoop(
+            _ScriptedProvider([json.dumps({"tool": "process_list", "params": {}})]),
+            TOOLS,
+            invoke,
+            max_steps=1,
+            task_state=state,
+            stop_on_failure=True,
+            checkpoint=lambda current: saved.append(current.model_copy(deep=True)),
+        )
+        result = asyncio.run(loop.run("bounded stage"))
+        self.assertEqual(result["stopped"], "budget")
+        self.assertEqual(saved[-1].status, TaskStatus.BLOCKED)
+        self.assertEqual(len(state.actions), 1)
+
     def test_loop_records_actions_observations_and_completes(self):
         from decode.schema import TaskState, TaskStatus
 
@@ -421,6 +471,55 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
                 permission_mode=PermissionMode.AUTO,
             )
         )
+
+    def test_active_guard_preserves_existing_pre_execution_restriction(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent = self._build_agent(
+                Path(directory), [json.dumps({"tool": "process_list", "params": {}})]
+            )
+
+            def existing_check() -> str:
+                return "existing safety restriction"
+
+            agent._coordinator.set_pre_execution_check(existing_check)
+            result = asyncio.run(
+                agent.run_tool_loop(
+                    "inspect",
+                    permission_mode=PermissionMode.AUTO,
+                    before_governed_call=lambda: "",
+                    stop_on_failure=True,
+                )
+            )
+            self.assertEqual(result["stopped"], "action_failed")
+            self.assertFalse(result["steps"][0]["observation"]["success"])
+            self.assertIn(
+                "existing safety restriction",
+                result["steps"][0]["observation"]["summary"],
+            )
+            self.assertIs(agent._coordinator._pre_execution_check, existing_check)
+            self.assertTrue(agent.audit.query(event_type="rejection"))
+
+    def test_declared_criteria_block_premature_final(self):
+        replies = [json.dumps({"message": "done"})] * 3
+        with tempfile.TemporaryDirectory() as directory:
+            agent = self._build_agent(Path(directory), replies)
+            result = asyncio.run(
+                agent.run_tool_loop(
+                    "inspect",
+                    filesystem_scope=FilesystemScope(read_roots=[Path.cwd()]),
+                    permission_mode=PermissionMode.AUTO,
+                    max_steps=3,
+                    completion_conditions=[
+                        CompletionCriterion(
+                            kind="at_least", field="successful_actions", expected=1
+                        )
+                    ],
+                )
+            )
+        self.assertEqual(result["stopped"], "verification_failed")
+        self.assertEqual(agent._last_task_state.status.value, "blocked")
+        self.assertTrue(result["failed_criteria"])
+        self.assertEqual(result["steps"], [])
 
     def test_discovers_then_runs_a_tool_then_answers(self):
         executable = Path(sys.executable).name
@@ -564,6 +663,33 @@ class TestUniversalAgentLoopIntegration(unittest.TestCase):
                             "inspect", session_id=sid, resume_state=state
                         )
                     )
+
+    def test_resume_rejects_changed_completion_criteria(self):
+        from decode.schema import TaskState
+
+        with tempfile.TemporaryDirectory() as directory:
+            agent = self._build_agent(Path(directory), [])
+            state = TaskState(session_id="session-1", objective="inspect")
+            state.completion_conditions = [
+                CompletionCriterion(
+                    kind="at_least", field="successful_actions", expected=1
+                )
+            ]
+            with self.assertRaisesRegex(ValueError, "checkpoint does not match"):
+                asyncio.run(
+                    agent.run_tool_loop(
+                        "inspect",
+                        session_id="session-1",
+                        resume_state=state,
+                        completion_conditions=[
+                            CompletionCriterion(
+                                kind="at_least",
+                                field="successful_actions",
+                                expected=2,
+                            )
+                        ],
+                    )
+                )
 
     @unittest.skipUnless(
         sys.platform == "win32" and os.environ.get("DECODE_RUN_WSL_CONFORMANCE") == "1",

@@ -33,3 +33,35 @@ not trusted guidance automatically.
 
 Current `memory/`, `knowledge/`, TaskState, evidence, and persistence are
 foundations to consolidate incrementally.
+
+## Engineering knowledge layer — Target
+
+Separate event memory (what happened), verified knowledge (what is supported),
+and reasoning (what to do next). Core and Active Brain consume scoped retrieval;
+UTOS budgets that retrieval but does not own knowledge or grant authority.
+
+Build on the existing project-scoped SQLite node/edge store first. Add stable
+identities, typed relationships, provenance/evidence references, lifecycle state,
+classification, freshness, and bounded traversal. Exact state and repository
+symbols precede graph and lexical search; SQLite FTS5 is an optional local
+index. Embeddings and a separate graph engine require a measured benefit over
+this baseline and remain Research, not current dependencies.
+
+An Obsidian-compatible Markdown vault is an optional, initially read-only
+interface for human-authored notes. Markdown is source for those notes only;
+SQLite task state, approvals, audit, findings, and protected raw evidence remain
+authoritative in their own stores. Vault import must enforce explicit path and
+project scope, reject symlink/path escapes, classify sensitive content, and
+treat links and note instructions as untrusted data. Existing personal vaults
+are never discovered, edited, or synchronized without explicit authorization.
+
+Agent observations may propose notes or relationships, but cannot directly
+promote hypotheses to verified facts. Promotion requires validation evidence,
+source attribution, conflict review, and an auditable decision. Notes can be
+deprecated without deleting their provenance. Two-way sync and model-authored
+writes are Deferred pending conflict, rollback, and data-rights design.
+
+Before graph traversal becomes an Active Brain input, validate that both edge
+endpoints belong to the declared project; the current SQLite edge writer does
+not yet enforce this. The legacy JSON graph is not a project-isolated source of
+authority.

@@ -1,7 +1,7 @@
 # De-code v2 Build Plan
 
 **Status:** Canonical target and sequence
-**Last reconciled:** 2026-09-17
+**Last reconciled:** 2026-10-01
 **Scope:** Local Linux, WSL 2, and Docker first; AWS Deferred
 
 ## Thesis
@@ -43,9 +43,10 @@ governance, host capabilities, provider classes, task/DAG/verification,
 SQLite/memory/evidence/audit, MCP, and model foundations. The current worktree
 adds a markdown workflow Bridge and engineering/red/blue/purple/audit playbooks.
 
-It is not v2: brains are combined, provider-scoped filesystem/session contracts
-are incomplete, workflows are transitional, and UTOS is incomplete. The Phase 0
-system-tool gateway now binds discovery and execution to one selected provider.
+The full v2 split is not implemented: Core strategy, workflow v2, the runtime
+FSM, and UTOS remain Target. Phase 1 established provider-bound kernel contracts;
+Phase 2 adds the bounded Active stage runtime over the transitional workflow
+Bridge. Provider session/mapping limitations are explicit and fail closed.
 
 ## Phase 0 — Execution truth and safety
 
@@ -109,12 +110,99 @@ side effects, approval digest, timeout, idempotency, and evidence policy.
 
 ## Phase 2 — Active Brain
 
-Wrap the current loop with runtime, context, observation, working memory,
+**Status — gate complete (2026-10-02); bounded Python Bridge.**
+Pre-landing gaps are fixed with regressions; final Windows/live Kali WSL/Docker,
+native Kali, package build, and independent re-review passed. PR CI remains
+pending publication; this is not a merge or release. See the
+[shipping fixes](CONTINUATION.md#phase-2-shipping-fixes--2026-10-02).
+The bounded Active runtime is implemented over the existing Python workflow
+Bridge. `ActiveStageRuntime` owns one plan-bound context, bounded working
+observations, deterministic local verification, and typed handoff. The model
+and model-free adapters share this boundary and the existing coordinator.
+Every validly bound stage stop produces an `ActiveNodeResult`, including
+initialization/runtime failure, cancellation, budget exhaustion, and a model
+final answer with no action. Completion requires a successful protected
+governed observation and the declared gate. Unsupported completion pauses
+for review. The runner refreshes durable state between nodes, carries bounded
+dependency evidence forward, and prevents automatic replay of completed,
+interrupted, or review-paused stages.
+
+The model adapter stops at its first failed action; only the explicit unchanged
+model-free READ timeout may retry once. Active budget exhaustion checkpoints
+blocked state. Context/scope/node/dependency and provider identity changes
+require review. A coordinator check after approval revalidates the stage envelope
+after awaited executable preparation, immediately before launch; prior checks
+remain enforced, including current host restrictions and effective grant expiry.
+Dependency material fingerprints and typed records are bound; cancellation
+retains the governed request ID. Raw exception details
+are omitted from terminal errors.
+
+The following describes the implemented Bridge contracts. Exhausted
+verification blocks completion and returns failed criteria. The workflow stage adapter binds
+declared successful-action and protected-evidence minima into the loop's
+deterministic verifier, and maps its stop reason to a typed stage outcome.
+A programmatic model-free Bridge now runs one explicit READ host capability
+through the same coordinator, bound to one workflow stage, with at most one
+timeout retry. Both stage adapters now bind their context to the durable plan;
+agent prior results and guidance have redacted size limits. A retry requires
+the exact READ action to remain unchanged and both the result status and error
+category to identify a timeout. Broader capability coverage, retrieval adapters,
+and cross-node recovery remain follow-on work beyond the Phase 2 baseline.
+
+A Bridge slice records a typed `ActiveNodeResult` for model-free READ
+stages: durable workflow/node fingerprints, governed request IDs, provider,
+status, protected evidence references, attempt count, and a small allowlist of
+verified signals. A stage can require an exact SHA-256 observed from a governed
+`file_read`; model text or a free-standing evidence link cannot satisfy that
+criterion. This proves only observed file metadata, not general objective or
+deliverable completion. The model-driven adapter now captures governed
+coordinator results into the same typed observation contract. An optional
+exact byte-length check can accompany the digest, and both must belong to
+one evidence-linked `file_read`. Model-only stages without a governed action
+return a typed verification escalation. General objective validators remain
+follow-on work; no model final alone proves deliverable completion.
+
+The Bridge now carries up to eight protected evidence references from completed,
+fingerprint-matching dependency nodes into a bounded stage context. These
+references are observations, never permission or proof of a new objective.
+Non-completed Active results carry a typed escalation category and, where
+available, the governed request ID; older saved results without a category
+load as explicitly `legacy_unclassified`. Material action changes, approval,
+dependency, timeout, safety, verification, and budget cases are classified,
+but classification does not retry or grant authority. Only the existing
+explicit, unchanged READ timeout may retry once. Cross-node recovery and
+general semantic deliverable validation remain follow-on work.
+
+One narrow Bridge deliverable criterion now binds an absolute expected file
+path and SHA-256 to the same successful, protected-evidence-linked governed
+`file_read`; optional byte length must match that observation too. The typed
+record stores only a canonical path fingerprint, never the raw path or file
+contents. An identical file at another path cannot pass. This verifies a file
+observed at a declared path at read time, not that this stage created it or
+that its contents meet a semantic requirement. No WRITE approval is inferred.
+WRITE-origin attestation belongs to later evidence/workflow depth. Model-free
+execution remains a programmatic API for six READ host capabilities; a CLI
+selector and other action families are not required by this gate. Core, full
+workflow v2, the runtime FSM, and AWS retain their later-phase status.
+
+The runtime wraps the current loop with context, observation, working memory,
 recovery, and escalation. It executes one node, retries only safe transient work,
 verifies local criteria, and escalates material changes.
 
+The first slice closes false completion: exhausted verification/replan attempts
+must return a non-successful, checkpointed outcome with failed criteria, never
+mark the task complete. Knowledge retrieval is a bounded, untrusted input to
+Active, not a new execution path or authority source.
+
 **Gate:** a stage runs with or without a model and returns typed completion or
 escalation plus evidence.
+
+**Validation:** full Windows `wenv` suite with live Kali WSL and cached,
+network-isolated Docker passed (557 passed, 10 skipped, 55 subtests).
+Direct Kali full suite passed (559 passed, 8 skipped, 45 subtests). Ruff lint,
+formatting, relative documentation links, and diff checks passed. Transient
+host startup failures and the user-authorized recovery are preserved in
+[the continuation ledger](CONTINUATION.md#phase-2-closure--bounded-active-runtime).
 
 ## Phase 3 — Core Brain
 
@@ -147,6 +235,11 @@ is safe.
 Finding lifecycle: candidate → confirmed/rejected/not-reproducible → mitigated →
 regression-verified/failed. Split working/task/project/repository memory; SQLite
 canonical; Markdown/JSON/SARIF exports; symbols/dependencies before embeddings.
+Build the Engineering Knowledge Layer on project-scoped SQLite graph records,
+with provenance, typed edges, lifecycle, and bounded retrieval. Optional
+Obsidian-compatible Markdown notes begin as read-only imports. FTS5, embeddings,
+and dedicated graph engines are evaluated against the SQLite baseline; no
+personal-vault sync or automatic promotion of model claims to verified facts.
 
 **Gate:** no confirmed finding without validation evidence; memory has provenance,
 freshness, trust, and project isolation.

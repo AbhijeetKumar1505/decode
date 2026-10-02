@@ -20,6 +20,7 @@ from typing import Any
 from ..agents.host import HostAgent
 from ..capabilities import CAPABILITIES
 from ..execution import (
+    EnvironmentIdentity,
     ExecutionContext,
     ExecutionProvider,
     ExecutionResult,
@@ -388,12 +389,29 @@ class HostController:
             "command_policy": self._policy,
             "stdin": stdin,
         }
+        bound_executor = self._executor
+        bound_environment = bound_executor.identify() if bound_executor else None
+        bound_scope = (self._scope.read_roots, self._scope.write_roots)
+
+        async def _prepare() -> Any:
+            if capability == "shell_command" and resolved_action is not None:
+                return await self._recheck_executables(resolved_action)
+            return None
 
         async def _op() -> Any:
             if capability == "shell_command" and resolved_action is not None:
-                identity_error = await self._recheck_executables(resolved_action)
-                if identity_error is not None:
-                    return identity_error
+                failure = self._validate_command_binding(
+                    resolved_action,
+                    argv,
+                    risk,
+                    bound_executor,
+                    bound_environment,
+                    bound_scope,
+                )
+                if failure is not None:
+                    return failure
+                context["filesystem_scope"] = self._scope
+                context["command_policy"] = self._policy
             if capability == "shell_command" and self._uses_external_provider:
                 if stdin is not None:
                     return ExecutionResult(
@@ -424,7 +442,7 @@ class HostController:
                 return await self._list_provider_tools(normalized_params)
             return await self._agent.run(node, self._registry, context=context)
 
-        return await self._coordinator.execute(request, _op)
+        return await self._coordinator.execute(request, _op, preparation=_prepare)
 
     @property
     def _executor_name(self) -> str:
@@ -656,6 +674,46 @@ class HostController:
                 )
             )
         return resolved_argv, tuple(identities), None
+
+    def _validate_command_binding(
+        self,
+        action: ResolvedAction,
+        argv: list[str],
+        risk: RiskLevel,
+        executor: ExecutionProvider | None,
+        environment: EnvironmentIdentity | None,
+        scope: tuple[list[str], list[str]],
+    ) -> ExecutionResult | None:
+        try:
+            if (self._scope.read_roots, self._scope.write_roots) != scope:
+                raise ScopeViolation("filesystem scope changed during preparation")
+            if self._scope.is_empty or self._policy is None:
+                raise ScopeViolation("host restrictions unavailable before launch")
+            self._policy.check(argv)
+            if (
+                _RISK_ORDER[RiskLevel(self._policy.classify(argv).value)]
+                > _RISK_ORDER[risk]
+            ):
+                raise ScopeViolation("command risk changed during preparation")
+            if self._executor is not executor or (
+                executor is not None and executor.identify() != environment
+            ):
+                raise ScopeViolation("provider binding changed during preparation")
+            for output in action.outputs:
+                self._scope.check(output.host, write=True)
+                if self._uses_external_provider:
+                    mapped = executor.map_path(output.host, write=True)
+                    if mapped.provider_path != output.provider:
+                        raise ScopeViolation("provider output mapping changed")
+        except (ScopeViolation, ValueError):
+            return ExecutionResult(
+                command=list(action.argv),
+                provider=action.provider,
+                success=False,
+                exit_code=-1,
+                error="host restrictions changed before launch",
+            )
+        return None
 
     async def _recheck_executables(
         self,
@@ -1126,10 +1184,52 @@ class HostController:
             },
         )
 
+        bound_executor = self._executor
+        bound_environment = bound_executor.identify()
+        bound_scope = (self._scope.read_roots, self._scope.write_roots)
+        bound_session_context = session.context.model_copy(deep=True)
+
+        async def _prepare() -> Any:
+            return await self._recheck_executables(action)
+
         async def _exec() -> Any:
-            identity_error = await self._recheck_executables(action)
-            if identity_error is not None:
-                return identity_error
+            failure = self._validate_command_binding(
+                action,
+                argv,
+                risk,
+                bound_executor,
+                bound_environment,
+                bound_scope,
+            )
+            if failure is not None:
+                return failure
+            try:
+                if (
+                    self._provider_session is not existing
+                    or session.context != bound_session_context
+                    or (
+                        existing is not None
+                        and self._provider_session_host_cwd != host_cwd
+                    )
+                ):
+                    raise ScopeViolation("provider session changed before launch")
+                self._scope.check(host_cwd, write=False)
+                if next_context is not None:
+                    self._scope.check(next_host_cwd, write=False)
+                if (
+                    self._executor.map_path(host_cwd).provider_path
+                    != execution_context.cwd
+                ):
+                    raise ScopeViolation("provider working directory mapping changed")
+                self._executor.prepare_session_context(session, execution_context)
+            except (ScopeViolation, ValueError):
+                return ExecutionResult(
+                    command=provider_command,
+                    provider=action.provider,
+                    success=False,
+                    exit_code=-1,
+                    error="provider session restrictions changed before launch",
+                )
             if existing is None:
                 self._provider_session = session
                 self._provider_session_host_cwd = host_cwd
@@ -1149,7 +1249,7 @@ class HostController:
                 self._provider_session_host_cwd,
             )
 
-        return await self._coordinator.execute(request, _exec)
+        return await self._coordinator.execute(request, _exec, preparation=_prepare)
 
     async def _run_local_session(
         self, capability: str, params: dict[str, Any]
@@ -1323,6 +1423,9 @@ class HostController:
             metadata={"source": "host_controller", "capability": "session_exec"},
         )
 
+        async def _prepare() -> Any:
+            return await self._recheck_executables(action)
+
         async def _exec() -> Any:
             if (
                 self._policy is not policy
@@ -1362,10 +1465,7 @@ class HostController:
                     exit_code=-1,
                     error=str(exc),
                 )
-            identity_error = await self._recheck_executables(action)
-            if identity_error is not None:
-                return identity_error
             self._session = session
             return self._agent._result("session_exec", session.run(resolved_argv))
 
-        return await self._coordinator.execute(request, _exec)
+        return await self._coordinator.execute(request, _exec, preparation=_prepare)

@@ -2,6 +2,51 @@
 
 ## Unreleased
 
+- Hardened Phase 2 launch boundaries: scope reset preserves existing guards;
+  awaited preparation precedes final governance and effective approval-expiry
+  checks; host restrictions and provider/session bindings are revalidated at
+  launch. Dependency material mutations invalidate bound context, and cancelled
+  actions retain their governed request IDs in Active handoff. Added regressions
+  for these paths, including actual host-policy revocation and shorter grants.
+
+- Implemented the bounded Phase 2 Active runtime over the workflow Bridge:
+  shared context, working observations, local gates, and durable typed handoff
+  for model-driven and model-free READ stages. Completion requires protected
+  governed evidence; no-action finals, errors, cancellation, and budgets cannot
+  silently complete. Failed model actions stop without automatic retry;
+  material/provider changes require review, including changes during approval.
+  Durable state refreshes between
+  nodes so bounded dependency evidence reaches the next stage. Added offline
+  lifecycle regressions and opt-in live Kali WSL/Docker stage conformance.
+  Windows, native Kali, and live WSL/Docker stage gates passed after a
+  user-authorized host-engine recovery; the failure history is retained.
+- Added a narrow evidence-bound file-artifact gate: an absolute declared path
+  and SHA-256 must match one protected governed read (and byte length when
+  declared). Active observations store only the path fingerprint; a same-byte
+  file at another path cannot satisfy the criterion.
+- Added bounded, fingerprint-checked dependency evidence references to Active
+  stage context and typed escalation categories for incomplete Active results.
+  Preflight/material-change refusals retain governed request provenance;
+  older saved incomplete results load with an explicit unknown category.
+- Carried coordinator-originated action provenance into model-driven workflow
+  stages and stopped accepting model-loop step text or loose task artifacts as
+  action/evidence counts. Added an exact file byte-length gate that can be
+  paired with SHA-256 on the same protected read observation; denied-only
+  model stages now pause despite a final answer.
+- Added a typed, provenance-bearing Active-node record for governed model-free
+  READ stages and an exact evidence-linked file SHA-256 workflow gate. The
+  runner checks node binding and gate consistency before checkpointing; raw
+  file content is excluded from this record.
+- Added a programmatic model-free workflow Bridge for one exact, scoped READ
+  host action. It uses the existing governance/evidence/telemetry path, returns
+  typed stage outcomes, retries only an explicitly permitted timeout once, and
+  pauses when the deterministic stage gate is unmet. CLI exposure and broader
+  capabilities remain future work.
+- Bound both stage adapters to a typed snapshot of the durable workflow plan,
+  bounded and redacted model context, and tightened the READ retry classifier
+  to require an unchanged action and an unambiguous timeout. Model-free
+  preflight denials now retain audit, log, and feedback records without
+  executing the rejected action.
 - Completed the Phase 1 governed task gate on local Linux, Kali WSL, and
   Docker: automatic sanitized checkpoints, safe same-task resume, verified
   evidence links, and mandatory execution telemetry. Failed checkpoints stop
@@ -28,6 +73,9 @@
 
 ### Fixed
 
+- Declared completion conditions now fail closed when bounded replanning is
+  exhausted: the task checkpoints as blocked and returns failed criteria
+  instead of accepting an unsupported final answer.
 - Replaced dynamic artifact INSERT, SELECT, and UPDATE SQL construction with
   fixed statements or fixed query fragments and bound values; added a
   SQL-metacharacter regression test. Kept the CI security scan enforced.
