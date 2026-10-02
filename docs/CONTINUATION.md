@@ -23,8 +23,9 @@ Phase 2's bounded Active runtime gate was recorded complete on 2026-10-01,
 then reopened by pre-landing review. The user authorized fixing the gaps,
 adding regressions, committing, and opening a PR from `feat/working` to `main`
 on 2026-10-02. The fixes below passed final environment validation and independent
-re-review. Phase 2's bounded Python Bridge gate is closed; publication to a PR
-is authorized, not a merge. Phase 3 remains Target; AWS remains Deferred.
+re-review. Phase 2's bounded Python Bridge gate is closed and published in
+[PR #21](https://github.com/AbhijeetKumar1505/decode/pull/21), from `feat/working`
+to `main`; it is not merged. Phase 3 remains Target; AWS remains Deferred.
 
 Current worktree also has `src/decode/workflows/`, workflow playbooks, CLI
 integration, and `tests/test_workflows.py`. Preserve these as Phase 4 Bridge.
@@ -78,10 +79,20 @@ integration, and `tests/test_workflows.py`. Preserve these as Phase 4 Bridge.
   in-host review is used instead. Bandit is not installed; no installation is
   authorized. Bandit and CI's clean Python 3.11/3.12/install-build lanes remain
   PR CI checks; no green CI claim is made before their results.
-- Next action: commit the reviewed Phase 2 work, push `feat/working`, complete
-  documentation sync, and open a PR against `main`. Then review CI before
-  beginning Phase 3. Do not merge, force-push, implement Phase 3, or deploy AWS
-  as part of this request. Version remains 1.0.0; this is not a release.
+- Publication: implementation/regressions committed as `66ff4c2`, contracts and
+  validation as `7526fe8`; both pushed to `feat/working`. PR #21 is open against
+  `main`. Initial CI lint, Python 3.11/3.12, security, and build jobs were in
+  progress when checked; no green CI claim is made.
+- Post-push documentation sync was dispatched but could not start its shell or
+  alternate runtime (`helper_unknown_error`). It could not read its skill,
+  inspect the repository, or audit documentation health; no edits, commits,
+  or pushes occurred. Parent documentation/link validation remains recorded
+  above; independent documentation-health audit is unavailable, not passed.
+- Next action: review PR #21's CI results before starting the Phase 3 plan;
+  optionally rerun the independent documentation audit once its runtime works.
+  No input is required for the completed publication request. Do not merge,
+  force-push, implement Phase 3, or deploy AWS as part of this request.
+  Version remains 1.0.0; this is not a release.
 
 ## Phase 2 shipping review — historical blocker (2026-10-01)
 
