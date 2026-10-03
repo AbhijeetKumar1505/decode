@@ -26,8 +26,9 @@ on 2026-10-02. The fixes below passed final environment validation and independe
 re-review. Phase 2's bounded Python Bridge gate is closed and landed through
 [PR #21](https://github.com/AbhijeetKumar1505/decode/pull/21), from `feat/working`
 to `main`. GitHub records an external merge at 2026-10-02 18:53:12 UTC into
-`2aff5bd`; this agent did not merge the PR. The documentation-only follow-up
-remains on `feat/working` for separate review. Phase 3 remains Target;
+`2aff5bd`; this agent did not merge the PR. The documentation-only follow-up is
+[PR #22](https://github.com/AbhijeetKumar1505/decode/pull/22), from `feat/working`
+to `main`, open for separate review. Phase 3 remains Target;
 AWS remains Deferred.
 
 Current worktree also has `src/decode/workflows/`, workflow playbooks, CLI
@@ -83,8 +84,10 @@ handoff below; it does not erase prior failures or extend implementation scope.
   the documentation commit is not in that merge. The user explicitly approved
   a new documentation-only PR from `feat/working` to `main`. The landed base was
   merged locally without conflicts or runtime changes; a follow-up correction
-  records the external merge. Next action: publish that PR and verify its new
-  CI; prior green checks do not attest to these documentation commits.
+  records the external merge. [PR #22](https://github.com/AbhijeetKumar1505/decode/pull/22)
+  is now open for the documentation-only follow-up. Next action after the final
+  handoff push: check PR #22's head and fresh CI; prior green checks do not
+  attest to these documentation commits.
   Phase 3 Core Brain remains Target and is not started; AWS is Deferred.
   Do not merge, force-push, implement Phase 3, or deploy AWS in this request.
 
