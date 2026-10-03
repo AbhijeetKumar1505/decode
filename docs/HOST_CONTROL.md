@@ -107,4 +107,9 @@ until a separate safe, tool-aware version contract exists. Local sessions
 resolve against their captured PATH and bind the environment hash, cwd, and
 declared output paths to approval. A local `cd` binds its next cwd as a session
 state transition without inventing an executable. A changed executable or
-session context blocks launch.
+session context blocks launch. After awaited executable preparation, the
+controller synchronously rechecks filesystem restrictions, command policy/risk,
+provider identity/mappings, and external session context before launching the
+command. Resetting a universal agent's scope preserves its existing deny-only
+execution guard, permission mode, hooks, and approval callback; it does not
+expand authority.

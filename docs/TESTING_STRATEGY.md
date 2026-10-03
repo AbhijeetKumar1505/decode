@@ -92,7 +92,8 @@ material changes during awaited executable preparation, dependency parameter
 and Active-record mutation, and in-flight cancellation provenance in both
 adapters. Host/coordinator tests directly revoke external scope, policy,
 provider mappings, and session context during preparation and expire a shorter
-approval grant with a fake clock; they assert no command launch and telemetry.
+approval grant with a fake clock, both with and without a preparation hook;
+they assert no command launch and telemetry.
 
 Local stage conformance runs by default. The same Phase 1 opt-ins enable
 `test_kali_active_stage_conformance_with_and_without_model` and

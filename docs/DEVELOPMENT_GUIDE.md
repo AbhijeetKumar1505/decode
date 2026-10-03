@@ -12,7 +12,7 @@ For the current Windows checkout:
 
 ```powershell
 py -3.12 -m venv wenv
-.\\wenv\\Scripts\\Activate.ps1
+.\wenv\Scripts\Activate.ps1
 python -m pip install -e .
 python -m pip install pytest mongomock ruff
 ruff check --no-cache .

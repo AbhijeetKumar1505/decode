@@ -557,9 +557,10 @@ sessions, downloads, output-path scope, and evidence capture require explicit
 capability contracts. Phase 0 now binds system-tool discovery and execution to
 one provider, rejects loose parameters and shell syntax, classifies explicit
 outputs, and scope-checks recognizable network targets. Semantic browsing/search
-appears only when a configured provider advertises it. External-provider file
-outputs and stateful sessions remain fail-closed until Phase 1 supplies those
-provider contracts.
+appears only when a configured provider advertises it. Phase 1 now binds
+external output paths to explicit writable mappings and supports context-persistent
+sessions on local, WSL, and SSH providers. Unmapped outputs and unsupported
+Docker/MCP sessions remain fail-closed; see [host control](docs/HOST_CONTROL.md).
 
 ## Configuration reference
 

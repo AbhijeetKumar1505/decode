@@ -1,5 +1,11 @@
 # Web Application Scan Example
 
+**Status: Historical.** The named Python tool-wrapper skills below were removed.
+Commands and sample results are not current interfaces or verified findings;
+the CVE descriptions are fictional illustrations, not vulnerability advisories.
+Do not execute these examples against public targets. Use explicitly authorized,
+controlled targets and the [current governed workflow](../docs/WORKFLOWS.md).
+
 ## Overview
 
 This example demonstrates a comprehensive web application security assessment using Decode's web-focused skills.

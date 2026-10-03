@@ -1,5 +1,11 @@
 # Social Account Incident Response & Attribution
 
+**Status: Historical.** The CLI and Python interfaces below are no longer
+available. Sample domains, identities, and results are illustrations, not
+verified incidents or authorization to investigate a person or system. Do not
+execute these examples against public targets. See the
+[current governed workflow](../docs/WORKFLOWS.md) for authorized operations.
+
 The `social-ir` module provides SOC-level incident response capabilities for
 social media account compromises. It focuses on **attack attribution** rather
 than directly identifying attackers (which platform privacy policies prevent).

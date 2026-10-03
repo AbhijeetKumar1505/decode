@@ -70,6 +70,14 @@ checks action/request coherence and rechecks the digest immediately before
 execution. Approval receives a redacted action; audit, logs, and feedback receive
 a compact action summary without argv or filesystem paths.
 
+Awaited executable preparation finishes before the coordinator's final action,
+stage-envelope, and policy checks. The earlier of approval-grant and request
+expiry is checked before every operation, including operations without a
+preparation hook. Host commands then synchronously revalidate scope, command
+policy/risk, provider identity/mappings, and session context before launch.
+Coordinator cancellation preserves the recorded result and provider; both
+Active stage adapters retain cancelled request IDs without retry.
+
 Tool version is empty when unverified. Exact governed `list_tools` lookup can
 fingerprint executable content in the selected provider. Governed CLI and
 session actions now replace executable names with resolved

@@ -1,6 +1,6 @@
 # De-code v2 Continuation Ledger
 
-**Updated:** 2026-10-02
+**Updated:** 2026-10-03
 **Plan:** [BUILD_PLAN.md](BUILD_PLAN.md)
 
 ## Resume protocol
@@ -29,6 +29,48 @@ to `main`; it is not merged. Phase 3 remains Target; AWS remains Deferred.
 
 Current worktree also has `src/decode/workflows/`, workflow playbooks, CLI
 integration, and `tests/test_workflows.py`. Preserve these as Phase 4 Bridge.
+
+## Documentation sync — 2026-10-03
+
+This entry supersedes the historical pending-CI and failed documentation-audit
+handoff below; it does not erase prior failures or extend implementation scope.
+
+- Request: sync existing root and subsystem documentation; the user approved
+  committing and pushing the sync to `feat/working` for PR #21. The user also
+  approved correcting SECURITY.md's stale Phase 0 status without changing its
+  authorization rules or remaining isolation/storage/cloud limitations.
+- CI verified for `58c8e0b`: [CI run](https://github.com/AbhijeetKumar1505/decode/actions/runs/37046975348)
+  passed lint, Python 3.11/3.12 tests, security, and build. This evidence applies
+  to that commit only, not the next documentation commit. PR #21 remains open
+  against `main`; no merge or release is authorized.
+- Documentation corrections cover phase maturity, reviewed-tree validation
+  counts, mapped provider/session limits, final launch checks, expiry and
+  cancellation provenance, contributor test dependencies, model/runtime-path
+  defaults, and the Windows activation example. Obsolete example pages are
+  explicitly historical; removed commands and fictional findings are not
+  current interfaces or verified advisories. No runtime code or version changed.
+- Validation of the documentation worktree: Ruff lint passed; formatting passed
+  for 247 Python files. Full offline Windows passed (557 passed, 16 skipped,
+  60 subtests, 59.25 seconds); full native Kali passed (565 passed, 8 skipped,
+  60 subtests, 57.81 seconds). Relative file links passed across 63 tracked
+  Markdown files; patch whitespace passed. The publication credential scan
+  found no credentials; numeric CI identifiers were false-positive phone
+  matches and now remain only in the verified CI link. These runs do not replace
+  the prior recorded live WSL/Docker Phase 2 gates or claim all-distro compatibility.
+- Coverage audit: the bounded Active/model-free READ API and exact-file gates
+  have reference and explanation coverage, but lack an end-to-end onboarding
+  tutorial. Historical security examples are not current how-to coverage.
+  No new documentation pages or diagram rewrites are authorized in this sync.
+- Independent in-host documentation review completed with no actionable findings
+  in the factual phase/provider/configuration/launch-contract corrections. The
+  parent separately audited examples and links. Outside-model review remains
+  unavailable because source disclosure is not authorized; no source was sent
+  externally. The earlier failed audit remains historical, not silently passed.
+- Publication: approved as one documentation-only commit to `feat/working`,
+  updating PR #21. Next action after push: verify the new PR head and rerun CI;
+  prior green checks do not attest to the new commit. Phase 3 Core Brain remains
+  Target and is not started; AWS is Deferred.
+  Do not merge, force-push, implement Phase 3, or deploy AWS in this request.
 
 ## Phase 2 shipping fixes — 2026-10-02
 

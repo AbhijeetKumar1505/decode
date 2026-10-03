@@ -69,10 +69,10 @@ Tauri desktop using the same API. Interfaces never duplicate authority.
 
 | Concern | Current source | Maturity |
 |---|---|---|
-| Coordination/governance | `runtime/`, `governance/` | Current; Phase 0 fixes |
-| Host/provider | `hostcontrol/`, `execution/` | Current; wiring gaps |
+| Coordination/governance | `runtime/`, `governance/` | Current; Phases 0/1 gates passed |
+| Host/provider | `hostcontrol/`, `execution/` | Current; explicit mapping/session limits |
 | Operational loop | `agent_loop.py`, `universal_agent.py` | Bridge |
-| Workflow | `workflows/`, playbooks | Bridge |
+| Workflow / bounded Active | `workflows/`, playbooks | Bridge; Phase 2 gate passed |
 | DAG/state | `planner/`, `schema/` | Foundation |
 | Evidence/audit | `persistence/`, `observability/` | Foundation |
 | Models | `models/`, `kernel/provider.py` | Foundation |
