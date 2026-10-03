@@ -20,7 +20,7 @@ the public summary; subsystem documents own detailed contracts.
 |---|---|---|
 | 0 | Execution truth and safety | **Current — gate passed 2026-09-18** |
 | 1 | Stable execution kernel | **Current — gate passed; PR #20 merged** |
-| 2 | Active Brain | **Gate complete (2026-10-02) — Python Bridge; PR #21 CI passed for `58c8e0b`** |
+| 2 | Active Brain | **Gate complete (2026-10-02) — Python Bridge; PR #21 merged after CI passed for `58c8e0b`** |
 | 3 | Core Brain | **Target — next implementation phase; not started** |
 | 4 | Workflow engine v2 | Bridge exists; Target pending |
 | 5 | DAG scheduler and runtime FSM | Target |

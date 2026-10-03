@@ -112,10 +112,11 @@ side effects, approval digest, timeout, idempotency, and evidence policy.
 
 **Status — gate complete (2026-10-02); bounded Python Bridge.**
 Pre-landing gaps are fixed with regressions; final Windows/live Kali WSL/Docker,
-native Kali, package build, and independent re-review passed. PR #21 is open;
+native Kali, package build, and independent re-review passed. PR #21 was merged;
 [CI](https://github.com/AbhijeetKumar1505/decode/actions/runs/37046975348)
 passed lint, Python 3.11/3.12 tests, security, and build
-for commit `58c8e0b`. This is not a merge or release. See the
+for commit `58c8e0b`. The documentation follow-up requires separate PR checks;
+this is not a release. See the
 [shipping fixes](CONTINUATION.md#phase-2-shipping-fixes--2026-10-02).
 The bounded Active runtime is implemented over the existing Python workflow
 Bridge. `ActiveStageRuntime` owns one plan-bound context, bounded working

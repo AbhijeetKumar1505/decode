@@ -23,9 +23,12 @@ Phase 2's bounded Active runtime gate was recorded complete on 2026-10-01,
 then reopened by pre-landing review. The user authorized fixing the gaps,
 adding regressions, committing, and opening a PR from `feat/working` to `main`
 on 2026-10-02. The fixes below passed final environment validation and independent
-re-review. Phase 2's bounded Python Bridge gate is closed and published in
+re-review. Phase 2's bounded Python Bridge gate is closed and landed through
 [PR #21](https://github.com/AbhijeetKumar1505/decode/pull/21), from `feat/working`
-to `main`; it is not merged. Phase 3 remains Target; AWS remains Deferred.
+to `main`. GitHub records an external merge at 2026-10-02 18:53:12 UTC into
+`2aff5bd`; this agent did not merge the PR. The documentation-only follow-up
+remains on `feat/working` for separate review. Phase 3 remains Target;
+AWS remains Deferred.
 
 Current worktree also has `src/decode/workflows/`, workflow playbooks, CLI
 integration, and `tests/test_workflows.py`. Preserve these as Phase 4 Bridge.
@@ -41,8 +44,9 @@ handoff below; it does not erase prior failures or extend implementation scope.
   authorization rules or remaining isolation/storage/cloud limitations.
 - CI verified for `58c8e0b`: [CI run](https://github.com/AbhijeetKumar1505/decode/actions/runs/37046975348)
   passed lint, Python 3.11/3.12 tests, security, and build. This evidence applies
-  to that commit only, not the next documentation commit. PR #21 remains open
-  against `main`; no merge or release is authorized.
+  to that commit only, not the documentation follow-up. PR #21 was initially
+  open during this audit and was externally merged before the documentation
+  push. No agent-performed merge or release is authorized.
 - Documentation corrections cover phase maturity, reviewed-tree validation
   counts, mapped provider/session limits, final launch checks, expiry and
   cancellation provenance, contributor test dependencies, model/runtime-path
@@ -66,10 +70,22 @@ handoff below; it does not erase prior failures or extend implementation scope.
   parent separately audited examples and links. Outside-model review remains
   unavailable because source disclosure is not authorized; no source was sent
   externally. The earlier failed audit remains historical, not silently passed.
-- Publication: approved as one documentation-only commit to `feat/working`,
-  updating PR #21. Next action after push: verify the new PR head and rerun CI;
-  prior green checks do not attest to the new commit. Phase 3 Core Brain remains
-  Target and is not started; AWS is Deferred.
+- After synchronizing the landed base, full Windows passed again (557 passed,
+  16 skipped, 60 subtests, 31.19 seconds), as did native Kali (565 passed,
+  8 skipped, 60 subtests, 62.33 seconds). Windows CLI help passed. The combined
+  Kali test/build command had a quoting failure after pytest passed; a direct
+  argument-vector retry built the source archive and wheel successfully through
+  the installed Poetry backend. No dependency was installed. A fresh local
+  adversarial documentation review found no actionable issues; the coverage
+  audit confirmed no new application code paths and 35 unchanged test files.
+- Publication: documentation sync committed and pushed as `9c73efa` to
+  `feat/working`. GitHub then showed PR #21 already merged with head `58c8e0b`;
+  the documentation commit is not in that merge. The user explicitly approved
+  a new documentation-only PR from `feat/working` to `main`. The landed base was
+  merged locally without conflicts or runtime changes; a follow-up correction
+  records the external merge. Next action: publish that PR and verify its new
+  CI; prior green checks do not attest to these documentation commits.
+  Phase 3 Core Brain remains Target and is not started; AWS is Deferred.
   Do not merge, force-push, implement Phase 3, or deploy AWS in this request.
 
 ## Phase 2 shipping fixes — 2026-10-02
