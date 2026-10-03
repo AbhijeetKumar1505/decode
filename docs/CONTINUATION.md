@@ -1,6 +1,6 @@
 # De-code v2 Continuation Ledger
 
-**Updated:** 2026-10-02
+**Updated:** 2026-10-03
 **Plan:** [BUILD_PLAN.md](BUILD_PLAN.md)
 
 ## Resume protocol
@@ -23,12 +23,73 @@ Phase 2's bounded Active runtime gate was recorded complete on 2026-10-01,
 then reopened by pre-landing review. The user authorized fixing the gaps,
 adding regressions, committing, and opening a PR from `feat/working` to `main`
 on 2026-10-02. The fixes below passed final environment validation and independent
-re-review. Phase 2's bounded Python Bridge gate is closed and published in
+re-review. Phase 2's bounded Python Bridge gate is closed and landed through
 [PR #21](https://github.com/AbhijeetKumar1505/decode/pull/21), from `feat/working`
-to `main`; it is not merged. Phase 3 remains Target; AWS remains Deferred.
+to `main`. GitHub records an external merge at 2026-10-02 18:53:12 UTC into
+`2aff5bd`; this agent did not merge the PR. The documentation-only follow-up is
+[PR #22](https://github.com/AbhijeetKumar1505/decode/pull/22), from `feat/working`
+to `main`, open for separate review. Phase 3 remains Target;
+AWS remains Deferred.
 
 Current worktree also has `src/decode/workflows/`, workflow playbooks, CLI
 integration, and `tests/test_workflows.py`. Preserve these as Phase 4 Bridge.
+
+## Documentation sync — 2026-10-03
+
+This entry supersedes the historical pending-CI and failed documentation-audit
+handoff below; it does not erase prior failures or extend implementation scope.
+
+- Request: sync existing root and subsystem documentation; the user approved
+  committing and pushing the sync to `feat/working` for PR #21. The user also
+  approved correcting SECURITY.md's stale Phase 0 status without changing its
+  authorization rules or remaining isolation/storage/cloud limitations.
+- CI verified for `58c8e0b`: [CI run](https://github.com/AbhijeetKumar1505/decode/actions/runs/37046975348)
+  passed lint, Python 3.11/3.12 tests, security, and build. This evidence applies
+  to that commit only, not the documentation follow-up. PR #21 was initially
+  open during this audit and was externally merged before the documentation
+  push. No agent-performed merge or release is authorized.
+- Documentation corrections cover phase maturity, reviewed-tree validation
+  counts, mapped provider/session limits, final launch checks, expiry and
+  cancellation provenance, contributor test dependencies, model/runtime-path
+  defaults, and the Windows activation example. Obsolete example pages are
+  explicitly historical; removed commands and fictional findings are not
+  current interfaces or verified advisories. No runtime code or version changed.
+- Validation of the documentation worktree: Ruff lint passed; formatting passed
+  for 247 Python files. Full offline Windows passed (557 passed, 16 skipped,
+  60 subtests, 59.25 seconds); full native Kali passed (565 passed, 8 skipped,
+  60 subtests, 57.81 seconds). Relative file links passed across 63 tracked
+  Markdown files; patch whitespace passed. The publication credential scan
+  found no credentials; numeric CI identifiers were false-positive phone
+  matches and now remain only in the verified CI link. These runs do not replace
+  the prior recorded live WSL/Docker Phase 2 gates or claim all-distro compatibility.
+- Coverage audit: the bounded Active/model-free READ API and exact-file gates
+  have reference and explanation coverage, but lack an end-to-end onboarding
+  tutorial. Historical security examples are not current how-to coverage.
+  No new documentation pages or diagram rewrites are authorized in this sync.
+- Independent in-host documentation review completed with no actionable findings
+  in the factual phase/provider/configuration/launch-contract corrections. The
+  parent separately audited examples and links. Outside-model review remains
+  unavailable because source disclosure is not authorized; no source was sent
+  externally. The earlier failed audit remains historical, not silently passed.
+- After synchronizing the landed base, full Windows passed again (557 passed,
+  16 skipped, 60 subtests, 31.19 seconds), as did native Kali (565 passed,
+  8 skipped, 60 subtests, 62.33 seconds). Windows CLI help passed. The combined
+  Kali test/build command had a quoting failure after pytest passed; a direct
+  argument-vector retry built the source archive and wheel successfully through
+  the installed Poetry backend. No dependency was installed. A fresh local
+  adversarial documentation review found no actionable issues; the coverage
+  audit confirmed no new application code paths and 35 unchanged test files.
+- Publication: documentation sync committed and pushed as `9c73efa` to
+  `feat/working`. GitHub then showed PR #21 already merged with head `58c8e0b`;
+  the documentation commit is not in that merge. The user explicitly approved
+  a new documentation-only PR from `feat/working` to `main`. The landed base was
+  merged locally without conflicts or runtime changes; a follow-up correction
+  records the external merge. [PR #22](https://github.com/AbhijeetKumar1505/decode/pull/22)
+  is now open for the documentation-only follow-up. Next action after the final
+  handoff push: check PR #22's head and fresh CI; prior green checks do not
+  attest to these documentation commits.
+  Phase 3 Core Brain remains Target and is not started; AWS is Deferred.
+  Do not merge, force-push, implement Phase 3, or deploy AWS in this request.
 
 ## Phase 2 shipping fixes — 2026-10-02
 

@@ -1,5 +1,12 @@
 # Nmap Workflow Example
 
+**Status: Historical.** The `nmap_pro` wrapper and session interfaces below were
+removed. Their parser output and automatically generated findings are not current
+behavior; open ports alone do not establish a vulnerability. Do not run these old
+commands. Installed CLIs now run through individually governed `shell_command`
+actions; see the [current governed workflow](../docs/WORKFLOWS.md) and use only
+explicitly authorized, controlled targets.
+
 ## Overview
 
 This example demonstrates a complete Nmap scanning workflow using Decode, from initial reconnaissance to service fingerprinting to finding generation.

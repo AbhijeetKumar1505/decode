@@ -25,9 +25,11 @@ not shortcut unfinished architecture.
 
 ## Immediate backlog
 
-Fix non-zero success, strict tool schemas, vector-mode metacharacters,
-side-effect/output scope, provider-bound discovery/execution, exact discovery,
-and governed HTTP/browser/search. Add the Bugcrowd/curl transcript regression.
+Phases 0–2 passed their bounded local/provider gates. Next is Phase 3 Core
+intent, workflow/criteria selection, bounded delegation, and public reasons;
+Core must not execute or expand Active authority. Native semantic browsing,
+broader CLI inference, and all-distro portability remain follow-on work, not
+completed by these gates. See [the continuation ledger](CONTINUATION.md).
 
 ## Every gate requires
 

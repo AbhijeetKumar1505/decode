@@ -1,7 +1,7 @@
 # De-code v2 Build Plan
 
 **Status:** Canonical target and sequence
-**Last reconciled:** 2026-10-01
+**Last reconciled:** 2026-10-03
 **Scope:** Local Linux, WSL 2, and Docker first; AWS Deferred
 
 ## Thesis
@@ -112,8 +112,11 @@ side effects, approval digest, timeout, idempotency, and evidence policy.
 
 **Status — gate complete (2026-10-02); bounded Python Bridge.**
 Pre-landing gaps are fixed with regressions; final Windows/live Kali WSL/Docker,
-native Kali, package build, and independent re-review passed. PR CI remains
-pending publication; this is not a merge or release. See the
+native Kali, package build, and independent re-review passed. PR #21 was merged;
+[CI](https://github.com/AbhijeetKumar1505/decode/actions/runs/37046975348)
+passed lint, Python 3.11/3.12 tests, security, and build
+for commit `58c8e0b`. The documentation follow-up requires separate PR checks;
+this is not a release. See the
 [shipping fixes](CONTINUATION.md#phase-2-shipping-fixes--2026-10-02).
 The bounded Active runtime is implemented over the existing Python workflow
 Bridge. `ActiveStageRuntime` owns one plan-bound context, bounded working
@@ -198,11 +201,11 @@ Active, not a new execution path or authority source.
 escalation plus evidence.
 
 **Validation:** full Windows `wenv` suite with live Kali WSL and cached,
-network-isolated Docker passed (557 passed, 10 skipped, 55 subtests).
-Direct Kali full suite passed (559 passed, 8 skipped, 45 subtests). Ruff lint,
+network-isolated Docker passed (563 passed, 10 skipped, 70 subtests).
+Direct Kali full suite passed (565 passed, 8 skipped, 60 subtests). Ruff lint,
 formatting, relative documentation links, and diff checks passed. Transient
 host startup failures and the user-authorized recovery are preserved in
-[the continuation ledger](CONTINUATION.md#phase-2-closure--bounded-active-runtime).
+[the continuation ledger](CONTINUATION.md#phase-2-shipping-fixes--2026-10-02).
 
 ## Phase 3 — Core Brain
 

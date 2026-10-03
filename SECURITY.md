@@ -37,9 +37,10 @@ Include the affected version, reproduction steps, impact, relevant logs with sec
 ## Known limitations
 
 The current Python baseline is not the completed v2 security architecture.
-Phase 0 still has known process-result, strict-schema, shell-metacharacter,
-output-path, provider-binding, discovery-result, and governed browsing/search
-gaps. Local, WSL, Docker, SSH, and MCP execution are not inherently isolated.
+Phase 0's execution-truth gate and Phase 1's provider-binding gate have passed;
+Phase 2's bounded Active runtime is a Python Bridge, not the full v2 architecture.
+Native semantic browsing/search providers remain unimplemented. Local, WSL,
+Docker, SSH, and MCP execution are not inherently isolated.
 Storage encryption, multi-user authorization, a stable network control plane,
 and cloud deployment are not complete.
 

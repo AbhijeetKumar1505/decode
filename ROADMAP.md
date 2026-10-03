@@ -20,8 +20,8 @@ the public summary; subsystem documents own detailed contracts.
 |---|---|---|
 | 0 | Execution truth and safety | **Current — gate passed 2026-09-18** |
 | 1 | Stable execution kernel | **Current — gate passed; PR #20 merged** |
-| 2 | Active Brain | **Gate complete (2026-10-02) — Python Bridge; PR CI pending** |
-| 3 | Core Brain | **Target — next phase after PR checks** |
+| 2 | Active Brain | **Gate complete (2026-10-02) — Python Bridge; PR #21 merged after CI passed for `58c8e0b`** |
+| 3 | Core Brain | **Target — next implementation phase; not started** |
 | 4 | Workflow engine v2 | Bridge exists; Target pending |
 | 5 | DAG scheduler and runtime FSM | Target |
 | 6 | Evidence, findings, and memory | Foundations exist; Target pending |
@@ -48,8 +48,10 @@ scope or approval, and an executable discovered in one environment cannot be
 silently run in another.
 
 **Gate result:** passed on 2026-09-18 for the listed contracts. External-provider
-file outputs and stateful sessions deliberately fail closed pending Phase 1
-provider filesystem/session interfaces. No native semantic browser or search
+file outputs and stateful sessions initially failed closed pending Phase 1;
+the current mapped provider/session contracts are documented in
+[host control](docs/HOST_CONTROL.md). Unmapped outputs and unsupported sessions
+still fail closed. No native semantic browser or search
 provider is claimed; configured providers must advertise those tools explicitly.
 
 ### Completion gates

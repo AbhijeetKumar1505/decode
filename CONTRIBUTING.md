@@ -16,6 +16,7 @@ Decode welcomes focused code, documentation, test, adapter, and research contrib
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+python -m pip install ruff pytest mongomock
 ruff check .
 python -m pytest tests/
 ```
@@ -29,7 +30,7 @@ Choose one provider and set its credential:
 ```dotenv
 DECODE_PROVIDER=openrouter
 OPENROUTER_API_KEY=replace_me
-DECODE_MODEL=z-ai/glm-5.2:free
+DECODE_MODEL=openrouter/free
 ```
 
 OpenAI uses `OPENAI_API_KEY` and optional `OPENAI_MODEL`; Anthropic uses `ANTHROPIC_API_KEY` and optional `ANTHROPIC_MODEL`. Never commit `.env`, target data, credentials, generated audit data, or deployment-specific registries.
@@ -80,8 +81,10 @@ privileges, side effects, outputs, or risk invalidates prior approval.
 
 ## Execution providers
 
-Current provider classes cover local, Docker, WSL, SSH, and MCP, with known
-wiring gaps tracked in Phase 0. SSH requires explicit connection configuration.
+Current provider classes cover local, Docker, WSL, SSH, and MCP. Phase 1 binds
+discovery, executable identity, mapped outputs, and supported session context;
+remaining portability limits are explicit in [host control](docs/HOST_CONTROL.md).
+SSH requires explicit connection configuration.
 An executor is not a permission decision and is not always a sandbox. Discovery
 and execution must share one provider identity, and new execution features must
 remain behind the governance gate.

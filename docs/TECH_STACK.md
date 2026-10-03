@@ -38,8 +38,10 @@ and explicit SSH/MCP. AWS is Deferred.
 ## Workflows and tools
 
 Bridge definitions use Markdown frontmatter; Target definitions use validated
-YAML. De-code avoids a hardcoded Kali catalog: providers discover executables,
-while adapters define construction, risk, scope, parsing, and evidence.
+YAML. De-code avoids a hardcoded Kali catalog and per-tool Python wrappers:
+installed CLIs run through the governed `shell_command` capability, while
+markdown playbooks provide methodology. Providers own discovery/transport;
+host contracts and the coordinator bind risk, scope, outcomes, and evidence.
 Browser/search/authenticated sessions require explicit providers.
 
 Pin dependencies and lockfiles, isolate optional integrations, verify integrity

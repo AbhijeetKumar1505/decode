@@ -1,5 +1,11 @@
 # Report Generation Example
 
+**Status: Historical.** The report-generator skill and attack-chain commands
+below were removed. Sample results are not verified findings; the CVE and
+remediation claims are fictional illustrations, not vulnerability advisories.
+Open ports alone do not establish a vulnerability. See the
+[current governed workflow](../docs/WORKFLOWS.md); do not run these old commands.
+
 ## Overview
 
 This example demonstrates generating structured security reports from collected findings and evidence.
