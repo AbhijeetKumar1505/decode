@@ -1,6 +1,8 @@
 import asyncio
 import json
+import sqlite3
 import sys
+from collections.abc import Callable
 from typing import Any
 
 import typer
@@ -900,6 +902,263 @@ def workflow_status(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from None
     _print_workflow_report(report, json_output=json_output)
+
+
+core_app = typer.Typer(
+    help="Reviewed, bounded Core missions; no automatic authority grants"
+)
+app.add_typer(core_app, name="core")
+
+
+def _core_pins(values: list[str]) -> tuple[Any, ...]:
+    from ..workflows import ReviewedWorkflow
+
+    pins = []
+    for value in values:
+        identity, separator, digest = value.rpartition(":")
+        name, version_separator, version = identity.partition("@")
+        if not separator or not version_separator:
+            raise ValueError("reviewed pin must be NAME@VERSION:SHA256")
+        pins.append(ReviewedWorkflow(name=name, version=version, fingerprint=digest))
+    return tuple(pins)
+
+
+def _core_call(operation: Callable[[Any], Any]) -> None:
+    try:
+        result = operation(_workflow_runner())
+        payload = (
+            result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+        )
+        print(json.dumps(payload, indent=2))
+    except (ValueError, OSError, ImportError, sqlite3.Error):
+        print(
+            json.dumps(
+                {
+                    "error": "core_request_rejected",
+                    "message": "Core request rejected or persistence unavailable; no automatic retry",
+                }
+            )
+        )
+        raise typer.Exit(1) from None
+
+
+def _core_issued(runner: Any, session_id: str, digest: str) -> Any:
+    return runner.issued_core(session_id, digest)
+
+
+@core_app.command("workflows")
+def core_workflows() -> None:
+    """Inspect candidate pins; discovery is not review or action permission."""
+    _core_call(
+        lambda runner: [
+            {
+                "name": spec.name,
+                "version": spec.version,
+                "fingerprint": spec.fingerprint(),
+                "mode": spec.mode.value,
+                "reviewed_pin": f"{spec.name}@{spec.version}:{spec.fingerprint()}",
+            }
+            for spec in runner.registry.all()
+        ]
+    )
+
+
+@core_app.command("select")
+def core_select(
+    goal: str = typer.Option(..., "--goal", "-g"),
+    intent_mode: str = typer.Option(
+        ..., "--intent-mode", help="coding | security | hybrid"
+    ),
+    workflow: str = typer.Option("", "--workflow"),
+    reviewed: list[str] = typer.Option(
+        [], "--reviewed", help="Explicitly reviewed NAME@VERSION:SHA256 (repeatable)"
+    ),
+) -> None:
+    """Select only explicitly reviewed definitions without creating a mission."""
+    from ..workflows import CoreIntent, CoreWorkflowPlanner
+
+    _core_call(
+        lambda runner: CoreWorkflowPlanner(runner.registry).select(
+            CoreIntent(objective=goal, mode=intent_mode, workflow_name=workflow),
+            _core_pins(reviewed),
+        )
+    )
+
+
+@core_app.command("start")
+def core_start(
+    goal: str = typer.Option(..., "--goal", "-g"),
+    intent_mode: str = typer.Option(
+        ..., "--intent-mode", help="coding | security | hybrid"
+    ),
+    workflow: str = typer.Option("", "--workflow"),
+    reviewed: list[str] = typer.Option(
+        [], "--reviewed", help="Explicitly reviewed NAME@VERSION:SHA256 (repeatable)"
+    ),
+    max_stage_dispatches: int = typer.Option(
+        ..., "--max-stage-dispatches", min=0, max=1024
+    ),
+    max_reserved_steps: int = typer.Option(
+        ..., "--max-reserved-steps", min=0, max=32768
+    ),
+    target: str = typer.Option("", "--target"),
+    read_root: list[str] = typer.Option([], "--read-root"),
+    write_root: list[str] = typer.Option([], "--write-root"),
+) -> None:
+    """Persist a reviewed mission; empty scope denies execution and nothing runs."""
+    from ..workflows import CoreIntent, CoreMissionBudget
+
+    _core_call(
+        lambda runner: runner.start_core(
+            CoreIntent(objective=goal, mode=intent_mode, workflow_name=workflow),
+            _core_pins(reviewed),
+            target=target,
+            read_roots=read_root,
+            write_roots=write_root,
+            budget=CoreMissionBudget(
+                max_stage_dispatches=max_stage_dispatches,
+                max_reserved_steps=max_reserved_steps,
+            ),
+        )
+    )
+
+
+@core_app.command("status")
+def core_status(session_id: str = typer.Argument(...)) -> None:
+    """Read mission progress, selected strategy and reserved budget."""
+
+    def status(runner: Any) -> dict[str, Any]:
+        state = runner.load_state(session_id)
+        if "core_selection" not in state.environment:
+            raise ValueError("session is not a Core mission")
+        return {
+            "report": runner.status(session_id).model_dump(mode="json"),
+            "selection": state.environment["core_selection"],
+            "strategy": state.environment.get("core_strategy"),
+            "budget": state.environment.get("core_budget"),
+            "review_resolution": state.environment.get("core_review_resolution"),
+            "stopped": "core_stop" in state.environment,
+            "replacement_session_id": state.environment.get(
+                "core_replan_transition", {}
+            ).get("replacement_session_id", ""),
+        }
+
+    _core_call(status)
+
+
+@core_app.command("decide")
+def core_decide(session_id: str = typer.Argument(...)) -> None:
+    """Issue a fresh non-executing decision and identifier for explicit consumption."""
+
+    def decide(runner: Any) -> dict[str, Any]:
+        decision = runner.decide_core(session_id)
+        return {
+            "decision_id": decision.fingerprint(),
+            "decision": decision.model_dump(mode="json"),
+        }
+
+    _core_call(decide)
+
+
+async def _core_no_executor(context: Any) -> Any:
+    raise ValueError("non-delegating Core decisions cannot invoke an executor")
+
+
+@core_app.command("advance")
+def core_advance(
+    session_id: str = typer.Argument(...),
+    decision_id: str = typer.Option(..., "--decision"),
+    provider: str | None = typer.Option(
+        None,
+        "--provider",
+        "-p",
+        help="Model provider; not an execution authority grant",
+    ),
+    mode: str = typer.Option("ask", "--mode", help="plan | ask | auto"),
+) -> None:
+    """Consume an issued decision; delegate at most one bounded stage."""
+
+    def advance(runner: Any) -> Any:
+        decision = _core_issued(runner, session_id, decision_id)
+        executor = (
+            _workflow_executor(runner, session_id, provider, mode)
+            if decision.outcome == "delegate"
+            else _core_no_executor
+        )
+        return asyncio.run(runner.run_core(decision, executor))
+
+    _core_call(advance)
+
+
+@core_app.command("approve")
+def core_approve(
+    session_id: str = typer.Argument(...),
+    decision_id: str = typer.Option(..., "--decision"),
+) -> None:
+    """Explicitly approve only an awaiting-human workflow gate, not an action."""
+    _core_call(
+        lambda runner: runner.approve_core_stage(
+            _core_issued(runner, session_id, decision_id)
+        )
+    )
+
+
+@core_app.command("review")
+def core_review(
+    session_id: str = typer.Argument(...),
+    decision_id: str = typer.Option(..., "--decision"),
+    disposition: str = typer.Option(
+        ..., "--disposition", help="acknowledged | rejected; neither resumes execution"
+    ),
+) -> None:
+    """Record human review while preserving the unresolved stop."""
+    from ..workflows import CoreReviewResolution
+
+    _core_call(
+        lambda runner: runner.review_core(
+            CoreReviewResolution(
+                decision=_core_issued(runner, session_id, decision_id),
+                disposition=disposition,
+            )
+        )
+    )
+
+
+@core_app.command("stop")
+def core_stop(
+    session_id: str = typer.Argument(...),
+    decision_id: str = typer.Option(..., "--decision"),
+) -> None:
+    """Explicitly stop a mission; never automatically reset or resume it."""
+    _core_call(
+        lambda runner: runner.stop_core(_core_issued(runner, session_id, decision_id))
+    )
+
+
+@core_app.command("replan")
+def core_replan(
+    session_id: str = typer.Argument(...),
+    decision_id: str = typer.Option(..., "--decision"),
+    workflow: str = typer.Option(..., "--workflow"),
+    reviewed: list[str] = typer.Option(
+        [], "--reviewed", help="Explicitly reviewed replacement NAME@VERSION:SHA256"
+    ),
+) -> None:
+    """Human-reviewed replacement: stop parent, retain scope/budget, execute nothing."""
+    from ..workflows import CoreIntent
+
+    def replan(runner: Any) -> Any:
+        decision = _core_issued(runner, session_id, decision_id)
+        state = runner.load_state(session_id)
+        return runner.replan_core(
+            decision,
+            CoreIntent(
+                objective=state.objective, mode=state.mode, workflow_name=workflow
+            ),
+            _core_pins(reviewed),
+        )
+
+    _core_call(replan)
 
 
 plugin_app = typer.Typer(help="Manage plugin packages (declarative capability bundles)")

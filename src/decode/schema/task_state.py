@@ -228,6 +228,7 @@ class ScopeView(BaseModel):
 
 class TaskState(BaseModel):
     session_id: str = Field(default_factory=_uuid)
+    revision: int = Field(default=0, ge=0, strict=True)
     objective: str = ""
     mode: TaskMode = TaskMode.HYBRID
     scope: ScopeView = Field(default_factory=ScopeView)
@@ -248,6 +249,7 @@ class TaskState(BaseModel):
 
     # ── mutation ────────────────────────────────────────────────────────
     def _touch(self) -> None:
+        self.revision += 1
         self.updated_at = _now()
 
     def record_action(
