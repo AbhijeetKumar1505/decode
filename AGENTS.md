@@ -63,7 +63,36 @@ Provider: local / WSL / Docker / SSH / MCP
 Verification -> Evidence -> Findings -> Memory / Audit / Usage
 ```
 
-Core Brain and workflow v2 remain Target. Phase 2 implements a bounded Active
+The Phase 3 deterministic local Core Bridge gate is complete (2026-10-04).
+Full model-led Core strategy and workflow v2 remain Target. Phase 3 adds a
+non-executing workflow-selection Bridge: typed intent, separately supplied
+trusted-caller reviewed-definition pins, fixed public reasons, and saved gates.
+`start_core()` compiles pending state only; pins never approve actions or grant
+scope. `decide_core()` issues task-revision/state-bound decisions; `run_core()`
+consumes one issued decision and hands off at most one stage to the existing
+Active runner. `approve_core_stage()` advances an explicit human workflow gate
+only, never action permission. Stale or interrupted handoffs cannot replay.
+Opt-in `CoreMissionBudget` caps stage dispatches and reserves full stage-step
+allowances before handoff. Budget exhaustion cannot invoke Active, weaken gates,
+or refund failed/interrupted allocations. Budgeted runs require `run_core()`;
+older/unbudgeted runs remain compatibility behavior except that Core review
+stops fence compatibility execution too. Typed review requests derive causes
+only from bound incomplete Active records. `review_core()` records explicit
+human acknowledgement/rejection, keeps work stopped, and never changes plans,
+grants action approval or refunds budget. The Phase 3 deterministic Core Bridge
+also persists `CoreStrategy`, supports explicit safe-boundary `stop_core()`, and
+applies a separately human-reviewed replacement through `replan_core()`.
+Replacement stops the parent, creates pending state only, retains identical
+objective/mode/scope and cumulative budget, and reuses no approvals/completion.
+Unanswered input blocks replacement; mission constraints and completion
+conditions are preserved. Core callbacks receive isolated task/context copies;
+their mutations cannot overwrite durable authority, guards or other nodes.
+Every ancestor is validated; partial saves, cycles, missing links and refunded
+usage fail closed. `decode core` exposes only explicit trusted-operator controls,
+with reviewed pins, finite CLI caps and fresh issued decision identifiers. These
+APIs are never model tools. Full resource accounting, model-led strategy, FSM,
+service authentication and concurrent dispatch remain Target.
+Phase 2 implements a bounded Active
 stage runtime in the Python workflow Bridge: shared context, working
 observations, deterministic local gates, and typed completion/escalation for
 model-driven or explicit model-free READ stages. The full Core/Active split,

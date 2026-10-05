@@ -1,6 +1,6 @@
 # De-code v2 Continuation Ledger
 
-**Updated:** 2026-10-03
+**Updated:** 2026-10-05
 **Plan:** [BUILD_PLAN.md](BUILD_PLAN.md)
 
 ## Resume protocol
@@ -28,11 +28,363 @@ re-review. Phase 2's bounded Python Bridge gate is closed and landed through
 to `main`. GitHub records an external merge at 2026-10-02 18:53:12 UTC into
 `2aff5bd`; this agent did not merge the PR. The documentation-only follow-up is
 [PR #22](https://github.com/AbhijeetKumar1505/decode/pull/22), from `feat/working`
-to `main`, open for separate review. Phase 3 remains Target;
+to `main`, externally merged on 2026-10-03 at 08:28:20 UTC with head `11b3ae4`
+(verified read-only on 2026-10-04). This agent did not merge it.
+Phase 3's deterministic local Core Bridge is implemented in the worktree,
+including reviewed strategy, bounded delegation/budget, typed review,
+safe-boundary operator stop, reviewed replacement and the Core CLI.
+Its bounded Phase 3 gate is complete (2026-10-04);
 AWS remains Deferred.
 
 Current worktree also has `src/decode/workflows/`, workflow playbooks, CLI
 integration, and `tests/test_workflows.py`. Preserve these as Phase 4 Bridge.
+
+## Phase 3 publishing review — 2026-10-05
+
+This entry supersedes the earlier no-publication handoff. The user explicitly
+authorized committing and pushing `feat/working` and opening a PR targeting
+`main`; merging, release publication and deployment are not authorized.
+
+- Base: fetched both branches and fast-forwarded to `origin/main` (`2329191`).
+  Its committed tree matched the old feature head, so all Phase 3 worktree edits
+  were preserved. No existing open PR targeted `main` from `feat/working`.
+- Review found premature completion after the final successful Core agent stage:
+  the runner closed the session before the planner checked additional mission
+  conditions. The owner approved fixing and retesting before publication.
+  Strengthened bounded-handoff and replacement assertions, added the unbudgeted
+  Core compatibility regression, and reproduced both failures before the fix.
+  Shared final completion now consults Core arbitration before reporting success
+  or closing the session. Non-Core compatibility behavior is unchanged.
+- Files: all prior Phase 3 source/test/docs edits plus `CHANGELOG.md`; no new
+  source, test or documentation file. Package version stays `1.0.0`; this is an
+  unreleased feature PR, not a package release. Existing ledger tracks next work;
+  no new TODO/version file or dependency is introduced.
+- Environment: started Docker Desktop under the user's testing authorization;
+  cached GNU-compatible image only. Initial pre-fix full Windows/WSL/Docker run
+  passed (641 passed, 10 skipped, 186 subtests, 241.22 seconds); native Kali passed
+  (643 passed, 8 skipped, 176 subtests, 135.33 seconds). Those are historical
+  results, not proof of the completion fix. A sandbox-restricted focused Windows
+  run stalled; only its two verified Python processes were stopped. The same
+  focused regressions ran normally with platform-test permissions and reproduced
+  the failure. Post-fix workflows/task-state passed (142 passed, 2 skipped,
+  124 subtests, 27.59 seconds); lint/format passed for 247 Python files.
+- Coverage review also reproduced SQLite persistence exceptions escaping Core's
+  fixed JSON error boundary. The owner approved the small fix: catch
+  `sqlite3.Error` without widening to arbitrary exceptions. The existing secret
+  redaction regression now covers both storage saves and runner initialization
+  for OS and SQLite failures. It failed before the fix and passed afterward.
+  Final focused workflows/task-state: 142 passed, 2 skipped, 128 subtests,
+  22.31 seconds; lint/format passed for all 247 Python files.
+- Independent in-host adversarial re-review found no remaining concrete defect
+  within the single-process trusted-operator Bridge. Outside-model source review
+  is not authorized and is not claimed; the independent fixture pass reviewed
+  statistics and assertion summaries, not every fixture assertion.
+  Coverage audit sampled 30 representative paths, with 26 covered after the
+  SQLite regression (about 87%; qualitative, not measured code coverage).
+  Remaining direct regression gaps: CLI-to-real executor initialization failures,
+  legacy Core state without strategy, the 64/65-stage strategy boundary, and
+  replacement target/registry changes during compilation. These are test debt,
+  not claims of implemented Target behavior.
+- Credential scan found no credentials. Its eight IP flags were solely the
+  synthetic `192.0.2.1` test fixture; the owner approved publishing unchanged.
+  Scanning with that exact fixture allowlisted returned no flags. The user
+  declined installation of a credential hook; scan this push instead.
+  Bandit is unavailable in both installed test environments; no dependency was
+  installed. GitHub's security job installs and runs it, so that check remains
+  pending until CI.
+- Final post-SQLite validation: full Windows suite with live Kali WSL and cached,
+  network-isolated Docker passed (642 passed, 10 skipped, 190 subtests,
+  289.72 seconds). Native Kali passed (644 passed, 8 skipped, 180 subtests,
+  155.27 seconds). Two Typer/Click deprecation warnings remain; Kali startup also
+  reported a systemd user-session warning without failing either test gate.
+  Poetry's installed backend built the wheel and source distribution in an
+  isolated temporary directory. No install, release or live model request.
+  Whitespace checks and relative file links across 63 documentation files passed.
+- Publication target: named source/test and documentation commits on
+  `feat/working`, a normal push and an attached PR with base `main`. Inspect live
+  branch/PR state before resuming publication to avoid duplicate work. The final
+  shipping documentation audit runs after push and before PR creation. No merge
+  or deployment is part of this request. After publication, check GitHub CI;
+  Phase 4 workflow v2 is next after review. AWS remains Deferred.
+
+## Phase 3 completion — 2026-10-04
+
+This entry supersedes slice 4's next-action handoff. The user requested completing
+Phase 3; no publication/deployment is authorized. The deterministic local Python
+Bridge gate is complete; full target Brain strategy remains later work.
+
+- Files: `workflows/models.py`, `registry.py`, `runner.py`, package exports and
+  `app/cli.py`; regressions remain in `tests/test_workflows.py`. Existing root,
+  architecture/workflow/build/testing docs and documentation hub are synchronized.
+  Prior slice changes in `schema/task_state.py` and `tests/test_task_state.py`
+  remain intact. No source/test/documentation file was added.
+- Strategy/stop: `CoreStrategy` pins reviewed declaration order and one-stage
+  delegation with no automatic recovery. Safe-boundary `stop_core()` consumes a
+  fresh issued decision, preserves existing proof/graph/usage, and fences all
+  further delegation/compatibility execution. It is not in-flight cancellation.
+- Replacement: `replan_core()` requires a fresh unresolved review stop and a
+  separately reviewed exact replacement pin with unchanged objective/mode.
+  Running/interrupted work and unanswered input block replacement. Parent is
+  durably stopped before creation; child remains pending and must have a saved
+  backlink before it can load. Parent/child/link save failures fail closed.
+  Scope, constraints, mission conditions and cumulative budgets are inherited;
+  old graph/evidence remain intact. No approval or completion credit is reused.
+  Every ancestor is checked, with a 32-transition bound and cycle/missing-parent/
+  tamper denials. No top-up, installation, automatic retry or execution occurs.
+- Ownership hardening: Active receives isolated task/context copies; the full
+  working-task hash is checked after callback. Scope/pin/guard/other-node/stop
+  mutation yields material review without altering durable Core authority.
+  Additional mission criteria unsupported by Bridge proof pause completion;
+  ordinary stage success is not proof that they were satisfied.
+- CLI: `decode core workflows/select/start/status/decide/advance/approve/review/
+  stop/replan`. Discovery does not review a definition; explicit `--reviewed`
+  NAME@VERSION:SHA256 pins are trusted operator inputs. Creation requires finite
+  dispatch/step caps and defaults to empty scope. Mutation commands require an
+  already-issued `--decision` identifier, validated before executor initialization
+  and again before consumption. Human-gate approval, stopped review, stop and
+  replacement remain separate; no authority mutation is a model tool.
+- Environment: the user explicitly authorized starting Docker Desktop. The
+  engine became ready (29.8.0); only cached `debian:bookworm-slim` was used for
+  network-isolated conformance. No pull, dependency install, WSL restart or
+  unrelated container removal occurred. Container inventory was empty before
+  validation and after the final complete platform run; no containers remain.
+- Validation: initial full Windows with live Kali WSL/Docker passed (636 passed,
+  10 skipped, 180 subtests); initial full native Kali passed (638 passed,
+  8 skipped, 170 subtests). Further ancestry regressions passed full Windows
+  (638 passed, 10 skipped, 180 subtests) and native Kali (640 passed, 8 skipped,
+  170 subtests). Final results after input/criteria/ownership hardening: full
+  Windows with live Kali WSL/Docker passed (641 passed, 10 skipped, 186 subtests,
+  361.27 seconds); native Kali passed (643 passed, 8 skipped, 176 subtests,
+  192.04 seconds). Final focused workflow/task-state suite passed (141 passed,
+  2 skipped, 124 subtests). Twenty-three tests were added in this completion
+  slice, including eight CLI tests and isolated Core-ownership mutations.
+  The existing conformance helper now proves reviewed Core selection, exact
+  reservations, provider-bound execution and no replay with both adapters.
+  Two installed Typer/Click deprecation warnings remain; no test failed.
+  Ruff lint and formatting passed for 247 Python files, relative file links
+  across 63 tracked non-source Markdown files passed, and whitespace passed.
+  Build backend was missing from Windows `wenv`; no installation was
+  attempted. The installed Kali Poetry backend built a wheel and sdist under
+  `/tmp/tmptgpxzgew` after the final source changes (earlier build under
+  `/tmp/tmpdfmoskkl`); these are temporary artifacts, not published release files.
+  No remote CI or Python 3.11 CI run is claimed for this uncommitted worktree.
+- Limits: this closes only the deterministic Python Bridge gate, not model-led
+  strategy, general semantic/finding acceptance, full v2 Core split, concurrent
+  CAS/leases, in-flight cancellation, authenticated service or immutable review
+  event history. FSM/concurrency remain Phase 5; evidence/finding depth Phase 6;
+  token/cost/time resource governance Phase 7. AWS remains Deferred.
+- Next: Phase 4 workflow v2 promotion in the existing
+  workflow spine. Preserve coordinator authority, reviewed criteria and all
+  current markdown/Core compatibility contracts. Do not invent new files or
+  publish, commit/push or deploy without explicit user authorization.
+- Work remains uncommitted on `feat/working`, including all prior Phase 3 slices.
+  No stage, commit, push, PR or merge was performed.
+
+## Phase 3 slice 4 — 2026-10-04
+
+This entry supersedes slice 3's next-action handoff. Full Phase 3 remains
+incomplete. No publication or deployment is authorized.
+
+- Changes: strict `CoreReviewRequest` and `CoreReviewResolution` contracts,
+  request-bearing decisions and deterministic identifiers in `workflows/models.py`;
+  typed source selection in `registry.py`; trusted-caller `review_core()`, strict
+  saved-resolution loading and Core compatibility-review fencing in `runner.py`.
+  Existing exports, tests and root/canonical documentation are synchronized.
+- Safety: requests use fixed public reasons and typed causes only from matching
+  incomplete Active provenance, with a hash rather than copied payload. Missing
+  or mismatched proof stays unclassified. Material-replan requests are not plans.
+  Acknowledgement/rejection consumes only the latest fresh issued decision and
+  saves a stopped resolution. No executor, reset, retry, workflow replacement,
+  scope grant, action approval, dependency install or budget refund occurs.
+- Compatibility gap fixed: unbudgeted Core `run()` could continue with unrelated
+  ready work or a human gate despite missing bound Active verification. Core
+  review stops now fence that path. The human-gate compatibility fixture uses
+  bound Active completion; ordinary non-Core workflows retain behavior.
+- Validation: focused workflow/task-state tests passed (115 passed, 2 skipped,
+  93 subtests) before adding three final regressions. Final Windows full suite
+  passed (612 passed, 16 skipped, 145 subtests, 62.45 seconds). Final native Kali
+  full suite passed (620 passed, 8 skipped, 145 subtests, 86.01 seconds).
+  Fourteen new tests cover typed causes, privacy, review dispositions,
+  unchanged scope/plan/budget, stale/replayed/altered/unissued decisions, strict
+  contracts, malformed saved state, persistence failure, changed definitions,
+  independent-stage fencing, interrupted-dispatch preservation, saved-resolution
+  state binding and failure retention; the existing real governed unscoped READ
+  regression also now proves acknowledgement cannot release execution. Ruff
+  lint/format passed for 247 Python files; relative file links passed across 63
+  tracked non-source Markdown files and patch whitespace passed.
+- Environment limitation: Docker Linux-engine named pipe is still missing on
+  read-only check. No restart/install, live Docker test, Windows-to-Kali transport
+  attestation, all-provider release gate or remote CI pass is claimed.
+- Limits: programmatic trusted-human boundary, not authenticated service/UI,
+  signed approval, immutable review history, material plan replacement or full
+  strategic Core. Only the latest resolution is stored; it participates in
+  later state hashes. Sequential local guards are not concurrent CAS/leases.
+- Next slice: operator-facing integration of the bounded Core APIs with separate
+  workflow-gate approval and stopped review disposition. Do not expose reviewed
+  pins, budget mutation or authority grants as model tools. Full strategy and
+  material plan application remain later work; AWS remains Deferred.
+- Work remains uncommitted on `feat/working`, including slices 1–3. No new file,
+  stage, commit, push, PR, merge, install, restart or deployment was performed.
+
+## Phase 3 slice 3 — 2026-10-04
+
+This entry supersedes slice 2's next-action handoff. The full Phase 3 gate is
+still incomplete; no publication or deployment is authorized.
+
+- Changes: strict `CoreMissionBudget` and `CoreBudgetState` contracts plus
+  `budget_exhausted` decision reasons in `workflows/models.py`; deterministic
+  budget-stop arbitration in `registry.py`; opt-in `start_core(budget=...)`,
+  durable pre-handoff reservations, fail-closed budget loading, retained usage,
+  and compatibility-bypass prevention in `runner.py`. Existing exports, tests,
+  root docs, and canonical architecture/workflow/build contracts are updated.
+- Limits: dispatch cap 0–1024 and reserved-stage-step cap 0–32768; strict integer
+  fields, unknown fields rejected, zero means deny allocation. Next agent stage
+  must fit its entire reviewed step allowance. There is no budget-driven gate
+  weakening, truncated stage, workflow switching, authority expansion, or model
+  call on exhaustion. Failure/review and verified completion retain precedence.
+- Reservation: one dispatch and full stage allowance are saved with consumption
+  and pending marker before handoff. Failure, denial, cancellation, or crash never
+  automatically refunds them. A callback cannot change limits or credit itself;
+  material review blocks its result and retains the authoritative reservation.
+  Human-gate approval uses no dispatch/step credits and grants no action permission.
+- Compatibility: budget is a separate trusted-caller option, not Core intent or
+  a model tool. Omitted budgets and legacy JSON remain unbudgeted; budgeted missions
+  reject compatibility `run()` and require bounded APIs. No SQL migration or new
+  dependency/file. No automatic top-up/refund or review-scope override exists.
+- Validation: focused workflow/task-state tests passed (103 passed,
+  2 skipped, 63 subtests) before strengthening the pre-handoff reservation witness
+  and adding adapter-level budget stops. Final full Windows passed (598 passed,
+  16 skipped, 117 subtests, 50.09 seconds); final native Kali passed (606 passed,
+  8 skipped, 117 subtests, 68.76 seconds). Twelve new tests cover strict limits,
+  reservation boundaries, zero/partial capacity, completion precedence, failure/
+  cancellation charging, human-gate accounting, stale/tampered/malformed budget
+  state, interrupted dispatch, callback refund attempts and no-model budget stops.
+  Governed success fixtures now exercise exact mission caps with both
+  model-driven and model-free READ; zero-cap tests verify no model/host invocation.
+  Ruff lint/formatting passed for 247 Python files; patch whitespace passed.
+- Environment limitation: Docker's Linux-engine named pipe is still missing,
+  verified read-only. No restart, install, image pull or live Docker test ran.
+  Native Kali tests do not attest to opt-in Windows-to-Kali provider transport;
+  no new all-provider release gate or remote CI result is claimed.
+- Limits remain: conservative reservations are not actual operations, tokens,
+  cost, elapsed time, CPU or memory accounting. Concurrent-worker atomic claims,
+  leases and recovery are Phase 5; UTOS accounting remains Phase 7. No all-provider
+  release gate, full strategic Core, runtime FSM, or AWS deployment is claimed.
+- Next slice: typed material-replan/escalation requests and explicit review
+  boundaries; preserve fresh authority/approval binding rather than retrying a
+  denial or expanding scope automatically. Full strategy and CLI parity remain
+  later work. AWS is Deferred.
+- Work remains uncommitted on `feat/working`, including slices 1 and 2. No stage,
+  commit, push, PR, merge, installation, or deployment was performed.
+
+## Phase 3 slice 2 — 2026-10-04
+
+This entry supersedes slice 1's next-action handoff; earlier validation remains
+historical. No publication or deployment is authorized by this continuation.
+
+- Changes: additive strict `TaskState.revision` in `schema/task_state.py`;
+  `CoreStageDecision` and state fingerprinting in `workflows/models.py`;
+  non-executing deterministic decisions in `registry.py`; issued-decision
+  validation, one-stage `run_core()`, and separate `approve_core_stage()` in
+  `runner.py`. Existing runner code is shared, not an alternate execution seam.
+  Existing workflow/task-state tests and root/canonical docs are updated.
+- Decisions bind session, task revision, state/workflow/node hashes and existing
+  step bounds. State changes invalidate them even without a revision bump.
+  Latest issuance and consumption are saved before dispatch; a surviving pending
+  marker requires review and fences compatibility execution too. Ready work
+  follows reviewed stage declaration order, with paused human gates first.
+- Authority: Core cannot invoke a provider or grant permission. Human-gate
+  approval is an explicit trusted-caller operation and advances only that gate.
+  The bounded runner requires matching typed Active verification, rejects changed
+  envelopes/excess step counts, and stops on failure/cancellation without replay.
+  Untyped compatibility outcomes are not promoted to verified Core completion.
+- Compatibility: legacy task JSON defaults to revision zero; no SQL migration
+  or dependency added. Original `start()`/`run()` remain compatibility APIs.
+  Programmatic bounded APIs are not new CLI/model tools. No general semantic
+  validator, mission budget, automatic replan, or new permission mechanism exists.
+- Limits: latest decision persistence is not a signed grant, decision event
+  history, or atomic cross-process claim. Concurrent-worker CAS/leases remain
+  Phase 5. A stranded dispatch marker has no automatic reset; human recovery
+  remains required. AWS is Deferred and the full Phase 3 gate is not closed.
+- Validation: initial compatibility tests passed. New tests caught
+  JSON-persistence ordering of independent nodes; selection now explicitly uses
+  reviewed declaration order rather than serialized dictionary order. Focused
+  workflow/task-state tests passed (91 passed, 2 skipped, 39 subtests). Core
+  governed READ fixtures now use the bounded path with and without a scripted
+  model and verify log/audit/feedback, protected evidence, and empty-scope denial.
+  Final full Windows passed (586 passed, 16 skipped, 91 subtests, 60.50 seconds)
+  and native Kali passed (594 passed, 8 skipped, 91 subtests, 93.65 seconds).
+  These include the final context/gate-mutation refusal regression. Fifteen new
+  tests since slice 1 cover revisions, one-node delegation, replay/stale/altered
+  or unissued decisions, scope/provider/target changes, human-gate handling,
+  interrupted dispatch, untyped results, cancellation, mandatory persistence,
+  excessive steps, and in-handoff authority/context mutation. Ruff lint and
+  formatting passed for 247 Python files; relative file links passed across
+  63 tracked Markdown files; patch whitespace passed. No live model API used.
+- Live environment limitation: Docker's Linux-engine named pipe is still missing
+  (rechecked read-only); no restart, pull, install, or live Docker test ran.
+  Native Kali tests are not Windows-to-Kali opt-in transport conformance. No
+  new all-provider release gate, concurrent-worker guarantee, or CI result is
+  claimed for this uncommitted worktree.
+- Next slice: mission-level resource budgets and deterministic budget/stop
+  arbitration around delegation and Active escalation. Preserve manual review
+  for material authority changes, denials, and consequential retries. Do not
+  claim the full strategic Core, runtime FSM, or all-provider release gate.
+- Work remains uncommitted on `feat/working`, including prior slice 1 changes.
+  No new file, commit, push, PR change, merge, dependency install, or AWS action.
+
+## Phase 3 slice 1 — 2026-10-03
+
+Final validation and handoff: 2026-10-04.
+
+This request supersedes the prior documentation-only restriction on starting
+Phase 3. It does not authorize publication, merging PRs, or AWS deployment.
+
+- Scope: begin Phase 3 in existing files; no new package or documentation files.
+  Added typed Core intent, reviewed workflow pins, and a versioned selection
+  record in `workflows/models.py`; deterministic selection in `registry.py`;
+  non-executing `WorkflowRunner.start_core()` compilation/persistence and load
+  binding checks in `runner.py`; exports and regressions in existing modules.
+- Authority: pins must come from a trusted caller, separately from model intent.
+  They identify reviewed definitions only, not scope or execution approval.
+  Mode matching is exact; ambiguity and absent coverage require input; unreviewed,
+  stale, or mode-mismatched explicit choices block before session creation.
+  Selected criteria are copied unchanged. Existing actions still cross the
+  coordinator; Core selection performs no governed action or model call.
+- Persistence: saved selection contains intent/definition fingerprints, stage
+  gates, schema version, and fixed public reason, not the raw objective or
+  model reasoning. Core-created session objectives are redacted. Resume checks
+  objective/mode, workflow identity, gates, dependencies and other graph material.
+  Compatibility `start()` runs remain unchanged; full state-versioned decisions
+  and signed/human review-management services are not claimed.
+- Validation: repository Ruff lint and formatting passed (247 Python files);
+  full Windows passed (571 passed, 16 skipped, 74 subtests, 63.69 seconds), and
+  full native Kali passed (579 passed, 8 skipped, 74 subtests, 79.11 seconds).
+  After strengthening the protected-file read spy, focused workflows passed
+  on Windows (64 passed, 2 skipped, 22 subtests, 8.44 seconds) and native Kali
+  (same counts, 17.76 seconds). Relative file links passed across 63 tracked
+  Markdown files; patch whitespace passed. Fourteen new tests cover reviewed
+  selection, changed/ambiguous/missing definitions, intent validation, graph and
+  gate mutation, redaction, non-executing creation, human-gate resume, and governed
+  READ completion with and without a scripted model. No live model API is used.
+- Intermediate regression failure: the new unscoped-read assertion expected
+  `policy_denial`, but the existing filesystem operation refuses before reading
+  bytes and the coordinator maps its failed result to `execution_failure`.
+  The test was corrected to the existing category and now independently records
+  byte-read attempts, asserting none occurred. Scope enforcement was not loosened;
+  broader filesystem-denial taxonomy remains a separate hardening limitation.
+- Environment limits: live Docker is unavailable because its Linux-engine named
+  pipe is missing. No restart, install, image pull, live Docker conformance, or
+  new all-provider release gate was attempted. Windows-to-Kali opt-in provider
+  tests were not enabled; the Linux suite above ran directly inside Kali.
+- Documentation: canonical Core/workflow/build contracts, root README and agent
+  instructions, and the system source map reflect the bounded Bridge status.
+- Next slice: task-state-versioned Core decisions and bounded one-node delegation
+  to the existing Active boundary, preserving exact authority and typed escalation.
+  Add mission budgets/material replan/stop incrementally; do not claim the whole
+  Phase 3 gate complete. CLI integration remains pending and AWS Deferred.
+- Work remains uncommitted on `feat/working`; no commit, push, PR change, merge,
+  or deployment is authorized by this request.
 
 ## Documentation sync — 2026-10-03
 
