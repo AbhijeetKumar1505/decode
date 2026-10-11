@@ -76,7 +76,8 @@ Tauri desktop using the same API. Interfaces never duplicate authority.
 | DAG/state | `planner/`, `schema/` | Foundation |
 | Evidence/audit | `persistence/`, `observability/` | Foundation |
 | Models | `models/`, `kernel/provider.py` | Foundation |
-| Core Brain, UTOS, API/TS CLI | — | Target |
+| Deterministic Core strategy / bounded handoff / budget / review / replacement / stop | `workflows/`, `schema/task_state.py`, `app/cli.py` | Bridge; reviewed definitions, task-bound decisions, stopped review and human replacement with inherited authority/usage; shared Active execution |
+| Full Core strategy, UTOS, API/TS CLI | — | Target |
 
 ## Invariants
 

@@ -87,13 +87,47 @@ validation failing closed, dependency readiness, bounded
 context, exact file criteria, refreshed dependency evidence, and safe resume.
 No live model API or real security target is needed.
 
-Shipping regressions also exercise scope reset preserving a prior guard,
+Phase 2 shipping regressions also exercise scope reset preserving a prior guard,
 material changes during awaited executable preparation, dependency parameter
 and Active-record mutation, and in-flight cancellation provenance in both
 adapters. Host/coordinator tests directly revoke external scope, policy,
 provider mappings, and session context during preparation and expire a shorter
 approval grant with a fake clock, both with and without a preparation hook;
 they assert no command launch and telemetry.
+
+## Phase 3 deterministic Core gate
+
+`tests/test_workflows.py` covers reviewed pin selection, unchanged criteria and
+strategy, one-stage state-bound handoff, strict mission reservations, explicit
+human workflow-gate approval, review disposition, operator stop and reviewed
+replacement. CLI tests use isolated stores and scripted executors; no Core
+authority mutation is offered to models. Fresh decision identifiers are checked
+before executor initialization and again before consumption. Empty scope stays
+empty, and model-only completion cannot satisfy bound Active verification.
+
+Replacement tests preserve the old graph/evidence, identical authority and used
+budget; no automatic retry, action approval, success credit or top-up follows.
+Parent-save, child-save and linkage-save failures leave replacement work
+non-executable. Tests cover stale/unreviewed requests, changed goals/modes,
+running/interrupted work, tampered scope/budget, missing/cyclic ancestors, all
+ancestor validation and the 32-transition bound. Operator stops are safe-boundary
+controls, not concurrent cancellation or leases.
+Additional regressions preserve unanswered input, constraints and extra mission
+criteria; stage success does not falsely satisfy unsupported mission conditions.
+Final-handoff regressions check returned and durable blocked status and no session
+close for the bounded runner, inherited replacement and Core compatibility path.
+CLI error regressions check fixed JSON rejection and secret redaction for OS and
+SQLite failures during both runner initialization and state saving.
+Callbacks receive isolated Core working copies; mutations to scope, review pins,
+constraints, mission criteria, other nodes or stop state cannot become durable
+authority or be inherited by replacement.
+
+The local/Kali WSL/Docker stage conformance helper now starts a reviewed Core
+mission with exact dispatch/step caps. Both model-free and scripted-model paths
+consume one issued delegation, retain typed protected evidence, log/audit/feedback,
+prove provider identity and prevent replay. The same explicit platform opt-ins
+above apply; Docker uses an already-cached GNU-compatible image and isolated
+network. Full native Kali and Windows suites remain separate gates.
 
 Local stage conformance runs by default. The same Phase 1 opt-ins enable
 `test_kali_active_stage_conformance_with_and_without_model` and

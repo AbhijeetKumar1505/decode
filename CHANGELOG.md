@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added explicit Core mission controls for selecting reviewed workflows,
+  advancing one bounded stage, approving human workflow gates, reviewing stops,
+  stopping work and applying a separately reviewed replacement. Decisions are
+  bound to task state; replacement preserves scope and cumulative reservations
+  without reusing action approvals or completion credit. Additional mission
+  conditions keep final handoff blocked for review instead of falsely reporting
+  completion. Added offline lifecycle/CLI regressions and local, Kali WSL and
+  network-isolated Docker conformance for model-free and scripted-model handoff.
+
 - Hardened Phase 2 launch boundaries: scope reset preserves existing guards;
   awaited preparation precedes final governance and effective approval-expiry
   checks; host restrictions and provider/session bindings are revalidated at

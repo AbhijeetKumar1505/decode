@@ -14,15 +14,17 @@ import re
 from collections.abc import Sequence
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..planner import CompletionCriterion, PlanGraph, PlanNode, RetryCategory
 from ..schema import (
+    ActiveEscalationKind,
     ActiveNodeResult,
     ActiveObservation,
     TaskMode,
+    TaskState,
 )
 from ..schema import (
     ActiveOutcome as StageOutcome,
@@ -309,6 +311,357 @@ class WorkflowSpec(BaseModel):
             if stage.id == stage_id:
                 return stage
         raise KeyError(stage_id)
+
+
+class CoreIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    objective: str = Field(min_length=1, max_length=4096)
+    mode: TaskMode
+    workflow_name: str = Field(default="", max_length=64)
+
+    @field_validator("objective")
+    @classmethod
+    def nonempty_objective(cls, value: str) -> str:
+        if not value.strip() or "\x00" in value:
+            raise ValueError("Core objective must be nonempty text")
+        return value.strip()
+
+    @field_validator("workflow_name")
+    @classmethod
+    def workflow_identifier(cls, value: str) -> str:
+        if value and not _IDENTIFIER.fullmatch(value):
+            raise ValueError("Core workflow name must be a lowercase identifier")
+        return value
+
+    def fingerprint(self) -> str:
+        from ..runtime.coordinator import redact_sensitive
+
+        payload = {
+            "objective": redact_sensitive(self.objective),
+            "mode": self.mode.value,
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+class ReviewedWorkflow(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,63}$")
+    version: str = Field(min_length=1, max_length=64)
+    fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class CoreWorkflowSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    intent_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    outcome: Literal["selected", "needs_input", "blocked"]
+    public_reason: Literal[
+        "explicit reviewed workflow selected",
+        "only compatible reviewed workflow selected",
+        "multiple reviewed workflows match; choose one explicitly",
+        "no reviewed workflow matches the requested mode",
+        "requested workflow is not reviewed",
+        "reviewed workflow is missing or changed",
+        "requested workflow mode does not match intent",
+    ]
+    workflow: ReviewedWorkflow | None = None
+    criteria: dict[str, WorkflowGate] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def selected_workflow_required(self) -> CoreWorkflowSelection:
+        selected_reasons = {
+            "explicit reviewed workflow selected",
+            "only compatible reviewed workflow selected",
+        }
+        if self.outcome == "selected":
+            if (
+                self.workflow is None
+                or not self.criteria
+                or self.public_reason not in selected_reasons
+            ):
+                raise ValueError(
+                    "Core selection requires reviewed workflow and criteria"
+                )
+        elif (
+            self.workflow is not None
+            or self.criteria
+            or self.public_reason in selected_reasons
+        ):
+            raise ValueError("unresolved Core selection cannot contain a workflow plan")
+        needs_input = self.public_reason in {
+            "multiple reviewed workflows match; choose one explicitly",
+            "no reviewed workflow matches the requested mode",
+        }
+        if (self.outcome == "needs_input") != needs_input:
+            raise ValueError("Core outcome must match its public reason")
+        return self
+
+
+class CoreStrategy(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    policy: Literal["reviewed-declaration-order-v1"] = "reviewed-declaration-order-v1"
+    workflow: ReviewedWorkflow
+    stage_order: tuple[str, ...] = Field(min_length=1, max_length=64)
+    delegation: Literal["one bounded stage per fresh decision"] = (
+        "one bounded stage per fresh decision"
+    )
+    recovery: Literal["human-reviewed replacement; no automatic replay"] = (
+        "human-reviewed replacement; no automatic replay"
+    )
+
+    @classmethod
+    def from_spec(cls, spec: WorkflowSpec) -> CoreStrategy:
+        return cls(
+            workflow=ReviewedWorkflow(
+                name=spec.name, version=spec.version, fingerprint=spec.fingerprint()
+            ),
+            stage_order=tuple(stage.id for stage in spec.stages),
+        )
+
+
+def core_state_fingerprint(state: TaskState) -> str:
+    payload = state.model_dump(mode="json", exclude={"created_at", "updated_at"})
+    payload["environment"].pop("core_decision", None)
+    payload["environment"].pop("core_decision_consumed", None)
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+class CoreMissionBudget(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_stage_dispatches: int = Field(ge=0, le=1024, strict=True)
+    max_reserved_steps: int = Field(ge=0, le=32768, strict=True)
+
+
+class CoreBudgetState(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    limits: CoreMissionBudget
+    stage_dispatches: int = Field(default=0, ge=0, le=1024, strict=True)
+    reserved_steps: int = Field(default=0, ge=0, le=32768, strict=True)
+
+    @model_validator(mode="after")
+    def usage_within_limits(self) -> CoreBudgetState:
+        if (
+            self.stage_dispatches > self.limits.max_stage_dispatches
+            or self.reserved_steps > self.limits.max_reserved_steps
+            or (self.stage_dispatches == 0) != (self.reserved_steps == 0)
+            or self.reserved_steps < self.stage_dispatches
+            or self.reserved_steps > self.stage_dispatches * 32
+        ):
+            raise ValueError("Core budget usage must be consistent and within limits")
+        return self
+
+    def stop_reason(self, steps: int) -> str:
+        if (
+            not isinstance(steps, int)
+            or isinstance(steps, bool)
+            or not 1 <= steps <= 32
+        ):
+            raise ValueError("Core reservation requires an existing bounded stage")
+        if self.stage_dispatches >= self.limits.max_stage_dispatches:
+            return "mission stage-dispatch budget exhausted"
+        if self.reserved_steps + steps > self.limits.max_reserved_steps:
+            return "mission step-reservation budget cannot cover the next stage"
+        return ""
+
+    def reserve(self, steps: int) -> CoreBudgetState:
+        if self.stop_reason(steps):
+            raise ValueError("Core mission budget cannot reserve the delegated stage")
+        return CoreBudgetState(
+            limits=self.limits,
+            stage_dispatches=self.stage_dispatches + 1,
+            reserved_steps=self.reserved_steps + steps,
+        )
+
+
+class CoreReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    category: Literal["material_replan", "escalation", "review"]
+    public_reason: Literal[
+        "material replanning requires separate human review; no changes applied",
+        "Active escalation requires human review; no automatic retry",
+        "mission stop requires human review; no authority granted",
+    ]
+    stage_id: str = Field(default="", pattern=r"^(?:[a-z][a-z0-9_-]{0,63})?$")
+    node_fingerprint: str = Field(default="", pattern=r"^(?:[a-f0-9]{64})?$")
+    active_fingerprint: str = Field(default="", pattern=r"^(?:[a-f0-9]{64})?$")
+    active_outcome: StageOutcome | None = None
+    escalation_kind: ActiveEscalationKind | None = None
+
+    @model_validator(mode="after")
+    def bound_source(self) -> CoreReviewRequest:
+        reasons = {
+            "material_replan": "material replanning requires separate human review; no changes applied",
+            "escalation": "Active escalation requires human review; no automatic retry",
+            "review": "mission stop requires human review; no authority granted",
+        }
+        if self.public_reason != reasons[self.category]:
+            raise ValueError("Core review category and public reason disagree")
+        if bool(self.stage_id) != bool(self.node_fingerprint):
+            raise ValueError("Core review node reference must be paired")
+        sourced = self.category != "review"
+        if sourced != bool(self.active_fingerprint) or sourced != (
+            self.active_outcome is not None and self.escalation_kind is not None
+        ):
+            raise ValueError(
+                "Core escalation requires a bound incomplete Active source"
+            )
+        if not sourced and (
+            self.active_outcome is not None or self.escalation_kind is not None
+        ):
+            raise ValueError("unclassified Core review cannot claim an Active cause")
+        if sourced:
+            if not self.stage_id or self.active_outcome is StageOutcome.COMPLETED:
+                raise ValueError("Core escalation requires an incomplete bound node")
+            material = (
+                self.active_outcome is StageOutcome.NEEDS_REPLAN
+                or self.escalation_kind is ActiveEscalationKind.MATERIAL_CHANGE
+            )
+            if (self.category == "material_replan") != material:
+                raise ValueError("Core material replan must match its Active cause")
+        return self
+
+
+class CoreStageDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    session_id: str = Field(min_length=1, max_length=128)
+    state_version: int = Field(ge=0, strict=True)
+    state_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    workflow_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    outcome: Literal[
+        "delegate",
+        "await_approval",
+        "needs_review",
+        "complete",
+        "failed",
+        "budget_exhausted",
+        "stopped",
+    ]
+    public_reason: Literal[
+        "one ready stage delegated within its existing bounds",
+        "human workflow gate requires explicit approval",
+        "interrupted or review-paused work requires human review",
+        "completed work lacks bound Active verification",
+        "task has unresolved questions or no ready work",
+        "all workflow stages have bound completion",
+        "workflow failure requires review; no automatic replay",
+        "mission stage-dispatch budget exhausted",
+        "mission step-reservation budget cannot cover the next stage",
+        "mission explicitly stopped by human; no automatic resume",
+    ]
+    stage_id: str = Field(default="", pattern=r"^(?:[a-z][a-z0-9_-]{0,63})?$")
+    node_fingerprint: str = Field(default="", pattern=r"^(?:[a-f0-9]{64})?$")
+    max_steps: int = Field(default=0, ge=0, le=32, strict=True)
+    review_request: CoreReviewRequest | None = None
+
+    @model_validator(mode="after")
+    def bound_decision(self) -> CoreStageDecision:
+        reasons = {
+            "delegate": {"one ready stage delegated within its existing bounds"},
+            "await_approval": {"human workflow gate requires explicit approval"},
+            "needs_review": {
+                "interrupted or review-paused work requires human review",
+                "completed work lacks bound Active verification",
+                "task has unresolved questions or no ready work",
+            },
+            "complete": {"all workflow stages have bound completion"},
+            "failed": {"workflow failure requires review; no automatic replay"},
+            "budget_exhausted": {
+                "mission stage-dispatch budget exhausted",
+                "mission step-reservation budget cannot cover the next stage",
+            },
+            "stopped": {"mission explicitly stopped by human; no automatic resume"},
+        }
+        if self.public_reason not in reasons[self.outcome]:
+            raise ValueError("Core decision outcome and public reason disagree")
+        if self.outcome in {"delegate", "await_approval"}:
+            if not self.stage_id or not self.node_fingerprint:
+                raise ValueError("Core stage decision requires a bound node")
+        elif self.stage_id or self.node_fingerprint:
+            raise ValueError("Core terminal or review decision cannot delegate a node")
+        if (self.outcome == "delegate") != (self.max_steps > 0):
+            raise ValueError("only Core delegation may allocate existing stage steps")
+        if self.review_request is not None and self.outcome not in {
+            "needs_review",
+            "failed",
+            "budget_exhausted",
+        }:
+            raise ValueError("only a Core review stop may carry a review request")
+        return self
+
+    def fingerprint(self) -> str:
+        encoded = json.dumps(
+            self.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
+        )
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+class CoreReviewResolution(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    decision: CoreStageDecision
+    disposition: Literal["acknowledged", "rejected"]
+
+    @model_validator(mode="after")
+    def review_required(self) -> CoreReviewResolution:
+        if self.decision.review_request is None:
+            raise ValueError("Core review resolution requires a review request")
+        return self
+
+
+class CoreMissionStop(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    decision: CoreStageDecision
+    public_reason: Literal[
+        "mission explicitly stopped by human; no automatic resume"
+    ] = "mission explicitly stopped by human; no automatic resume"
+
+
+class CoreReplanTransition(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: Literal[1] = 1
+    decision: CoreStageDecision
+    replacement: CoreWorkflowSelection
+    replacement_session_id: str = Field(default="", max_length=128)
+    public_reason: Literal[
+        "human reviewed replacement; prior run stopped; no authority expanded"
+    ] = "human reviewed replacement; prior run stopped; no authority expanded"
+
+    @model_validator(mode="after")
+    def reviewed_replacement_required(self) -> CoreReplanTransition:
+        if (
+            self.decision.review_request is None
+            or self.replacement.outcome != "selected"
+        ):
+            raise ValueError(
+                "Core replanning requires a review stop and reviewed replacement"
+            )
+        return self
+
+
+class CoreReplanOrigin(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    parent_session_id: str = Field(min_length=1, max_length=128)
+    decision_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
 class EvidenceLink(BaseModel):

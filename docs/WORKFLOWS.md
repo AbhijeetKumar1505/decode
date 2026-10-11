@@ -19,6 +19,42 @@ compiles stages to `PlanGraph`, persists state, checks gates, pauses for human
 stages, and resumes. Agent stages call the governed loop; definitions cannot
 embed a bypass. Preserve current workflow/playbook work.
 
+The Phase 3 programmatic `CoreWorkflowPlanner.select()` and
+`WorkflowRunner.start_core()` add reviewed-definition selection in front of this
+Bridge. A typed objective/mode and separate trusted-caller workflow pins produce
+a fixed public reason and the existing stage gates. Selection cannot grant scope
+or invoke an executor; compilation persists only pending nodes. Saved Core runs
+reject changed selection, criteria, objective, mode, or graph material on load.
+`decide_core()` saves a task-revision/state-fingerprint-bound decision;
+`run_core()` consumes it and invokes at most one stage through the existing
+runner and Active boundary. A fresh decision is required for further work.
+`approve_core_stage()` advances a human gate only, without invoking an executor
+or granting action permission. Stale, altered, unissued, consumed, or interrupted
+handoffs do not replay. The bounded path requires typed Active completion and
+checks context and step limits; legacy free-standing results are not upgraded to
+verified Core completion. Task revisions are additive JSON state, not a runtime
+FSM or a concurrent-worker lease.
+`start_core(..., budget=CoreMissionBudget(...))` additionally opts into strict
+dispatch/full-stage-step reservation caps. `CoreBudgetState` is saved before
+handoff; failed or interrupted allocations are not automatically refunded.
+Insufficient capacity produces a non-delegating `budget_exhausted` decision,
+without invoking Active or shrinking stage criteria. Human gates are not charged
+as dispatches; verified completion and review/failure retain precedence. Budgeted
+missions cannot call compatibility `run()` to bypass these limits. Omitted
+budgets and older saved Core runs retain unbudgeted compatibility behavior.
+These are conservative reservations, not actual token/cost/time measurements.
+Review/failure/budget stops carry typed `CoreReviewRequest` records bound by the
+issued decision. Matching incomplete Active proof supplies a typed escalation
+or material-replan request; missing/mismatched proof stays generic review.
+`review_core(CoreReviewResolution(...))` records explicit human acknowledgement
+or rejection only. It consumes a fresh issued decision, persists the resolution
+and keeps work stopped; no plan change, scope grant, action approval, refund or
+retry follows. Core review stops also fence unbudgeted compatibility `run()`.
+Ordinary non-Core `start()`/`run()` remain compatibility paths. A separate
+human-reviewed replacement API and the bounded `decode core` controls are now
+implemented; full resource accounting and model-led strategy remain Target. See
+[the Core selection contract](BRAIN_ARCHITECTURE.md#phase-3-bridge-workflow-selection).
+
 For agent stages, declared minimum successful actions and protected evidence
 are also bound as deterministic completion criteria *before* the loop accepts
 a final answer. A failed criterion yields a typed `NeedsReplan` result after
@@ -123,8 +159,74 @@ material-change escalation rather than accepting their claimed evidence.
 The Phase 2 gate is the bounded runtime over this Bridge, not the full workflow
 v2 engine. Model-free shell/network/WRITE action families, a model-free CLI
 selector, semantic validators, WRITE-origin attestation, cross-node recovery,
-and Core strategy remain later work. No runtime dependency or storage backend
+and model-led Core strategy remain later work. No runtime dependency or storage backend
 was added for Phase 2.
+
+## Core operator controls
+
+The deterministic Phase 3 Core is a Python Bridge over the markdown runner, not
+workflow v2 YAML. `decode core` emits JSON. Start is non-executing, requires
+explicit finite dispatch/step caps, and leaves read/write/target scope empty
+unless the operator supplies it. Workflow discovery is not review: inspect a
+definition, then explicitly supply its `NAME@VERSION:SHA256` pin. Selection with
+zero/multiple matching reviewed definitions requests input; start refuses it.
+
+Replace placeholders below with inspected definitions and controlled paths:
+
+```text
+decode core workflows
+decode workflow show <name> --json
+decode core select --goal "Inspect a controlled repository" --intent-mode coding --reviewed "<name>@<version>:<sha256>"
+decode core start --goal "Inspect a controlled repository" --intent-mode coding --reviewed "<name>@<version>:<sha256>" --max-stage-dispatches 4 --max-reserved-steps 32 --read-root /path/to/controlled/repository
+decode core status <session>
+decode core decide <session>
+decode core advance <session> --decision <decision-id>
+```
+
+`decide` saves a fresh non-executing decision and prints its `decision_id` and
+typed body. `advance` consumes exactly that issued decision and delegates at most
+one stage. Stale, altered, wrong-session or consumed identifiers fail before
+executor initialization. Request a fresh decision after each transition; no
+command automatically refreshes a decision or loops across stages. Its `provider`
+option selects a model provider, not new execution authority. `mode` preserves
+the existing plan/ask/auto governance; it cannot override scope or destructive
+approval. Returned report status, not successful JSON rendering, states mission
+completion or failure.
+
+Other transitions are explicit and require a current issued decision:
+
+```text
+decode core approve <session> --decision <decision-id>
+decode core review <session> --decision <decision-id> --disposition acknowledged
+decode core stop <session> --decision <decision-id>
+decode core replan <session> --decision <decision-id> --workflow <replacement-name> --reviewed "<replacement-name>@<version>:<sha256>"
+```
+
+`approve` advances only an awaiting-human workflow gate, not a capability.
+`review` accepts `acknowledged` or `rejected`; both preserve the unresolved stop.
+`stop` prevents further delegation/compatibility execution at a safe boundary;
+it does not cancel another process in flight. `replan` is a different human
+operation for unresolved review/failure/budget stops, never ready, running,
+interrupted or explicitly stopped work; unanswered input must be resolved first.
+It selects a separately reviewed
+replacement with the same objective/mode, stops the parent and creates only a
+new pending run. Target/scope and all used budget are inherited exactly; action
+approvals and completion credits are not. Mission constraints and extra
+completion conditions are retained. Unsupported extra mission criteria pause
+completion for review; stage proof does not prove them. Core callbacks operate on
+isolated state and cannot rewrite durable authority, guards or other nodes.
+No replanning command runs or installs a tool.
+Use the returned new session and request a fresh decision before doing work.
+Missing/cyclic/tampered ancestry or an incompletely saved link blocks the child;
+the chain is bounded to 32 replacements. An exhausted mission stays exhausted.
+
+These APIs are trusted local operator controls, not model tools or an
+authenticated multi-user service. They do not change the inline REPL, and the
+older `decode workflow` commands remain compatibility interfaces. Budgeted,
+review-stopped or operator-stopped Core sessions cannot use those commands as a
+bypass. See [Core lifecycle contracts](BRAIN_ARCHITECTURE.md#phase-3-bridge-completion-strategy-stop-and-reviewed-replacement).
+Core CLI OS and SQLite persistence failures return a fixed JSON rejection and
+non-zero exit without echoing exception payloads or automatically retrying.
 
 ## Target definition
 

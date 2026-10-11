@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from decode.persistence.store import SessionStore
 from decode.planner.dag import CompletionCriterion
 from decode.schema import (
@@ -41,6 +43,24 @@ class TestCompletionCriterion(unittest.TestCase):
 
 
 class TestTaskState(unittest.TestCase):
+    def test_revision_is_additive_and_tracks_mutation(self) -> None:
+        state = TaskState.model_validate({"objective": "legacy task"})
+        self.assertEqual(state.revision, 0)
+        state.record_action("file_read")
+        self.assertEqual(state.revision, 1)
+        state.add_question("which controlled file?")
+        self.assertEqual(state.revision, 2)
+        state.resolve_question("which controlled file?")
+        self.assertEqual(state.revision, 3)
+        state.mark(TaskStatus.BLOCKED)
+        self.assertEqual(state.revision, 4)
+        self.assertEqual(
+            TaskState.model_validate_json(state.model_dump_json()).revision, 4
+        )
+        for revision in (-1, True, "1"):
+            with self.subTest(revision=revision), self.assertRaises(ValidationError):
+                TaskState(revision=revision)
+
     def _state(self):
         return TaskState(objective="add a function and test it", mode=TaskMode.CODING)
 

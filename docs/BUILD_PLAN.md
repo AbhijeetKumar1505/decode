@@ -1,7 +1,7 @@
 # De-code v2 Build Plan
 
 **Status:** Canonical target and sequence
-**Last reconciled:** 2026-10-03
+**Last reconciled:** 2026-10-04
 **Scope:** Local Linux, WSL 2, and Docker first; AWS Deferred
 
 ## Thesis
@@ -43,7 +43,7 @@ governance, host capabilities, provider classes, task/DAG/verification,
 SQLite/memory/evidence/audit, MCP, and model foundations. The current worktree
 adds a markdown workflow Bridge and engineering/red/blue/purple/audit playbooks.
 
-The full v2 split is not implemented: Core strategy, workflow v2, the runtime
+The full v2 split is not implemented: model-led Core strategy, workflow v2, the runtime
 FSM, and UTOS remain Target. Phase 1 established provider-bound kernel contracts;
 Phase 2 adds the bounded Active stage runtime over the transitional workflow
 Bridge. Provider session/mapping limitations are explicit and fail closed.
@@ -209,11 +209,55 @@ host startup failures and the user-authorized recovery are preserved in
 
 ## Phase 3 — Core Brain
 
+**Status — gate complete (2026-10-04); deterministic local Python Bridge.**
+Typed intent selects only explicitly reviewed, version/fingerprint-pinned
+workflow definitions with unchanged gates and a fixed public reason. Ambiguity
+requires input; unreviewed or changed definitions block. `start_core()` persists
+the selection and pending DAG without executing, then checks selection/criteria/
+graph bindings on load. This is programmatic and model-free; the review pins
+are supplied separately by a trusted caller, never inferred from model output.
+Pins do not approve consequential actions. Typed decisions now bind task
+revisions and state fingerprints; `run_core()` consumes one issued decision and
+hands off at most one stage to the same governed Active runner. Human-gate
+approval is separate, stale decisions fail before handoff, and interrupted
+dispatch never automatically replays. Opt-in mission limits now cap dispatches
+and reserve each full reviewed stage's step allowance before handoff. Typed
+budget-exhaustion stops cannot invoke Active or weaken criteria; no automatic
+refund occurs on failure/interruption. Human gates remain separately authorized.
+Typed review requests now distinguish bound Active escalation/material replan
+from missing proof. Explicit human acknowledgement/rejection consumes a fresh
+issued request and persists a stopped resolution, never a changed plan or retry.
+Unbudgeted Core compatibility execution cannot bypass review stops.
+New Core runs persist a reviewed-declaration-order `CoreStrategy`. Explicit
+operator stop prevents all further delegation, while human-reviewed replanning
+stops the parent and creates only a new pending session with unchanged objective,
+mode, scope and cumulative budget. Old evidence/graph state is preserved; no
+action approval or completion credit is reused. Full bounded ancestry validation
+and isolated Active callback state prevent authority/guard/other-node mutation;
+unanswered input blocks replacement and extra mission criteria cannot be silently
+completed or removed. Ancestry validation fails closed on missing links, cycles,
+scope/budget tampering or partial saves.
+The `decode core` CLI exposes this lifecycle with explicit pins, finite caps and
+fresh issued decision identifiers; no Core mutation is a model tool. Cost/time/
+token accounting remains Phase 7, concurrent arbitration/FSM Phase 5, semantic
+finding acceptance Phase 6, and full model-led strategy/v2 split remains Target.
+See
+[the Core contract](BRAIN_ARCHITECTURE.md#phase-3-bridge-workflow-selection).
+
 Add intent, strategy, workflow/criteria selection, DAG/delegation, budget,
 material replan, escalation, and stop conditions. Core cannot execute.
 
 **Gate:** Core selects an approved workflow with a public reason; Active executes
 without expanding authority.
+
+**Validation:** final Windows full suite with live Kali WSL and cached,
+network-isolated Docker passed (641 passed, 10 skipped, 186 subtests). Native
+Kali full suite passed (643 passed, 8 skipped, 176 subtests). Both model-driven
+and model-free Core handoffs verify protected evidence, provider identity,
+log/audit/feedback and no replay. Lint/format, documentation file links, patch
+whitespace and the Kali package build passed. No live model API, real security
+target, new dependency, image pull or publication was used. See
+[completion evidence and remaining limits](CONTINUATION.md#phase-3-completion--2026-10-04).
 
 ## Phase 4 — Workflow engine v2
 

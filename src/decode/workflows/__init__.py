@@ -7,8 +7,20 @@ from .agent_executor import (
 )
 from .models import (
     BoundStageContext,
+    CoreBudgetState,
+    CoreIntent,
+    CoreMissionBudget,
+    CoreMissionStop,
+    CoreReplanOrigin,
+    CoreReplanTransition,
+    CoreReviewRequest,
+    CoreReviewResolution,
+    CoreStageDecision,
+    CoreStrategy,
+    CoreWorkflowSelection,
     EvidenceLink,
     ReadStageAction,
+    ReviewedWorkflow,
     StageExecution,
     StageOutcome,
     StageResult,
@@ -18,16 +30,29 @@ from .models import (
     WorkflowStage,
     WorkflowStageContext,
 )
-from .registry import WorkflowRegistry, parse_workflow
+from .registry import CoreWorkflowPlanner, WorkflowRegistry, parse_workflow
 from .runner import StageExecutor, WorkflowRunner
 
 __all__ = [
     "ActiveStageRuntime",
     "BoundStageContext",
+    "CoreBudgetState",
+    "CoreIntent",
+    "CoreMissionBudget",
+    "CoreMissionStop",
+    "CoreReplanOrigin",
+    "CoreReplanTransition",
+    "CoreReviewRequest",
+    "CoreReviewResolution",
+    "CoreStageDecision",
+    "CoreStrategy",
+    "CoreWorkflowPlanner",
+    "CoreWorkflowSelection",
     "EvidenceLink",
     "GovernedAgentStageExecutor",
     "GovernedReadStageExecutor",
     "ReadStageAction",
+    "ReviewedWorkflow",
     "StageExecution",
     "StageExecutor",
     "StageOutcome",

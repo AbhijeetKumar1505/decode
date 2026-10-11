@@ -99,7 +99,24 @@ Provider: local / WSL / Docker / SSH / MCP
 Verification -> Evidence -> Findings -> Memory / Audit / Usage
 ```
 
-Core Brain and the full split remain Target architecture. The bounded Active
+The Phase 3 deterministic local Core Bridge gate is complete; the full Core Brain
+split remains Target architecture. Phase 3 adds a
+programmatic, non-executing workflow-selection Bridge with typed intent,
+separately reviewed definition pins, saved gates, and fixed public reasons.
+It cannot grant scope or approvals. State-bound decisions now support one-stage
+Core-to-Active handoff and separate explicit human workflow-gate approval;
+opt-in mission caps reserve dispatches and full-stage step allowances before
+handoff. Budget exhaustion stops without invoking Active or weakening criteria.
+Typed escalation/material-replan requests now support explicit human
+acknowledgement or rejection while keeping work stopped; neither grants
+permission, changes the plan or refunds budget. Core review stops also fence
+unbudgeted compatibility execution. Deterministic Core strategy, explicit mission
+stop and separately human-reviewed replacement are also implemented. Replacement
+preserves scope and cumulative budget, stops the old run and creates pending
+state only; no approvals or completion credit carry forward. `decode core`
+provides the bounded operator lifecycle with explicit review pins and decision
+identifiers; see [Core controls](docs/WORKFLOWS.md#core-operator-controls).
+Cost/time/token accounting and full model-led strategy remain Target. The bounded Active
 runtime now wraps one workflow node around the universal loop or an explicit
 model-free READ action. Both use the same execution coordinator. Workflows own
 procedure, capabilities describe
